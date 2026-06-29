@@ -29,7 +29,7 @@ describe('createEventBus', () => {
       received = e;
     });
     const before = Date.now();
-    bus.broadcast({ type: 'node:done', flowId: 'x', payload: null });
+    bus.broadcast({ type: 'flow:reload', flowId: 'x', payload: null });
     const after = Date.now();
     expect(received).toBeDefined();
     expect(received?.ts).toBeGreaterThanOrEqual(before);
@@ -73,8 +73,8 @@ describe('event bus tenancy', () => {
     const bus = createEventBus();
     const seen: string[] = [];
     bus.subscribe('flow-1', (e) => seen.push(e.type));
-    bus.broadcast({ type: 'node:done', flowId: 'flow-1', payload: {} });
-    expect(seen).toEqual(['node:done']);
+    bus.broadcast({ type: 'flow:reload', flowId: 'flow-1', payload: {} });
+    expect(seen).toEqual(['flow:reload']);
   });
 
   it('does not deliver across tenants for the same flowId', () => {
@@ -83,8 +83,8 @@ describe('event bus tenancy', () => {
     const b: string[] = [];
     bus.subscribe('flow-1', (e) => a.push(e.type), 'tenant-a');
     bus.subscribe('flow-1', (e) => b.push(e.type), 'tenant-b');
-    bus.broadcast({ type: 'node:done', flowId: 'flow-1', payload: {}, tenantId: 'tenant-a' });
-    expect(a).toEqual(['node:done']);
+    bus.broadcast({ type: 'flow:reload', flowId: 'flow-1', payload: {}, tenantId: 'tenant-a' });
+    expect(a).toEqual(['flow:reload']);
     expect(b).toEqual([]);
   });
 

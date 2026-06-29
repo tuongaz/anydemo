@@ -46,7 +46,7 @@ slugs are present, so there's no index + lookup round-trip. The
 
 - **Adapter wrapping:** `canvas-bridge.ts:wrapAdapter` decorates a base
   `CanvasAdapter` so structural mutations (createNode, deleteNode,
-  createConnector, deleteConnector, updateNode-with-name, playAction) call
+  createConnector, deleteConnector, updateNode-with-name) call
   `bridge.sendMessage` on success. Visual-only `updateNode` patches (style,
   font size) AND `updateNodePosition` stay silent — drag telemetry routes
   through `updateModelContext` instead. Rejected adapter calls do NOT emit
@@ -54,7 +54,7 @@ slugs are present, so there's no index + lookup round-trip. The
   it did.
 - **Canvas host wiring is required for the wrap to fire:** the canvas's edit
   UI dispatches `onCreateShapeNode` / `onDeleteNode` / `onCreateConnector` /
-  `onNodeNameChange` / `onPlayNode` / `onNodePositionChange` callbacks, and
+  `onNodeNameChange` / `onNodePositionChange` callbacks, and
   the host must route them into the wrapped adapter. Without that wiring,
   user clicks/draws never reach the adapter and no `sendMessage` fires. The
   MCP App keeps the wiring minimal (no undo, no optimistic overrides) — SSE

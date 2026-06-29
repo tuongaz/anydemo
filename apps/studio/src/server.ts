@@ -3,19 +3,16 @@ import { resolve as resolvePath } from 'node:path';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
-import { type ProxyFacade, createApi } from './api.ts';
+import { createApi } from './api.ts';
 import { createCorsMiddleware } from './cors.ts';
-import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
 import { type JobRegistry, createJobRegistry } from './icons/jobs.ts';
 import type { IconFetcher } from './icons/router.ts';
 import { createMcpServer } from './mcp.ts';
 import { seeflowHome } from './paths.ts';
-import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import type { Spawner } from './shellout.ts';
-import { type StatusRunner, createStatusRunner } from './status-runner.ts';
 import { createTenantResolver } from './tenancy.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
 
@@ -49,14 +46,6 @@ export interface CreateAppOptions {
   spawner?: Spawner;
   /** Override the host platform for tests covering darwin/win32/linux branches. */
   platform?: NodeJS.Platform;
-  /** Inject a StatusRunner; defaults to one wired to the registry + event bus. */
-  statusRunner?: StatusRunner;
-  /** Inject a ProcessSpawner for the play-action script; defaults to letting
-   *  proxy.ts pick `defaultProcessSpawner`. Tests use this to drive runPlay
-   *  with an in-memory fake spawner. */
-  processSpawner?: ProcessSpawner;
-  /** Inject a ProxyFacade — tests use this to short-circuit runPlay. */
-  proxy?: ProxyFacade;
   /** Per-process token gating `Origin: null` requests (sandboxed MCP App
    *  iframe). Generated at studio boot; delivered to the iframe via
    *  `widgetState.backendToken`. Undefined disables the null-origin path —
@@ -110,9 +99,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const registryWatcher = options.disableWatcher
     ? undefined
     : (options.registryWatcher ?? createRegistryWatcher({ registry, events }));
-  const statusRunner =
-    options.statusRunner ??
-    createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const iconJobs = options.iconJobs ?? createJobRegistry();
   const tenantResolver = createTenantResolver({
     defaultRegistry: registry,
@@ -186,8 +172,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     });
   });
 
-  app.route('/demo', createDemoRouter(events));
-
   // Public app config consumed by the SPA's auth bootstrap. Standalone/local
   // studio has no auth, so this default reports `required: false` and the SPA
   // resolves to its inert NullAuthProvider. A host (e.g. the cloud deployment)
@@ -203,9 +187,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       watcher,
       spawner: options.spawner,
       platform: options.platform,
-      statusRunner,
-      processSpawner: options.processSpawner,
-      proxy: options.proxy,
       iconJobs,
       iconCacheRoot: options.iconCacheRoot,
       iconFetcher: options.iconFetcher,
@@ -292,19 +273,6 @@ export function serve(options: ServeOptions = {}) {
 if (import.meta.main) {
   const registry = createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = createEventBus();
-  const statusRunner = createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
-  const server = serve({ registry, events, statusRunner });
-  const shutdown = async () => {
-    try {
-      await statusRunner.stopAll();
-    } catch (err) {
-      console.warn(
-        `[server] statusRunner.stopAll() failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    process.exit(0);
-  };
-  process.once('SIGINT', () => void shutdown());
-  process.once('SIGTERM', () => void shutdown());
+  const server = serve({ registry, events });
   console.log(`SeeFlow Studio listening on http://${server.hostname}:${server.port}`);
 }

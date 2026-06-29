@@ -21,13 +21,9 @@ async function waitForAutoFit(node: Locator): Promise<void> {
     .toBeLessThan(320);
 }
 
-// US-015: end-to-end coverage for the component node — proves both dispatch
-// kinds light up against a real studio. (a) clicking a Button with a
-// `set`-kind action mutates the canvas runtime's state synchronously;
-// (b) clicking a Button with a `script`-kind action POSTs to the studio's
-// /api/flows/:id/nodes/:nodeId/actions/:name endpoint, the runner spawns
-// `bun nodes/c1/actions/inc.ts`, and the JSON stdout patch merges back
-// into state via the runtime's `merge` reducer.
+// US-015: end-to-end coverage for the component node — proves the `set`-kind
+// dispatch lights up against a real studio: clicking a Button with a `set`-kind
+// action mutates the canvas runtime's state synchronously.
 
 const E2E_DIR = resolve(import.meta.dir);
 const FIXTURE_DIR = join(E2E_DIR, 'fixtures/component-demo');
@@ -57,10 +53,9 @@ async function seedComponentDemo(
   const repoPath = join(studio.home, opts.slug);
   mkdirSync(repoPath, { recursive: true });
   // recursive: true on cpSync copies the entire fixture tree including
-  // nodes/c1/spec.json and nodes/c1/actions/inc.ts. The studio's resolver
-  // chain (FlowSchema -> mergeFlowAndStyle -> inlineComponentSpecs ->
-  // ResolvedFlowSchema) inlines spec.json on read, and the component-action
-  // runner realpath-roots scriptPath under nodes/c1/.
+  // nodes/c1/spec.json. The studio's resolver chain (FlowSchema ->
+  // mergeFlowAndStyle -> inlineComponentSpecs -> ResolvedFlowSchema) inlines
+  // spec.json on read.
   cpSync(FIXTURE_DIR, repoPath, { recursive: true });
 
   // US-005 migrated the on-disk fixture to the manifest layout — the flow
@@ -116,45 +111,6 @@ test.describe('canvas — component node (US-015)', () => {
     await body.getByRole('button', { name: 'Reset' }).click();
     await expect(value).toHaveText('0');
     await expect(node).toHaveScreenshot('component-node-after-reset.png', {
-      maxDiffPixelRatio: 0.02,
-    });
-  });
-
-  test('Fetch button POSTs to the action endpoint and merges the response into state', async ({
-    page,
-    studio,
-  }) => {
-    const registered = await seedComponentDemo(studio.studio, { slug: 'component-demo-fetch' });
-
-    await page.goto(
-      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
-    );
-    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
-    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await waitForCanvasSettled(page);
-
-    const node = page.locator('[data-node-type="component"]');
-    await expect(node).toHaveCount(1);
-    const body = node.locator('[data-testid="component-node-body"]');
-    const value = body.locator('span.sf\\:tabular-nums');
-    await expect(value).toHaveText('5');
-    await waitForAutoFit(node);
-
-    // Race-safe wait: arm the response promise BEFORE clicking. The Button
-    // impl invokes onClick with no payload, so the runtime POSTs `{}`. The
-    // script falls back to from=0 and writes `{"/count": 1}` to stdout,
-    // which the runtime merges into state via dispatchState({kind:'merge'}).
-    //
-    // US-007 moved the action endpoint under the nested route — the adapter
-    // composes the URL as `/api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
-    const actionUrlSuffix = `${projectFlowPath(registered.projectSlug, registered.flowSlug)}/nodes/c1/actions/inc`;
-    const responsePromise = page.waitForResponse(
-      (res) => res.url().endsWith(actionUrlSuffix) && res.status() === 200,
-    );
-    await body.getByRole('button', { name: 'Fetch' }).click();
-    await responsePromise;
-    await expect(value).toHaveText('1');
-    await expect(node).toHaveScreenshot('component-node-after-fetch.png', {
       maxDiffPixelRatio: 0.02,
     });
   });

@@ -21,9 +21,8 @@ const PORT_RELEASE_TIMEOUT_MS = 2_000;
 const PORT_POLL_INTERVAL_MS = 50;
 
 // Minimal-but-valid demo matching the fixtures used in mcp-parity.test.ts. The
-// shape mirrors VALID_DEMO_TWO_NODES (rectangle + request stateSource + script
-// playAction) so `seeflow_register_flow` accepts it through the same Flow
-// schema the rest of the studio uses.
+// shape mirrors VALID_DEMO_TWO_NODES (two rectangles) so `seeflow_register_flow`
+// accepts it through the same Flow schema the rest of the studio uses.
 const VALID_DEMO_TWO_NODES = {
   version: 2,
   name: 'Integration Two Nodes',
@@ -33,8 +32,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -42,8 +39,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'B',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],

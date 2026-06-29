@@ -125,8 +125,6 @@ import type {
   EdgePin,
   FlowNode,
   GeometricNodeType,
-  NodeStatus,
-  StatusReport,
 } from '../types.ts';
 import {
   ContextMenu,
@@ -159,7 +157,7 @@ import '@xyflow/react/dist/style.css';
  * US-027: canvas operating mode. `edit` is the studio default — every chrome
  * affordance renders and every mutation handler is live. `view` is the
  * embedder-facing read-only mode — chrome is suppressed, editing handlers
- * inert, but pan/zoom and SSE-driven status badges still work so the canvas
+ * inert, but pan/zoom still work so the canvas
  * remains a useful presentation surface. `mini` is the static-preview mode
  * for thumbnails — every chrome affordance is off (incl. the bottom-left
  * Controls cluster), all input is inert (no pan, zoom, selection, or node
@@ -172,7 +170,7 @@ export type SeeflowCanvasMode = 'edit' | 'view' | 'mini';
  * effective value comes from the mode preset in {@link resolveFlags}. Use these
  * to surgically toggle a chrome affordance or interaction without flipping the
  * whole canvas into the other mode (e.g. a mostly-`view` canvas that still
- * lets the user pan but with status badges hidden).
+ * lets the user pan but with the detail panel hidden).
  *
  * `storageKey` is a pass-through for future canvas-side persistence (e.g. a
  * future viewport memory). It is currently unused inside demo-canvas; the
@@ -183,7 +181,6 @@ export interface CanvasFeatureOverrides {
   showToolbar?: boolean;
   showStyleStrip?: boolean;
   showDetailPanel?: boolean;
-  showStatusBadges?: boolean;
   showResizeHandles?: boolean;
   /**
    * Gates the bottom-left zoom/fit/tidy `<Controls>` cluster. Default ON for
@@ -258,7 +255,6 @@ export interface ResolvedCanvasFlags {
   showToolbar: boolean;
   showStyleStrip: boolean;
   showDetailPanel: boolean;
-  showStatusBadges: boolean;
   showResizeHandles: boolean;
   showControls: boolean;
   showShareMenu: boolean;
@@ -281,7 +277,6 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showToolbar: true,
   showStyleStrip: true,
   showDetailPanel: true,
-  showStatusBadges: true,
   showResizeHandles: true,
   showControls: true,
   showShareMenu: true,
@@ -308,9 +303,6 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   showToolbar: true,
   showStyleStrip: false,
   showDetailPanel: false,
-  // View mode keeps status badges (driven by SSE) so the canvas can serve as
-  // a live monitoring surface — the AC excludes status badges from "chrome".
-  showStatusBadges: true,
   showResizeHandles: false,
   // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
   // fit-view buttons — they're navigation aids, not editing affordances.
@@ -344,15 +336,12 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
  * Mini mode preset: every chrome affordance off, every input inert. The
  * canvas renders as a static, auto-fit preview suitable for thumbnails.
  * Consumers can still surgically override via `CanvasFeatureOverrides`
- * (e.g. `showStatusBadges: true` to keep live state visible).
+ * (e.g. `showControls: true` to keep the zoom cluster visible).
  */
 const MINI_DEFAULTS: ResolvedCanvasFlags = {
   showToolbar: false,
   showStyleStrip: false,
   showDetailPanel: false,
-  // Status badges off so thumbnails read visually neutral; flip on via
-  // override for a live-state preview.
-  showStatusBadges: false,
   showResizeHandles: false,
   showControls: false,
   showShareMenu: false,
@@ -387,7 +376,6 @@ export function resolveFlags(
     showToolbar: input.showToolbar ?? defaults.showToolbar,
     showStyleStrip: input.showStyleStrip ?? defaults.showStyleStrip,
     showDetailPanel: input.showDetailPanel ?? defaults.showDetailPanel,
-    showStatusBadges: input.showStatusBadges ?? defaults.showStatusBadges,
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
     showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
@@ -441,13 +429,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   projectId?: string;
   /**
-   * Flow slug for the currently-mounted flow. Threaded into each type:'component'
-   * node's runtime `data.flowSlug` so script-kind actions can POST to
-   * `/api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`. Absent →
-   * the runtime no-ops script dispatches (set-kind actions still work).
-   */
-  flowSlug?: string;
-  /**
    * Optional override for the file-serving URL prefix used by file-backed
    * nodes (type:'image', type:'html'). Default `/api/projects` is correct for the
    * studio (same-origin). Embedders that serve files from a different host
@@ -469,16 +450,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   resolveFileSrc?: (url: string) => Promise<string>;
   /**
-   * Base URL the component-node runtime uses to POST script-kind actions:
-   * `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
-   * Defaults to `/api` (correct for the studio, same-origin). Embedders that
-   * mount the studio under a different prefix or proxy through another host
-   * pass an absolute prefix here. Threaded into `data.apiBaseUrl` for every
-   * `type:'component'` node alongside `data.projectSlug = projectId` and
-   * `data.flowSlug = flowSlug`.
-   */
-  apiBaseUrl?: string;
-  /**
    * US-013: studio origin used by IconRenderer's `kind:'svg-url'` branch when
    * resolving vendor-prefixed icon ids (`aws:lambda` → `${studioBaseUrl}/api/icons/aws/lambda.svg`).
    * Default `''` (same-origin) is correct when the canvas is hosted by the
@@ -499,17 +470,12 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onSelectionChange?: (nodeIds: string[], connectorIds: string[]) => void;
   /**
-   * US-026: read-only runtime state — per-node SSE `runs`, latest `statuses`,
-   * and optimistic `pendingOverrides.{nodes,connectors}` that haven't been
-   * reconciled by the server yet. Replaces the per-stream props (`runs`,
-   * `statusByNode`, `nodeOverrides`, `connectorOverrides`) so demo-canvas
-   * has a single seam for runtime data. Every field is optional; absent →
-   * the canvas renders without dynamic chrome (no status badges / overlay
-   * indicators), matching the view-mode default.
+   * Read-only runtime state — optimistic `pendingOverrides.{nodes,connectors}`
+   * that haven't been reconciled by the server yet. Every field is optional;
+   * absent → the canvas renders without optimistic overrides, matching the
+   * view-mode default.
    */
   runtime?: CanvasRuntime;
-  /** Click handler for a PlayNode's Play button. */
-  onPlayNode?: (nodeId: string) => void;
   /** Fired once per drag-stop with the node's final position. */
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
   /**
@@ -958,13 +924,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * driven by `selectedNodeIds[0]` / `selectedConnectorIds[0]`.
    */
   disableSidebar?: boolean;
-  /**
-   * US-007: latest StatusReport for the currently inspected node, forwarded to
-   * the built-in DetailPanel's Status section. The host owns the per-node
-   * status map and slices it down to the single selected entry. Undefined when
-   * the selected node has no statusAction or hasn't emitted yet.
-   */
-  statusReport?: StatusReport & { ts: number };
   /**
    * US-007: persist a new node name from a DetailPanel edit. Mirrors
    * {@link onNodeNameChange} (the inline-on-canvas edit handler) — both share
@@ -1539,12 +1498,9 @@ const mergeConnectorOverride = (
   return { ...conn, ...override } as Connector;
 };
 
-// Flat-node-types routing: `rectangle` → RectangleNode (the only renderer that
-// draws capability chrome — play button, status pill, header layout, icon
+// Flat-node-types routing: `rectangle` → RectangleNode (header layout + icon
 // trigger); the 8 other geometric tags → GeometricNode (shared SVG/box visual
-// keyed by `type`); image/html/icon → their dedicated renderers. Non-rectangle
-// renderers parse + persist capabilities but draw no chrome (Renderer
-// phasing — see docs/plans/2026-05-23-flat-node-types-design.md).
+// keyed by `type`); image/html/icon → their dedicated renderers.
 const nodeTypes = {
   rectangle: RectangleNode,
   ellipse: GeometricNode,
@@ -2232,28 +2188,6 @@ export function handleClipboardShortcut(deps: ClipboardShortcutDeps): boolean {
   return true;
 }
 
-type RunsMap = CanvasRuntime['runs'];
-
-const statusFor = (runs: RunsMap, id: string): NodeStatus => runs?.[id]?.status ?? 'idle';
-
-/**
- * Per-node `status` injected into a node's `data` slot. PlayNode (US-030)
- * needs to distinguish "never run" (undefined → hide pill) from "ran-then-idle"
- * (the runs reducer doesn't actually produce idle entries — the only way
- * status is undefined is no-entry-in-map). StateNode falls back to 'idle' on
- * its own; passing undefined upstream lets PlayNode see the difference
- * without affecting StateNode.
- */
-const dataStatusFor = (runs: RunsMap, id: string): NodeStatus | undefined => runs?.[id]?.status;
-
-/**
- * Per-node error message injected into a node's `data` slot when the most
- * recent run failed. PlayNode (US-018) surfaces it as the play-button
- * tooltip in place of the removed status chip.
- */
-const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
-  runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
-
 function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowCanvasHandle>) {
   const {
     mode,
@@ -2266,21 +2200,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     topLeftSlot,
     topRightSlot,
     projectId,
-    flowSlug,
     fileBaseUrl,
     resolveFileSrc,
-    apiBaseUrl = '/api',
     studioBaseUrl = '',
     nodes,
     connectors,
     selectedNodeIds,
     selectedConnectorIds,
     onSelectionChange,
-    // US-026: single bundled runtime prop replacing runs/statusByNode/
-    // nodeOverrides/connectorOverrides. Destructured below into local aliases so
-    // the existing read sites keep the same shape; the parent now owns the seam.
+    // Single bundled runtime prop carrying pendingOverrides. Destructured below
+    // into local aliases so the existing read sites keep the same shape; the
+    // parent now owns the seam.
     runtime,
-    onPlayNode,
     onNodePositionChange,
     onNodePositionsChange,
     onNodeResize,
@@ -2338,7 +2269,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     canvasMode,
     onCanvasModeChange,
     disableSidebar,
-    statusReport,
     onNameChange,
     onDescriptionChange,
     onDetailChange,
@@ -2355,7 +2285,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     showToolbar,
     showStyleStrip,
     showDetailPanel,
-    showStatusBadges,
     showResizeHandles,
     showControls,
     showShareMenu,
@@ -2385,7 +2314,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         showToolbar,
         showStyleStrip,
         showDetailPanel,
-        showStatusBadges,
         showResizeHandles,
         showControls,
         showShareMenu,
@@ -2407,7 +2335,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       showToolbar,
       showStyleStrip,
       showDetailPanel,
-      showStatusBadges,
       showResizeHandles,
       showControls,
       showShareMenu,
@@ -2447,11 +2374,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     () => resolveAutoFitView(effectiveAutoFitView),
     [effectiveAutoFitView],
   );
-  // US-026: destructure the bundled `runtime` prop into the legacy per-stream
-  // names every downstream call site already uses. Keeps the diff focused on
-  // the prop API while preserving the existing memo/dependency wiring.
-  const runs = runtime?.runs;
-  const statusByNode = runtime?.statuses;
+  // Destructure the bundled `runtime` prop into the local names the override
+  // read sites use.
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
   const connectorOverrides = runtime?.pendingOverrides?.connectors;
   // Bottom-toolbar draw mode (US-028). When `drawShape` is set, the wrapper
@@ -3713,15 +3637,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // Cloud/authed mode: lets type:'image' resolve its token-gated asset
           // through the host (blob URL) instead of a header-less native <img>.
           resolveFileSrc,
-          // US-031: component-node runtime POSTs script-kind actions to
-          // `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
-          // Gated on type so non-component nodes don't carry stray fields they'd
-          // ignore. `projectSlug` mirrors the canvas's `projectId` prop (the
-          // file-route addressing uses project slug); `flowSlug` is the active
-          // flow's slug threaded from the host (apps/web/demo-view.tsx).
-          projectSlug: merged.type === 'component' ? projectId : undefined,
-          flowSlug: merged.type === 'component' ? flowSlug : undefined,
-          apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined,
           // type:'component'-only: hover "View fullscreen" affordance. On for
           // edit + view (where a person is looking at the canvas), off for mini
           // thumbnails (every input/chrome path is disabled by design there).
@@ -3730,14 +3645,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every image node picks it up uniformly; non-image types ignore it.
           onRetryUpload: onRetryImageUpload,
-          status: dataStatusFor(runs, merged.id),
-          errorMessage: dataErrorMessageFor(runs, merged.id),
-          // US-007: latest StatusReport for this node (if any). The rectangle
-          // renderer reads this to draw its status badge row when a
-          // statusAction capability is set. Undefined → row is suppressed
-          // and the node renders byte-identical to legacy.
-          statusReport: statusByNode?.[merged.id],
-          onPlay: onPlayNode,
           onResize: onNodeResize,
           onResizeEnd: onNodeResizeEnd,
           setResizing,
@@ -3884,15 +3791,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return [...fromServer, ...fromOverrides];
   }, [
     projectId,
-    flowSlug,
     fileBaseUrl,
     resolveFileSrc,
-    apiBaseUrl,
     nodes,
     selectedNodeIdSet,
-    runs,
-    statusByNode,
-    onPlayNode,
     onNodeResize,
     onNodeResizeEnd,
     onHtmlNodeFitToContent,
@@ -4410,10 +4312,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     selectedConnectorIdSet.size === 1 ? [...selectedConnectorIdSet][0] : null;
   const rfEdges = useMemo<Edge[]>(() => {
     const decorate = (c: Connector): Edge => {
-      const adjacentRunning =
-        statusFor(runs, c.source) === 'running' || statusFor(runs, c.target) === 'running';
       const isSelected = selectedConnectorIdSet.has(c.id);
-      const edge = connectorToEdge(c, adjacentRunning, isSelected);
+      const edge = connectorToEdge(c, false, isSelected);
       if (isSelected) edge.selected = true;
       // `reconnectable: true` enables the endpoint-drag gesture for the edge;
       // React Flow shows reconnect handles on hover. Wired only when the
@@ -4426,7 +4326,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // visible endpoint-dot portal (CSS z-index 2000) sits on top.
       const next: Edge = enableReconnect ? { ...edge, reconnectable: true } : edge;
       // Inject the runtime label-change callback into edge.data — same
-      // channel the custom node components use for `onPlay` / `onResize`.
+      // channel the custom node components use for `onResize`.
       // US-024: `reconnectable` tells the edge component to render the
       // visible (non-interactive) endpoint dots above other nodes; React
       // Flow's native EdgeUpdateAnchors handle the actual drag.
@@ -4494,7 +4394,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return [...unselected, ...selected];
   }, [
     connectors,
-    runs,
     selectedConnectorIdSet,
     onlySelectedConnectorId,
     connectorOverrides,
@@ -6653,7 +6552,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 node={sidebarNode}
                 connector={null}
                 adapter={adapter ?? null}
-                statusReport={statusReport}
                 onNameChange={onNameChange}
                 onDescriptionChange={onDescriptionChange}
                 onDetailChange={onDetailChange}

@@ -30,7 +30,7 @@ If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed
 
 ## 2. Normalize the planner output
 
-Strip `rationales` (keep them in memory for the review prompt below), then for the planner's designated trigger node (the one whose `data.playAction` is set even as a placeholder), inject the minimum `playAction` payload the contract requires so the server accepts the batch. Use `$schemaCache.action` and `$schemaCache.node` (Phase 0) to look up the `PlayAction` shape's required keys — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it. **Skip this normalisation entirely for `inputClass === "document"` flows** — document flows usually carry no trigger, and the planner deliberately omits `playAction` per its input-class rules.
+Strip `rationales` (keep them in memory for the review prompt below). The remaining `nodes` / `connectors` arrays are forwarded as-is to `flow:add-bulk` after the id rewrite in step 3 — the planner already conformed them to `$SEEFLOW schema node` / `connector`. If any node carries a key the contract rejects (a leaked connector-only field, an adjacent-domain key), strip it here before the batch.
 
 ## 3. Mint canonical ids
 
@@ -55,12 +55,12 @@ Atomic seed of nodes + connectors in one transactional write. Forward the normal
 
 ## 5. Detail backfill — runs unconditionally
 
-Every input class, every dynamic gate outcome; the static path used to ship with blank `nodes/<id>/detail.md` because Phase 4–5 were skipped. Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
+Every input class. Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
 
 - **Present** — already externalised by `flow:add-bulk` to `nodes/<id>/detail.md`. Nothing to do.
-- **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why`. Push via `nodes:patch --project "$projectSlug" --flow "$flowSlug" <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `<repoPath>/flows/<flowSlug>/nodes/<id>/detail.md` and stores a `file://` ref.
+- **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why` (and the staged `dataEntryPaths` / `techAdaptations` from the Phase 1 → 2 overlap when they sharpen the prose). Push via `nodes:patch --project "$projectSlug" --flow "$flowSlug" <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `<repoPath>/flows/<flowSlug>/nodes/<id>/detail.md` and stores a `file://` ref.
 
-Parallelise the patches across nodes — single message, N Bash calls. This is the static-flow safety net described in `../../agents/seeflow-node-planner.md` § "Semantic requirements".
+Parallelise the patches across nodes — single message, N Bash calls. This is the detail safety net described in `../../agents/seeflow-node-planner.md` § "Semantic requirements".
 
 ## 6. `flows:layout`
 
@@ -70,35 +70,34 @@ Run ELK and write `style.json`:
 $SEEFLOW flows:layout --project "$projectSlug" --flow "$flowSlug"
 ```
 
-## 7. Silent LEARN.md write #1
+## 7. Silent LEARN.md write
 
-First disk hit for `$learnPath`. Merges staged `learnUpdates` from Phase 1 → 2 overlap AND upserts the "Flows already created" row by `<projectSlug>/<flowSlug>`. Full merge contract, field list, and ~6 KB cap rule live in `../learn-format.md` § "Lifecycle" + § "Merging rules". Run quietly — do **not** narrate to the user. Create `$PWD/.seeflow/` if missing.
+The single disk hit for `$learnPath` per run. Merges staged `learnUpdates` from Phase 1 → 2 overlap AND upserts the "Flows already created" row by `<projectSlug>/<flowSlug>` with today's date + a one-line purpose. Full merge contract, field list, and ~6 KB cap rule live in `../learn-format.md` § "Lifecycle" + § "Merging rules". Run quietly — do **not** narrate to the user. Create `$PWD/.seeflow/` if missing.
+
+If the user review below applies layout edits, re-run this write afterward (idempotent upsert by `<projectSlug>/<flowSlug>`) so any new fact the edits surfaced lands too.
 
 ---
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
-## User review + dynamic gate
+## User review
 
-Open the canvas, surface the planner's `rationales` per node — prefix each with `<data.name> (<canonical id>):` so the human sees a readable anchor despite the opaque id (`POST /orders (node-Ab12cd34Ef): Single HTTP service — internal routes are implementation detail.`) — and ask **one combined question** (layout review + dynamic gate in a single round-trip — two consecutive waits is interrogation):
+Open the canvas, surface the planner's `rationales` per node — prefix each with `<data.name> (<canonical id>):` so the human sees a readable anchor despite the opaque id (`POST /orders (node-Ab12cd34Ef): Single HTTP service — internal routes are implementation detail.`) — and ask **one question** about the layout:
 
 ```bash
 URL="$STUDIO_URL/projects/$projectSlug/flows/$flowSlug"
 (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
 ```
 
-> Opened the canvas at `<url>`. Two quick questions:
-> 1. **Layout** — any additions, removals, or renames?
-> 2. **Dynamic or static** — continue with Play scripts + Status probes so the
->    canvas reacts to your running system, or stop with the static layout?
+> Opened the canvas at `<url>`. Any additions, removals, or renames?
 
-**Wait once.** Parse both answers from the reply.
+**Wait once.** Parse the answer from the reply.
 
+- **No changes** → finalise (below).
 - **Layout changes requested** → branch on how scoped the change is:
-  - **Small, fully-specified edit** (the user names exactly what to add / rename / drop — "add two component nodes for X and Y", "rename `orders-db` to `orders-db-write`", "remove the cache node") and the overall intent is unchanged → **apply it directly**, no planner round-trip. New nodes/connectors via `flow:add-bulk` (mint ids with `$SEEFLOW ids` first, run detail-backfill on any new non-decorative node), field edits via `nodes:patch`, removals via `nodes:delete`; then re-run `flows:layout`. Re-surface the canvas. **Don't re-ask the dynamic gate** — if the user already answered it, that answer still stands; carry it forward. The planner exists to turn an open-ended brief into a graph, not to relay a two-node tweak the user already spelled out.
-  - **Substantive change** (new or shifted intent, structural rethink, vague feedback that needs modelling judgment — "make it look more like our actual pipeline", "this is missing the whole billing side") → re-run node-planner with the feedback, repeat the combined ask. The dynamic answer (if given) is remembered but not acted on until the layout is approved.
-- **Layout approved + dynamic** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations.
-- **Layout approved + static** → **Silent LEARN.md write #2** (merge contract in `p6-validation.md` § "Silent LEARN.md write #2"), then print `Flow "<name>" registered as <projectSlug>/<flowSlug> (static). Open: $STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` and stop.
-- **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in).
+  - **Small, fully-specified edit** (the user names exactly what to add / rename / drop — "add two component nodes for X and Y", "rename `orders-db` to `orders-db-write`", "remove the cache node") and the overall intent is unchanged → **apply it directly**, no planner round-trip. New nodes/connectors via `flow:add-bulk` (mint ids with `$SEEFLOW ids` first, run detail-backfill on any new non-decorative node), field edits via `nodes:patch`, removals via `nodes:delete`; then re-run `flows:layout`. Re-surface the canvas, then finalise. The planner exists to turn an open-ended brief into a graph, not to relay a two-node tweak the user already spelled out.
+  - **Substantive change** (new or shifted intent, structural rethink, vague feedback that needs modelling judgment — "make it look more like our actual pipeline", "this is missing the whole billing side") → re-run node-planner with the feedback, re-run steps 4–6, re-surface the canvas and repeat this review.
 
-(`inputClass === "document"` defaults to static here without re-asking — document flows have no runtime to react to. Same applies to the no-source-tree case folded into the document branch.)
+### Finalise
+
+Once the layout is approved (with or without edits): re-run the **Silent LEARN.md write** (step 7) if any edits were applied, then print `Flow "<name>" registered as <projectSlug>/<flowSlug>. Open: $STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`, then `rm -rf "$SEEFLOW_TMP"` to clear flow-local scratch. Done.

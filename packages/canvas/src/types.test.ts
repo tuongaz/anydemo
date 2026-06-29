@@ -7,7 +7,6 @@ import type {
   FlowNode,
   GroupNodeData,
   NodeType,
-  ScriptAction,
   SetComponentAction,
 } from './types.ts';
 
@@ -28,17 +27,11 @@ describe('US-010: component node types', () => {
     expect(el.children).toEqual(['btn']);
   });
 
-  test('ComponentAction discriminates on kind: "set" | "script"', () => {
+  test('ComponentAction is the set-kind action', () => {
     const setAct: SetComponentAction = { kind: 'set', path: '/count', value: 0 };
-    const scriptAct: ScriptAction = {
-      kind: 'script',
-      interpreter: 'bun',
-      scriptPath: 'actions/refresh.ts',
-    };
     const a: ComponentAction = setAct;
-    const b: ComponentAction = scriptAct;
+    expect(a.kind).toBe('set');
     if (a.kind === 'set') expect(a.path).toBe('/count');
-    if (b.kind === 'script') expect(b.scriptPath).toBe('actions/refresh.ts');
   });
 
   test('ComponentSpec ties root + elements together', () => {

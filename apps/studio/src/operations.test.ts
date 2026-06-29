@@ -882,52 +882,7 @@ describe('ConnectorPatchBodySchema — head shape', () => {
   });
 });
 
-describe('NodePatchBodySchema — action overlays', () => {
-  it('accepts playAction in the patch body', () => {
-    const parsed = NodePatchBodySchema.safeParse({
-      playAction: {
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('accepts statusAction in the patch body', () => {
-    const parsed = NodePatchBodySchema.safeParse({
-      statusAction: {
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/status.ts',
-      },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('accepts stateSource in the patch body', () => {
-    const parsed = NodePatchBodySchema.safeParse({
-      stateSource: { kind: 'request' },
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it('mergeNodeUpdates writes playAction onto node.data', () => {
-    const node: Record<string, unknown> = { id: 'n1', type: 'rectangle', data: {} };
-    mergeNodeUpdates(node, {
-      playAction: {
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-      },
-    });
-    expect((node.data as Record<string, unknown>).playAction).toEqual({
-      kind: 'script',
-      interpreter: 'bun',
-      scriptPath: 'scripts/play.ts',
-    });
-  });
-
+describe('NodePatchBodySchema — strictness', () => {
   it('rejects unknown top-level keys (strict guarantee preserved)', () => {
     const parsed = NodePatchBodySchema.safeParse({ bogus: 1 });
     expect(parsed.success).toBe(false);
@@ -1351,9 +1306,8 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
   // reparse is what enforces required fields on the new type (e.g. type:'image'
   // needs `path`). These cases assert the mutator's contract: type flips,
   // visuals survive, lingering semantic fields not allowed on the new type get
-  // stripped. Capability fields (playAction / statusAction / stateSource) are
-  // valid on every type post-flat-types, so a geometric→geometric retype is
-  // strip-free.
+  // stripped. The `handlerModule` capability field is valid on every type, so a
+  // geometric→geometric retype is strip-free.
 
   it('rectangle → ellipse preserves capabilities + visuals (geometric → geometric is strip-free)', () => {
     const node: Record<string, unknown> = {
@@ -1361,9 +1315,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'rectangle',
       data: {
         name: 'svc',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-        statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
+        handlerModule: 'svc-handler',
         borderColor: 'teal',
         cornerRadius: 8,
       },
@@ -1371,9 +1323,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     mergeNodeUpdates(node, { type: 'ellipse' });
     expect(node.type).toBe('ellipse');
     const data = node.data as Record<string, unknown>;
-    expect(data.playAction).toBeDefined();
-    expect(data.statusAction).toBeDefined();
-    expect(data.stateSource).toBeDefined();
+    expect(data.handlerModule).toBe('svc-handler');
     expect(data.borderColor).toBe('teal');
     expect(data.cornerRadius).toBe(8);
   });
@@ -1386,7 +1336,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
         name: 'pic',
         path: 'nodes/n1/upload.png',
         alt: 'a picture',
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        handlerModule: 'pic-handler',
         borderColor: 'teal',
       },
     };
@@ -1395,7 +1345,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     const data = node.data as Record<string, unknown>;
     expect('path' in data).toBe(false);
     expect('alt' in data).toBe(false);
-    expect(data.playAction).toBeDefined();
+    expect(data.handlerModule).toBe('pic-handler');
     expect(data.borderColor).toBe('teal');
   });
 
@@ -1405,7 +1355,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'rectangle',
       data: {
         name: 'svc',
-        statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
+        handlerModule: 'svc-handler',
         borderColor: 'teal',
       },
     };
@@ -1413,7 +1363,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     expect(node.type).toBe('icon');
     const data = node.data as Record<string, unknown>;
     expect(data.icon).toBe('server');
-    expect(data.statusAction).toBeDefined();
+    expect(data.handlerModule).toBe('svc-handler');
     expect(data.borderColor).toBe('teal');
   });
 
@@ -1429,7 +1379,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
         name: 'pic',
         path: 'nodes/n1/upload.png',
         alt: 'a picture',
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        handlerModule: 'pic-handler',
       },
     };
     mergeNodeUpdates(node, { type: 'html' });
@@ -1437,7 +1387,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     const data = node.data as Record<string, unknown>;
     expect('path' in data).toBe(false);
     expect('alt' in data).toBe(false);
-    expect(data.playAction).toBeDefined();
+    expect(data.handlerModule).toBe('pic-handler');
     expect(data.name).toBe('pic');
   });
 
@@ -1447,13 +1397,12 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'rectangle',
       data: {
         name: 'svc',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        handlerModule: 'svc-handler',
       },
     };
     mergeNodeUpdates(node, { type: 'rectangle' });
     expect(node.type).toBe('rectangle');
-    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
+    expect((node.data as Record<string, unknown>).handlerModule).toBe('svc-handler');
   });
 });
 
@@ -1464,7 +1413,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'rectangle',
       data: {
         name: 'svc',
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        handlerModule: 'svc-handler',
         detail: 'docs survive retype',
       },
     });
@@ -1515,7 +1464,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'rectangle',
       data: {
         name: 'svc',
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        handlerModule: 'svc-handler',
       },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
@@ -1529,8 +1478,8 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
     expect(node.type).toBe('icon');
     expect(node.data.icon).toBe('server');
-    // Capabilities are valid on every type, so playAction carries through.
-    expect(node.data.playAction.scriptPath).toBe('scripts/play.ts');
+    // Capabilities are valid on every type, so handlerModule carries through.
+    expect(node.data.handlerModule).toBe('svc-handler');
   });
 });
 
@@ -1624,7 +1573,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a capability field (playAction) on every one of the 14 types via FlowSchema', async () => {
+  it('accepts a capability field (handlerModule) on every one of the 14 types via FlowSchema', async () => {
     const types = [
       'rectangle',
       'ellipse',
@@ -1649,11 +1598,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
             type,
             data: {
               name: type,
-              playAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/play.ts',
-              },
+              handlerModule: `${type}-handler`,
             },
           },
         ],
@@ -1662,7 +1607,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
       const result = FlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with playAction to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
     }

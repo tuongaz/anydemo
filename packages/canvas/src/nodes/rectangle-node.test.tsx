@@ -3,7 +3,6 @@ import type { NodeProps } from '@xyflow/react';
 import * as React from 'react';
 import { FONT_STACKS } from '../lib/font-stacks.ts';
 import { RectangleNode, type RectangleNodeType } from './rectangle-node.tsx';
-import { StatusBadge } from './status-badge.tsx';
 
 // Shim React's internal dispatcher so we can render RectangleNode without a
 // real React Flow mount (see icon-node.test.tsx for the same pattern). The
@@ -82,14 +81,10 @@ function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): R
   return out;
 }
 
-function findByTestId(tree: unknown, testId: string): ReactElementLike[] {
-  return findAll(tree, (el) => (el.props as { 'data-testid'?: string })['data-testid'] === testId);
-}
-
 // Function components in the JSX tree appear as `{ type: FunctionRef, props }`
 // without their render body executing under the shim. Match by the function's
-// `.name` so local components (PlayButton) defined inside rectangle-node.tsx
-// can be located without exporting them.
+// `.name` so local components (e.g. NodeHeader) referenced inside
+// rectangle-node.tsx can be located without exporting them.
 function findByComponentName(tree: unknown, name: string): ReactElementLike[] {
   return findAll(tree, (el) => {
     const t = el.type as { name?: string } | { type?: { name?: string } } | unknown;
@@ -132,53 +127,8 @@ function callRectangleNode(
   return renderWithHooks(() => impl(props));
 }
 
-// US-009: capability-chrome-rectangle-only invariant — first half. The
-// rectangle is the SOLE renderer that draws the play button and status pill.
-// Adding a play action / status action data field MUST surface chrome on
-// rectangle. The other-half geometric-node test fences the inverse.
-describe('US-009: RectangleNode renders capability chrome', () => {
-  const onPlay = () => {};
-
-  it('draws the play button when data.playAction is set', () => {
-    const tree = callRectangleNode({
-      name: 'svc',
-      onPlay,
-      playAction: {
-        kind: 'script' as const,
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-      },
-    });
-    const playButtons = findByComponentName(tree, 'PlayButton');
-    expect(playButtons).toHaveLength(1);
-  });
-
-  it('does NOT draw the play button when data.playAction is absent', () => {
-    const tree = callRectangleNode({ name: 'svc', onPlay });
-    const playButtons = findByComponentName(tree, 'PlayButton');
-    expect(playButtons).toHaveLength(0);
-  });
-
-  it('draws the status badge when data.statusReport is set', () => {
-    const tree = callRectangleNode({
-      name: 'svc',
-      statusReport: { state: 'ok', summary: 'all good', ts: 1 },
-    });
-    // The status badge wraps a StatusBadge component inside a div with the
-    // rectangle-node-status-badge testid. Find either.
-    const badges = findByTestId(tree, 'rectangle-node-status-badge');
-    expect(badges).toHaveLength(1);
-    // The StatusBadge component is the child — confirms it really is rendered.
-    const statusBadges = findAll(tree, (el) => el.type === StatusBadge);
-    expect(statusBadges).toHaveLength(1);
-  });
-
-  it('does NOT draw the status badge when data.statusReport is absent', () => {
-    const tree = callRectangleNode({ name: 'svc' });
-    const badges = findByTestId(tree, 'rectangle-node-status-badge');
-    expect(badges).toHaveLength(0);
-  });
-
+// RectangleNode root element invariants.
+describe('RectangleNode root element', () => {
   it('emits data-node-type="rectangle" on the root element', () => {
     const tree = callRectangleNode({ name: 'svc' });
     const rect = findAll(
@@ -255,8 +205,7 @@ describe('RectangleNode shadow elevation', () => {
 // inline style is the single source of truth for alignment — when textAlign
 // is undefined it defaults to 'center' (so a fresh double-click-to-edit
 // drops the caret in the middle of the card, not the left edge). The header
-// title is deliberately NOT aligned — title stays left, play button stays
-// right — so the trailing slot remains anchored. Earlier fix only touched
+// title is deliberately NOT aligned — it stays left. Earlier fix only touched
 // geometric-node.tsx, leaving rectangle bodies unaligned — this fence
 // guards the body half of the contract.
 describe('RectangleNode textAlign fan-out', () => {

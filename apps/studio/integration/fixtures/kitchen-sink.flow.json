@@ -11,15 +11,7 @@
       },
       "data": {
         "name": "Trigger",
-        "stateSource": {
-          "kind": "request"
-        },
-        "description": "type:'rectangle' — kitchen sink fixture trigger with playAction capability.",
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "scriptPath": "scripts/noop.ts"
-        }
+        "description": "type:'rectangle' — kitchen sink fixture trigger node."
       }
     },
     {
@@ -31,10 +23,7 @@
       },
       "data": {
         "name": "Worker",
-        "stateSource": {
-          "kind": "event"
-        },
-        "description": "type:'database' — kitchen sink fixture worker (non-rectangle geometric with statusAction capability)."
+        "description": "type:'database' — kitchen sink fixture worker (non-rectangle geometric node)."
       }
     },
     {

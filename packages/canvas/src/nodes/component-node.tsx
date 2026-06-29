@@ -23,12 +23,6 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
   setResizing?: (on: boolean) => void;
   /** US-005: alignment-guide integration injected by the canvas in edit mode. */
   resizeAlignment?: ResizeAlignmentHooks;
-  /** Threaded from the host so script-kind actions know which project to POST against. */
-  projectSlug?: string;
-  /** Threaded from the host so script-kind actions know which flow to POST against. */
-  flowSlug?: string;
-  /** Override for the action-dispatch base URL. Defaults to '/api' in ComponentRuntime. */
-  apiBaseUrl?: string;
   // Mirror of HtmlNodeRuntimeData.onFitToContent: when wired (edit mode only),
   // the renderer's "Fit to content" button calls this. The host's handler
   // PATCHes { autoSize: true } through the adapter, which strips width/height
@@ -147,13 +141,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto"
       style={bodyFontStyle}
     >
-      <ComponentRuntime
-        spec={data.spec}
-        nodeId={id}
-        projectSlug={data.projectSlug}
-        flowSlug={data.flowSlug}
-        apiBaseUrl={data.apiBaseUrl}
-      />
+      <ComponentRuntime spec={data.spec} nodeId={id} />
     </div>
   ) : (
     <div
@@ -162,13 +150,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       className="sf:inline-block"
       style={{ ...bodyFontStyle, maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
     >
-      <ComponentRuntime
-        spec={data.spec}
-        nodeId={id}
-        projectSlug={data.projectSlug}
-        flowSlug={data.flowSlug}
-        apiBaseUrl={data.apiBaseUrl}
-      />
+      <ComponentRuntime spec={data.spec} nodeId={id} />
     </div>
   );
 
@@ -240,13 +222,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
             className="sf:min-h-0 sf:flex-1 sf:overflow-auto sf:p-4"
             style={bodyFontStyle}
           >
-            <ComponentRuntime
-              spec={data.spec}
-              nodeId={id}
-              projectSlug={data.projectSlug}
-              flowSlug={data.flowSlug}
-              apiBaseUrl={data.apiBaseUrl}
-            />
+            <ComponentRuntime spec={data.spec} nodeId={id} />
           </div>
         </DialogContent>
       </Dialog>

@@ -33,9 +33,6 @@ import {
   FlowTextNodeSchema,
   FlowTriangleNodeSchema,
   FlowUserNodeSchema,
-  PlayActionSchema,
-  StatusActionSchema,
-  StatusReportSchema,
   StyleSchema,
 } from './schema.ts';
 
@@ -90,8 +87,8 @@ export const SCHEMA_INDEX_USAGE = {
   examples: [
     'seeflow schema node',
     'seeflow schema node rectangle',
-    'seeflow schema node rectangle --jq .schemas.rectangle.properties.data.properties.playAction',
-    'seeflow schema action playAction',
+    'seeflow schema node rectangle --jq .schemas.rectangle.properties.data.properties.name',
+    'seeflow schema action componentAction',
   ],
 } as const;
 
@@ -102,7 +99,7 @@ const CATEGORY_META: Array<Omit<SchemaCategory, 'subnames'>> = [
   {
     name: 'node',
     description:
-      'All 19 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, diamond, hexagon, triangle, parallelogram, document, image, html, icon, component, linkflow). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant. The linkflow variant carries an optional `target: { project, flow }` slug pair that turns the node into a clickable cross-flow link.',
+      'All 19 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, diamond, hexagon, triangle, parallelogram, document, image, html, icon, component, linkflow). Visual kind is the type. The linkflow variant carries an optional `target: { project, flow }` slug pair that turns the node into a clickable cross-flow link.',
   },
   {
     name: 'connector',
@@ -111,7 +108,7 @@ const CATEGORY_META: Array<Omit<SchemaCategory, 'subnames'>> = [
   {
     name: 'action',
     description:
-      'playAction, statusAction, statusReport, plus componentAction (the set | script discriminated union dispatched on component-node action handles).',
+      'componentAction — the `set` mutation dispatched on component-node action handles.',
   },
   {
     name: 'componentSpec',
@@ -155,11 +152,8 @@ const PAYLOADS: Record<string, SchemaPayload> = {
     },
     notes: [
       "type:'image' data.path must start with 'nodes/<id>/'.",
-      "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
       "type:'component' nodes have no `spec` field on disk — the spec lives in <project>/nodes/<id>/spec.json (see `seeflow schema componentSpec`). The resolver inlines it into data.spec for runtime / SSE broadcasts.",
       'The legal `elements[].type` values and their props are listed under `seeflow schema componentCatalog`.',
-      "stateSource SHOULD be set on every node that has a statusAction — kind:'request' for poll-based (REST, healthcheck, DB query), kind:'event' for push-based (SSE, webhook, queue, message bus).",
-      'stateSource may also be set without a statusAction on representational/architecture diagrams to signal data-flow intent (poll vs push) without wiring a runtime probe.',
     ],
   },
   connector: {
@@ -170,14 +164,10 @@ const PAYLOADS: Record<string, SchemaPayload> = {
   },
   action: {
     schemas: {
-      playAction: toJsonSchema(PlayActionSchema),
-      statusAction: toJsonSchema(StatusActionSchema),
-      statusReport: toJsonSchema(StatusReportSchema),
       componentAction: toJsonSchema(ComponentActionSchema),
     },
     notes: [
-      "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
-      "componentAction is a `set | script` discriminated union: `set` mutates canvas state locally (path is a JSON Pointer starting with '/'), `script` shells out via POST /api/flows/:id/nodes/:nodeId/actions/:name with the same scriptPath rooting rules as playAction.",
+      "componentAction is a `set` mutation: it updates canvas state locally (path is a JSON Pointer starting with '/') and never round-trips to the server.",
     ],
   },
   componentSpec: {
@@ -233,7 +223,7 @@ export function schemaCategoryNames(): string[] {
 // Drill into one named schema inside a category — e.g. ('node', 'rectangle')
 // returns just the rectangle variant. The category-level notes ride along
 // unchanged because they describe cross-variant invariants the caller still
-// needs (image path prefix, scriptPath rooting, etc.). Returns null if either
+// needs (image path prefix, etc.). Returns null if either
 // the category or the subname is unknown; callers use listCategorySubnames
 // to build a helpful "available" list in that case.
 export function getCategorySubschema(category: string, subname: string): SchemaPayload | null {
@@ -255,7 +245,7 @@ export function listCategorySubnames(category: string): string[] | null {
 
 // Top-level keys under `data.properties` for a single node variant — i.e.
 // the per-shape data fields an author actually sets on a flow.json node
-// (`name`, `icon`, `playAction`, etc.). Returns null when the variant has
+// (`name`, `icon`, etc.). Returns null when the variant has
 // no `data.properties` wrapper (action / connector / style / componentSpec
 // schemas, plus anything malformed). Pure helper consumed by buildJqHints
 // to surface concrete drill-down paths.
@@ -271,7 +261,7 @@ export function getDataFieldNames(category: string, subname: string): string[] |
 // Build ready-to-paste jq path examples for a schema response. When `subname`
 // is provided, the examples drill into that single variant — including one
 // path per `data.<field>` so the agent can `--jq` straight to (say)
-// `.schemas.rectangle.properties.data.properties.playAction` without first
+// `.schemas.rectangle.properties.data.properties.name` without first
 // reading the whole envelope. When `subname` is omitted, the hints cover the
 // whole category (iteration, one sample variant, notes). `dataFields` only
 // surfaces on single-variant lookups for shapes that actually carry a

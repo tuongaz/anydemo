@@ -7,7 +7,6 @@ import type {
   LayoutResult,
   NodeCreateInput,
   NodePatch,
-  PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,
   UploadImageResult,
@@ -476,13 +475,6 @@ export function wrapAdapterWithHistory(
     // Optional methods — forward only when the host supplied them. Keeping
     // these conditional preserves `?` semantics in CanvasAdapter so embedders
     // can still omit them.
-    ...(inner.playAction
-      ? {
-          playAction: (nodeId: string): Promise<PlayActionResult> =>
-            // biome-ignore lint/style/noNonNullAssertion: presence checked above
-            inner.playAction!(nodeId),
-        }
-      : {}),
     ...(inner.openFile
       ? {
           openFile: (path: string): Promise<void> =>

@@ -16,7 +16,7 @@ describe('integration: sse client', () => {
   beforeAll(async () => {
     studio = await spawnStudio();
     // The /api/events route is flow-scoped — register one project so we can
-    // open a stream and emit against it.
+    // open a stream against it.
     const projRes = await fetch(`${studio.baseURL}/api/projects`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -34,7 +34,7 @@ describe('integration: sse client', () => {
     if (studio) await studio.stop();
   });
 
-  it('receives the initial hello frame and a node:running event from /api/emit', async () => {
+  it('receives the initial hello frame on /api/events', async () => {
     const sse = await connectSse(studio.baseURL, `/api/events?flowId=${flowId}`);
     try {
       // The route writes a `hello` frame immediately so reconnecting clients
@@ -43,27 +43,6 @@ describe('integration: sse client', () => {
       const helloPayload = JSON.parse(hello.data) as { flowId: string; ts: number };
       expect(helloPayload.flowId).toBe(flowId);
       expect(typeof helloPayload.ts).toBe('number');
-
-      const emitRes = await fetch(`${studio.baseURL}/api/emit`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          flowId,
-          nodeId: 'sse-test-node',
-          status: 'running',
-          runId: 'run-sse-1',
-        }),
-      });
-      expect(emitRes.status).toBe(200);
-
-      const evt = await sse.waitFor((e) => e.event === 'node:running', 2_000);
-      const parsed = JSON.parse(evt.data) as {
-        nodeId: string;
-        runId?: string;
-        ts: number;
-      };
-      expect(parsed.nodeId).toBe('sse-test-node');
-      expect(parsed.runId).toBe('run-sse-1');
     } finally {
       sse.close();
     }

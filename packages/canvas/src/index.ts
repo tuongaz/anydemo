@@ -48,16 +48,9 @@ export type {
   NodeCapabilities,
   NodeDescription,
   NodeSemanticBase,
-  NodeStatus,
   NodeType,
   NodeVisual,
-  RunResult,
-  ScriptAction,
   SetComponentAction,
-  StateSource,
-  StatusAction,
-  StatusReport,
-  StatusReportState,
 } from './types.ts';
 
 // ----------------------------------------------------------------------------
@@ -278,7 +271,6 @@ export type {
   NodeKind,
   NodePatch,
   PackSummary,
-  PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,
   UploadImageResult,
@@ -331,13 +323,7 @@ export type {
   ToolbarShapeEntry,
 } from './components/canvas-toolbar.tsx';
 
-export {
-  DetailPanel,
-  EditableField,
-  formatRelativeTime,
-  HtmlNodeSection,
-  StatusSection,
-} from './components/detail-panel.tsx';
+export { DetailPanel, EditableField, HtmlNodeSection } from './components/detail-panel.tsx';
 export type { DetailPanelProps } from './components/detail-panel.tsx';
 
 export { EmbedDialog } from './components/embed-dialog.tsx';

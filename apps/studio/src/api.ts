@@ -5,7 +5,6 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { registerProject } from './cli-ops.ts';
-import { runComponentAction } from './component-action-runner.ts';
 import {
   AssembleRequestSchema,
   ProposeScopeRequestSchema,
@@ -29,13 +28,10 @@ import {
   ReorderBodySchema,
   type ValidateBody,
   createOperations,
-  resolveFilePath,
   writeFileAtomic,
 } from './operations.ts';
 import { seeflowHome } from './paths.ts';
-import type { ProcessSpawner } from './process-spawner.ts';
 import { readProjectManifest } from './project-scanner.ts';
-import { type PlayResult, type RunPlayOptions, runPlay as defaultRunPlay } from './proxy.ts';
 import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import {
@@ -48,21 +44,11 @@ import {
   listSchemaCategories,
   schemaCategoryNames,
 } from './schema-catalog.ts';
-import type { ComponentAction, SeeflowManifest } from './schema.ts';
+import type { SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
-import type { StatusRunner } from './status-runner.ts';
-import { readMergedFlow } from './watcher.ts';
 import type { FlowWatcher } from './watcher.ts';
-
-const EmitBodySchema = z.object({
-  flowId: z.string().min(1),
-  nodeId: z.string().min(1),
-  status: z.enum(['running', 'done', 'error']),
-  runId: z.string().optional(),
-  payload: z.unknown().optional(),
-});
 
 // Body for POST /api/projects/:project/flows (US-015). The flow id reuses
 // FlowIdPattern from schema.ts — same constraint the seeflow.json manifest
@@ -110,12 +96,6 @@ const validateRelativePath = (path: string): RelativePathCheck => {
   }
   return { kind: 'ok' };
 };
-
-const EMIT_STATUS_TO_EVENT = {
-  running: 'node:running',
-  done: 'node:done',
-  error: 'node:error',
-} as const;
 
 const FilePathBodySchema = z.object({ path: z.string() });
 
@@ -221,14 +201,6 @@ export interface ApiOptions {
   spawner?: Spawner;
   /** Override `process.platform` for tests covering darwin/win32/linux branches. */
   platform?: NodeJS.Platform;
-  /** Long-running statusAction runner; fanned out on each /play click. */
-  statusRunner?: StatusRunner;
-  /** Injectable ProcessSpawner threaded into runPlay; tests use this to avoid
-   *  launching real child processes for the play-action script. */
-  processSpawner?: ProcessSpawner;
-  /** Injectable proxy facade — defaults wrap the proxy.ts module exports.
-   *  Tests use this to drive runPlay in isolation. */
-  proxy?: ProxyFacade;
   /** In-memory icon-install job registry. Defaults to a fresh registry created
    *  per request — caller (server.ts) should pass one shared instance so the
    *  router can fanout SSE replays across requests. */
@@ -241,26 +213,10 @@ export interface ApiOptions {
   iconFetcher?: IconFetcher;
 }
 
-/**
- * Thin call-through wrapper around the proxy.ts module exports. Lets tests
- * inject a recording fake to observe runPlay invocations — the play-run map
- * and event broadcasts are encapsulated inside proxy.ts and not otherwise
- * observable via the underlying ProcessSpawner.
- */
-export interface ProxyFacade {
-  runPlay(options: RunPlayOptions): Promise<PlayResult>;
-}
-
-export const defaultProxyFacade: ProxyFacade = {
-  runPlay: defaultRunPlay,
-};
-
 export function createApi(options: ApiOptions): Hono {
-  const { watcher, statusRunner } = options;
+  const { watcher } = options;
   const spawner = options.spawner ?? defaultSpawner;
   const platform = options.platform ?? process.platform;
-  const processSpawner = options.processSpawner;
-  const proxy = options.proxy ?? defaultProxyFacade;
   // Injected singletons = the single-tenant local studio. In the cloud, each
   // request carries a tenant context (server.ts middleware) and routes resolve
   // a per-user registry/events/ops via `tenant(c)` below.
@@ -388,8 +344,7 @@ export function createApi(options: ApiOptions): Hono {
 
   // POST /api/flows/validate — dry-run validation. The skill's diagram
   // pipeline calls this between assemble and register to decide whether to
-  // rewire. Runs the Zod schema, the soft node cap, and the tier playability
-  // check. Filesystem-bound checks (harness coverage, event emitter index)
+  // rewire. Runs the Zod schema and the soft node cap. Filesystem-bound checks
   // stay in the skill since the studio doesn't see the user's $TARGET.
   api.post('/flows/validate', async (c) => {
     let body: unknown;
@@ -626,7 +581,7 @@ export function createApi(options: ApiOptions): Hono {
   // category. Mirrors `seeflow schema <category> <subname>` and the MCP
   // `seeflow_schema` tool's `subname` arg. Notes ride along unchanged because
   // they describe cross-variant invariants the caller still needs (image
-  // path prefix, scriptPath rooting, etc.).
+  // path prefix, etc.).
   api.get('/schema/:name/:subname', (c) => {
     const name = c.req.param('name');
     const subname = c.req.param('subname');
@@ -1592,125 +1547,6 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  api.post('/projects/:project/flows/:flow/play/:nodeId', async (c) => {
-    const { events, registry } = tenant(c);
-    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
-    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
-    const entry = resolved.entry;
-    const id = entry.id;
-    const nodeId = c.req.param('nodeId');
-    if (!events) return c.json({ error: 'events not enabled' }, 500);
-
-    // Always re-read from disk so the user's most recent edit (validated or
-    // not yet observed by the watcher) drives the actual fetch.
-    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
-    if (!existsSync(fullPath)) {
-      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
-    }
-    const merged = readMergedFlow(fullPath);
-    if (!merged.flow) {
-      const error = merged.error ?? 'Flow read failed';
-      const status = error.startsWith('Invalid JSON in') ? 400 : 400;
-      return c.json({ error }, status);
-    }
-
-    const node = merged.flow.nodes.find((n) => n.id === nodeId);
-    if (!node) return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
-    // playAction is optional on every node type post-flat-types. The runtime
-    // gate is purely "is the field set?" — visual kind doesn't constrain
-    // playability.
-    if (!node.data.playAction) {
-      return c.json({ error: `Node ${nodeId} has no playAction` }, 400);
-    }
-
-    // Fan out the long-running statusAction scripts BEFORE awaiting the play
-    // spawn — fire-and-forget so a slow status batch can't delay the click.
-    // Individual spawn failures are surfaced via console.warn but never fail
-    // the /play call itself.
-    if (statusRunner) {
-      void statusRunner.restart(id).catch((err) => {
-        console.warn(
-          `[api] statusRunner.restart(${id}) failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-    }
-
-    const result = await proxy.runPlay({
-      events,
-      flowId: id,
-      nodeId,
-      cwd: entry.repoPath,
-      action: node.data.playAction,
-      spawner: processSpawner,
-    });
-
-    // Surface the symlink-escape error as a 400 so the frontend can show a
-    // distinct "fix your scriptPath" message instead of a generic run failure.
-    if (result.error === 'scriptPath escapes project root') {
-      return c.json({ error: result.error }, 400);
-    }
-    return c.json(result);
-  });
-
-  // POST /api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name —
-  // dispatch a component node's named action over HTTP. Only `script`-kind
-  // actions cross this seam; `set`-kind actions mutate canvas state locally
-  // and never round-trip through the API (the runner rejects them with
-  // statusHint 400). Payload is the JSON request body (defaults to {} on
-  // parse failure) and is piped to the script's stdin by
-  // `runComponentAction`. Response is the script's parsed JSON stdout on
-  // success.
-  api.post('/projects/:project/flows/:flow/nodes/:nodeId/actions/:name', async (c) => {
-    const { events, registry } = tenant(c);
-    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
-    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
-    const entry = resolved.entry;
-    const id = entry.id;
-    const nodeId = c.req.param('nodeId');
-    const actionName = c.req.param('name');
-
-    if (!events) return c.json({ error: 'events not enabled' }, 500);
-
-    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
-    if (!existsSync(fullPath)) {
-      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
-    }
-    const merged = readMergedFlow(fullPath);
-    if (!merged.flow) {
-      return c.json({ error: merged.error ?? 'Flow read failed' }, 400);
-    }
-
-    const node = merged.flow.nodes.find((n) => n.id === nodeId);
-    if (!node) return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
-    if (node.type !== 'component') {
-      return c.json({ error: `Node ${nodeId} is not a component node` }, 400);
-    }
-
-    const action = (node.data as { spec: { actions?: Record<string, ComponentAction> } }).spec
-      .actions?.[actionName];
-    if (!action) return c.json({ error: `Unknown action: ${actionName}` }, 404);
-
-    const payload = await c.req.json().catch(() => ({}));
-    // US-031: per-node sidecar scripts now anchor at
-    // `<repoPath>/<dirname(flowPath)>/nodes/<id>/` post-multi-flow migration —
-    // the runner still resolves scripts as `<cwd>/nodes/<nodeId>/<scriptPath>`,
-    // so feed the per-flow folder as `cwd`.
-    const result = await runComponentAction({
-      events,
-      flowId: id,
-      nodeId,
-      cwd: join(entry.repoPath, dirname(entry.flowPath)),
-      actionName,
-      action,
-      payload,
-      spawner: processSpawner,
-    });
-    if (!result.ok) {
-      return c.json({ error: result.error }, result.statusHint as 400 | 404 | 500 | 504);
-    }
-    return c.json(result.body);
-  });
-
   // PATCH a single node's position back into the on-disk flow.json. Atomic
   // write via tempfile + rename keeps editor diffs clean and avoids
   // corruption mid-write.
@@ -2067,43 +1903,6 @@ export function createApi(options: ApiOptions): Hono {
       case 'writeFailed':
         return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
     }
-  });
-
-  api.post('/emit', async (c) => {
-    const { events, registry } = tenant(c);
-    if (!events) return c.json({ error: 'events not enabled' }, 500);
-
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'Body must be valid JSON' }, 400);
-    }
-
-    const parsed = EmitBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: 'Invalid emit body', issues: parsed.error.issues }, 400);
-    }
-
-    const { flowId, nodeId, status, runId, payload } = parsed.data;
-    if (!registry.getById(flowId)) {
-      return c.json({ error: `Unknown flowId: ${flowId}` }, 404);
-    }
-
-    const extras =
-      payload && typeof payload === 'object' && !Array.isArray(payload)
-        ? (payload as Record<string, unknown>)
-        : {};
-    const eventPayload: Record<string, unknown> = { nodeId, ...extras };
-    if (runId !== undefined) eventPayload.runId = runId;
-
-    events.broadcast({
-      type: EMIT_STATUS_TO_EVENT[status],
-      flowId,
-      payload: eventPayload,
-    });
-
-    return c.json({ ok: true });
   });
 
   api.get('/events', (c) => {

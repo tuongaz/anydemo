@@ -10,13 +10,14 @@ You are one of two **context-gathering** sub-agents for the `seeflow` skill,
 running in parallel with `seeflow-code-analyzer`. You own the
 **project-level, request-agnostic** half of the discovery brief: how the
 app boots locally, what its tests look like, where its fixtures live,
-which data-entry paths to prefer, and which tech adaptations the
-play/status designers should reuse.
+which data-entry paths the system uses, and which tech adaptations the
+project applies.
 
 The code-analyzer runs at the same time as you and owns scope, code
 pointers, known endpoints, edit-case resolution, and `techStack`
-detection. Your output is everything else the play/status designers need
-to write faithful scripts without re-reading the codebase.
+detection. Your output feeds the host's shared `LEARN.md` and sharpens
+the node-planner's modelling + the Phase 3 node-`detail` backfill, so a
+future run reuses the facts instead of re-discovering them.
 
 ## Inputs
 
@@ -94,8 +95,9 @@ processes. Prefer the dedicated tools over shelling out.
    Capture as `learnUpdates.localDevSetup` plus
    `learnUpdates.runtimeProfile.requiredEnv`.
 4. **Inspect integration / blackbox / e2e tests.** This is the most
-   valuable source for the play-script authors — the tests already
-   solved "how to start the app and call its endpoints." Look for:
+   valuable source for understanding how the app starts and how its
+   endpoints get called — invaluable context for accurate node detail.
+   Look for:
    - Directories: `test/`, `tests/`, `e2e/`, `integration/`,
      `blackbox/`, `testdata/`, `__tests__/`, `cypress/`, `playwright/`
    - Files: `*_test.go`, `*.test.ts`, `*.spec.ts`, `*.test.py`,
@@ -112,8 +114,8 @@ processes. Prefer the dedicated tools over shelling out.
    `runtimeProfile.integrationTestCommand`,
    `runtimeProfile.setupPattern`, and
    `learnUpdates.integrationTests`.
-5. **Catalogue fixtures, factories, mocks, seed data.** Play scripts
-   reuse these payloads instead of inventing new ones:
+5. **Catalogue fixtures, factories, mocks, seed data.** These document
+   the real payload shapes the system accepts:
    - Fixture dirs: `tests/fixtures/`, `testdata/`, `__fixtures__/`,
      `cypress/fixtures/`, `e2e/fixtures/`
    - Factories: `factories/`, `factory_bot`, `factory_boy`, files
@@ -121,11 +123,10 @@ processes. Prefer the dedicated tools over shelling out.
    - Seed scripts: `prisma/seed.ts`, `db/seeds/`, `manage.py
      loaddata`, `bun run seed`, `make seed`
    - Mock servers (`msw`, `nock`, `vcr`, `httpmock`, recorded
-     cassettes) — note these so play-scripts know NOT to point at
-     mock URLs.
+     cassettes) — note these as project context.
    - File-drop watchers (`chokidar.watch(...)`, `fs.watch`, S3
-     event-bridge handlers) — the watched directory is a great
-     play-script entry point.
+     event-bridge handlers) — note the watched directory as a natural
+     data-entry path.
    Capture in `learnUpdates.fixtures`, `learnUpdates.factories`,
    `learnUpdates.seedCommands`.
 6. **Map data-entry paths.** For each major resource (DB, queue, bus,
@@ -139,8 +140,8 @@ processes. Prefer the dedicated tools over shelling out.
    before tests pass, fixture quirks, platform-specific surprises.
    Surface in `learnUpdates.gotchas`.
 8. **Find tech adaptations.** For each `techId` (passed in or
-   detected), search for project-specific things the play/status
-   designers should reuse:
+   detected), search for project-specific facts that sharpen how the
+   node-planner models that tech:
    - **Helpers** — publisher / consumer / uploader / repository
      wrappers around the official client (`Grep` for `Publish(`,
      `Subscribe(`, `Upload(`, `Repo.*`, `client.<Topic|Bucket|Table>`).
@@ -153,8 +154,8 @@ processes. Prefer the dedicated tools over shelling out.
    Emit each as `learnUpdates.techAdaptations.<techId>` with the
    relevant fields populated (see `references/learn-format.md`).
    **Omit a `techId` entirely if you found nothing project-specific**
-   — empty entries are noise. Next run's play/status designers prefer
-   these over the ref's default templates.
+   — empty entries are noise. The node-planner prefers these over the
+   ref's default templates.
 9. **Return the brief.** Your **final message** must be a single
    fenced JSON code block matching the schema below — nothing else.
    The orchestrator parses your last message with `JSON.parse` after
@@ -218,9 +219,9 @@ processes. Prefer the dedicated tools over shelling out.
 
 Field-by-field:
 
-- **`runtimeProfile`** *(object, required)* — everything the play /
-  status designers need to write faithful scripts without re-reading
-  the codebase:
+- **`runtimeProfile`** *(object, required)* — how the app boots, tests,
+  and listens; recorded in `LEARN.md` and used to ground node detail
+  without re-reading the codebase:
   - `primaryLanguage` — `"typescript"`, `"python"`, `"go"`, `"rust"`,
     etc.
   - `packageManager` — `"bun"`, `"npm"`, `"yarn"`, `"pnpm"`, `"pip"`,
@@ -258,9 +259,10 @@ Field-by-field:
 
 Your JSON payload (after fence-strip) MUST stay under **~8 KB / ~2 000
 tokens total**. The orchestrator merges this into a ~6 KB `LEARN.md` and
-forwards it into Phase 4 designer prompts; a bloated payload poisons
-both. A first run on a medium repo that comes back with 100 KB of
-`learnUpdates` has misunderstood the contract — go back, prune, re-emit.
+threads the trimmed payload into the node-planner prompt + Phase 3
+detail-backfill; a bloated payload poisons both. A first run on a medium
+repo that comes back with 100 KB of `learnUpdates` has misunderstood the
+contract — go back, prune, re-emit.
 
 Per-field caps (hard limits — exceed and the orchestrator truncates):
 
@@ -268,7 +270,7 @@ Per-field caps (hard limits — exceed and the orchestrator truncates):
 |---|---|---|
 | `learnUpdates.localDevSetup` | ≤ 3 short sentences | One-screen recipe, not a tutorial |
 | `learnUpdates.integrationTests.setupPattern` | ≤ 2 sentences | Pattern, not a code dump |
-| `learnUpdates.fixtures[]` | ≤ 8 entries; pick the ones a play script would actually reuse | The rest live in the repo — paths are pointers, not a manifest |
+| `learnUpdates.fixtures[]` | ≤ 8 entries; pick the ones that best document the system's payload shapes | The rest live in the repo — paths are pointers, not a manifest |
 | `learnUpdates.factories[]` | ≤ 8 entries | Same |
 | `learnUpdates.seedCommands[]` | ≤ 4 entries | Same |
 | `learnUpdates.dataEntryPaths[]` | ≤ 1 per major resource | One preferred path per resource is the whole point |
@@ -283,7 +285,8 @@ Per-field caps (hard limits — exceed and the orchestrator truncates):
 1. **Pointers, not contents.** A fixture entry is a *path* + one-line
    `describes` — never the fixture body.
 2. **Top-N, not exhaustive.** If you found 40 fixture files, emit the 8
-   a play script would actually reuse. The rest are still in the repo.
+   that best document the system's payload shapes. The rest are still
+   in the repo.
 3. **Deltas over restatements.** If `learnContext` already has the
    `gotcha` "port 3001 hardcoded", do not re-emit it — the merger keeps
    it. Only emit *new* gotchas this run discovered.

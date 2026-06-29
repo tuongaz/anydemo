@@ -11,19 +11,6 @@
       },
       "data": {
         "name": "POST /checkout",
-        "stateSource": {
-          "kind": "request"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "args": ["run"],
-          "scriptPath": "scripts/play.ts",
-          "input": {
-            "items": [],
-            "customerId": "cust_1"
-          }
-        },
         "description": "Creates an order, charges the card, enqueues fulfillment."
       }
     },
@@ -36,9 +23,6 @@
       },
       "data": {
         "name": "Fulfillment worker",
-        "stateSource": {
-          "kind": "event"
-        },
         "handlerModule": "src/workers/fulfillment.ts"
       }
     }

@@ -1,8 +1,9 @@
 # Tech-specific best practices
 
-Per-tech reference cards covering **how to use this tech locally from Play
-and Status node scripts**. Refs are general guidance only — the project's
-own helpers, fixtures, and conventions (captured in the shared
+Per-tech reference cards covering **how to model this tech on a SeeFlow
+canvas** — what the resource is, how it runs locally, and how to shape its
+node(s). Refs are general guidance only — the project's own helpers,
+fixtures, and conventions (captured in the shared
 `<host>/.seeflow/LEARN.md` under `## Tech stack adaptations`) always win.
 
 ## How the catalog is used
@@ -14,18 +15,12 @@ own helpers, fixtures, and conventions (captured in the shared
    conventions and emits them under `learnUpdates.techAdaptations.<techId>`.
 2. **Orchestrator** maps each `techId` to `references/tech/<techId>.md`
    and forwards the file paths (plus the matching `techAdaptations`
-   entries from the shared `<host>/.seeflow/LEARN.md`) into the launch
-   prompts of:
-   - `seeflow-node-planner` (Phase 2) — for node modelling guidance.
-   - `seeflow-play-designer` (Phase 4) — for the canonical local trigger
-     recipe.
-   - `seeflow-status-designer` (Phase 4) — for the canonical local
-     state-read recipe.
-3. **Sub-agents** read only the forwarded refs (typically 3–5 per flow),
-   then reconcile against the `techAdaptations` block. **Project
+   entries from the shared `<host>/.seeflow/LEARN.md`) into the
+   `seeflow-node-planner` (Phase 2) launch prompt — for node modelling
+   guidance.
+3. **The node-planner** reads only the forwarded refs (typically 3–5 per
+   flow), then reconciles against the `techAdaptations` block. **Project
    conventions override the ref's templates.**
-4. **Phase 6 polish** writes any new project-specific learnings back into
-   `techAdaptations` so the next `/seeflow` run reuses them.
 
 Stable `techId` = the ref's filename stem (e.g. `google-pubsub`,
 `kafka`, `temporal`). One per ref file. The catalog is intentionally
@@ -86,22 +81,12 @@ Every per-tech ref follows `_template.md` exactly:
 3. **What it is** — one-to-two-sentence identity + role.
 4. **How to run it** — start the local emulator / compose service / dev
    CLI. Project script first, then ≤ 5-line bash fallback.
-5. **How to insert data** — Play-trigger guidance for
-   `seeflow-play-designer`. Project helper first, then ≤ 15-line SDK/CLI
-   example.
-6. **How to verify run success** — cheapest one-shot confirmation that
-   the insert landed (publish ack, write receipt, workflow start id).
-   ≤ 5-line bash, exit 0 on success.
-7. **How to verify query data** — Status-read guidance for
-   `seeflow-status-designer`. Project helper first, then ≤ 15-line read
-   loop emitting `StatusReport` JSON.
-8. **Node modelling** — guidance for `seeflow-node-planner`.
-9. **Gotchas** — bullet list.
-10. **Fixture shape** — one short JSON / struct example.
+5. **Node modelling** — guidance for `seeflow-node-planner`.
+6. **Gotchas** — bullet list.
+7. **Fixture shape** — one short JSON / struct example documenting the
+   tech's envelope / row shape.
 
-Keep refs ≤ 300 words. One excellent example per ref, in the language
-most natural for that tech — the sub-agent will port to the project's
-`runtimeProfile.primaryLanguage`.
+Keep refs short. One excellent example per ref.
 
 ## Adding a new ref
 

@@ -16,8 +16,6 @@ import type {
   EdgePin,
   FlowNode,
   NodeType,
-  RunResult,
-  StatusReport,
 } from '../types.ts';
 
 /**
@@ -207,30 +205,15 @@ export interface UploadImageResult {
   path: string;
 }
 
-export interface PlayActionResult {
-  runId: string;
-  status?: number;
-  body?: unknown;
-  error?: string;
-}
-
 /**
- * US-026: read-only runtime state injected into the canvas. Bundles the three
- * data streams the canvas needs to render dynamic chrome — SSE-driven per-node
- * `runs`, latest `statuses`, and optimistic `pendingOverrides` for node /
- * connector edits in flight. The hooks that produce these values stay in
- * apps/web (`use-node-runs`, `use-node-statuses`, `use-pending-overrides`); the
- * canvas treats this as an opaque data prop.
+ * Read-only runtime state injected into the canvas: optimistic
+ * `pendingOverrides` for node / connector edits in flight. The hook that
+ * produces these values stays in apps/web (`use-pending-overrides`); the canvas
+ * treats this as an opaque data prop.
  *
- * Every field is optional so view-mode embedders can omit the whole prop. Inside
- * demo-canvas, `runtime?.runs?.[id]` etc. is the canonical access pattern —
- * the helpers fall back to `'idle'` / `undefined` when the entries are absent.
+ * Every field is optional so view-mode embedders can omit the whole prop.
  */
 export interface CanvasRuntime {
-  /** Per-node SSE run state, keyed by node id. */
-  runs?: Record<string, RunResult>;
-  /** Latest StatusReport per node, keyed by node id. */
-  statuses?: Record<string, StatusReport>;
   /**
    * Optimistic edits that haven't yet been reconciled by the server. Nodes and
    * connectors are stored separately because their generic parameters differ —
@@ -345,9 +328,6 @@ export interface CanvasAdapter {
    * cascade clean up the asset along with the row.
    */
   uploadImage(nodeId: string, file: File, filename: string): Promise<UploadImageResult>;
-  /** Optional: invoke the node's playAction. Adapters that don't support
-   *  server-side execution can omit this — view-mode canvases never call it. */
-  playAction?(nodeId: string): Promise<PlayActionResult>;
   /** Optional: ask the host to open the given project-scoped file in its editor. */
   openFile?(path: string): Promise<void>;
   /** Optional: ask the host to reveal the given project-scoped file in its OS file manager. */

@@ -27,9 +27,7 @@ here introduces new constraints — it shows the rules applied.
   exception 2.
 - **A payments service exposing `charge`, `refund`, and `subscription`
   with independent state machines.** → 3 `rectangle` nodes
-  (`payments-charge`, `payments-refund`, `payments-subscription`),
-  each a candidate trigger (one of them carries the initial
-  `playAction` placeholder) and each with its own status probe later.
+  (`payments-charge`, `payments-refund`, `payments-subscription`).
   Cite exception 4.
   Contrast with a payments service whose `charge` and `refund` routes
   both mutate the same ledger row — that stays one node.
@@ -38,8 +36,8 @@ here introduces new constraints — it shows the rules applied.
     to each consumer with three event connectors. Use your judgement;
     err toward 4 nodes when the codebase has a named bus.
 - **A microservice with 12 internal HTTP routes.** → 1 node, regardless
-  of how many routes there are. The play-designer picks ONE route to
-  hang the Play on; the other routes are not part of the demo.
+  of how many routes there are. The internal routes are implementation
+  detail, not separate nodes.
 - **A Postgres database used by 3 different services.** → 1 node, with
   3 connectors pointing into it. NOT 3 database nodes.
 
@@ -83,12 +81,12 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server", "stateSource": { "kind": "request" }, "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
-    { "id": "event-bus",        "type": "queue",     "data": { "name": "Event Bus",        "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
-    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
-    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
-    { "id": "shipments-queue",  "type": "queue",     "data": { "name": "Shipments Queue",  "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
-    { "id": "order-store",      "type": "database",  "data": { "name": "Order Store",      "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
+    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server", "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
+    { "id": "event-bus",        "type": "queue",     "data": { "name": "Event Bus",        "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
+    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",    "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
+    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",    "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
+    { "id": "shipments-queue",  "type": "queue",     "data": { "name": "Shipments Queue",  "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
+    { "id": "order-store",      "type": "database",  "data": { "name": "Order Store",      "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
   ],
   "connectors": [
     { "id": "c-order-server-event-bus",          "source": "order-server",     "target": "event-bus",        "label": "order.created" },
@@ -117,10 +115,10 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "validate-cart", "type": "rectangle", "data": { "name": "validate cart", "stateSource": { "kind": "event" } } },
-    { "id": "compute-tax",   "type": "rectangle", "data": { "name": "compute tax",   "stateSource": { "kind": "event" } } },
-    { "id": "charge-card",   "type": "rectangle", "data": { "name": "charge card",   "stateSource": { "kind": "event" } } },
-    { "id": "publish-event", "type": "rectangle", "data": { "name": "publish event", "stateSource": { "kind": "event" } } }
+    { "id": "validate-cart", "type": "rectangle", "data": { "name": "validate cart" } },
+    { "id": "compute-tax",   "type": "rectangle", "data": { "name": "compute tax"   } },
+    { "id": "charge-card",   "type": "rectangle", "data": { "name": "charge card"   } },
+    { "id": "publish-event", "type": "rectangle", "data": { "name": "publish event" } }
   ],
   "connectors": [],
   "rationales": { "validate-cart": "step 1", "compute-tax": "step 2", "charge-card": "step 3", "publish-event": "step 4" }
@@ -129,9 +127,8 @@ editTarget: null
 
 This is wrong because (a) the four "steps" are internal routes / handlers
 of a single service — they fail the abstraction rule (one node per
-microservice), and "step 1/2/3/4" does NOT match any exception; (b) no
-node carries an initial `data.playAction` placeholder, so the audience
-has nothing to click; (c) there are zero connectors, so the
-orchestrator cannot render the flow direction. Collapse to a single
-`order-server` `type:'rectangle'` with `data.playAction` set, and wire
+microservice), and "step 1/2/3/4" does NOT match any exception; (b)
+there are zero connectors, so the orchestrator cannot render the flow
+direction; (c) each node is missing `data.detail`, so every card renders
+blank. Collapse to a single `order-server` `type:'rectangle'` and wire
 connectors to the downstream entities.

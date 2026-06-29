@@ -24,7 +24,6 @@ import {
   ReorderBodySchema,
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
-import { defaultProcessSpawner } from './process-spawner.ts';
 import { publishProject } from './publish.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import {
@@ -42,7 +41,6 @@ import {
 import { FlowSchema } from './schema.ts';
 import { serve } from './server.ts';
 import { MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
-import { createStatusRunner } from './status-runner.ts';
 
 const DEFAULT_FLOW_PATH = PROJECT_FLOW_FILENAME;
 const HEALTH_TIMEOUT_MS = 10_000;
@@ -63,14 +61,6 @@ const flagValue = (name: string): string | undefined => {
 };
 
 const hasFlag = (name: string): boolean => argv.includes(`--${name}`);
-
-const requireArg = (idx: number, name: string): string => {
-  const v = argv[idx];
-  if (!v || v.startsWith('--')) {
-    printError(`Missing required positional argument: ${name}`);
-  }
-  return v as string;
-};
 
 /**
  * Walk argv (after the subcommand at argv[0]) and return non-flag positionals
@@ -204,8 +194,6 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runIcons();
 } else if (sub === 'flow:add-bulk') {
   await runFlowAddBulk();
-} else if (sub === 'flows:play') {
-  await runFlowsPlay();
 } else if (sub === 'nodes:add') {
   await runNodesAdd();
 } else if (sub === 'nodes:get') {
@@ -230,10 +218,6 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runSchema();
 } else if (sub === 'ids') {
   await runIds();
-} else if (sub === 'e2e') {
-  await runE2e();
-} else if (sub === 'emit') {
-  await runEmit();
 } else if (sub === 'login') {
   await runLoginCmd();
 } else if (sub === 'logout') {
@@ -293,7 +277,7 @@ Commands (work without a running studio):
                        Every response carries jqHints.rootPath (the jq prefix
                        for that level). Pair with --jq to slice (e.g. 'schema
                        node rectangle --jq
-                       .schemas.rectangle.properties.data.properties.playAction').
+                       .schemas.rectangle.properties.data.properties.name').
   ids <type> <count>   Print <count> short ids of the given <type>, one per
                        line. <type> is 'node' (-> 'node-...') or 'connector'
                        (-> 'conn-...'). <count> is 1..100. Call once per type
@@ -305,12 +289,6 @@ Icons (local cache):
   icons add <v>        Install a vendor pack (v: aws|azure) [--accept-terms] [--pack-url <url>]
   icons update <v>     Re-install a vendor pack — same flags as add
   icons remove <v>     Remove an installed vendor pack (idempotent)
-
-Commands (require a running studio):
-  flows:play <n>       Trigger a play on node <n> (--project <p> --flow <f>)
-  emit <id> <n> <st>   Broadcast a status event for node <n> (st: running|done|error)
-                       [--run-id <id>] [--payload <json>] [--studio-url <url>]
-  e2e                  End-to-end validate a registered flow (--project <p> --flow <f> [--skip-nodes a,b])
 
 Cloud account:
   login                Sign in to the cloud (opens a browser) [--endpoint <url>]
@@ -326,7 +304,6 @@ Meta:
 
 Global options:
   --version, -v        Print the CLI version and exit
-  --no-start           For flows:play / e2e: fail instead of auto-starting the studio
 
 Body source flags (where applicable):
   --json '<JSON>'      Inline JSON body
@@ -422,26 +399,18 @@ async function runStart() {
 
   const registry = createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = createEventBus();
-  const statusRunner = createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
-  const server = serve({ port, hostname: config.host, registry, events, statusRunner });
+  const server = serve({ port, hostname: config.host, registry, events });
   writePid(process.pid);
 
   const cleanup = () => {
     if (readPid() === process.pid) clearPid();
   };
-  const shutdown = async () => {
+  const shutdown = () => {
     cleanup();
-    try {
-      await statusRunner.stopAll();
-    } catch (err) {
-      console.warn(
-        `[cli] statusRunner.stopAll() failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
     process.exit(0);
   };
-  process.on('SIGTERM', () => void shutdown());
-  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => shutdown());
+  process.on('SIGINT', () => shutdown());
   process.on('exit', cleanup);
 
   console.log(`SeeFlow Studio listening on http://${server.hostname}:${server.port}`);
@@ -926,57 +895,6 @@ async function runFlowsLayout() {
   printOutcome(result);
 }
 
-async function runFlowsPlay() {
-  const { project, flow } = requireProjectFlow();
-  const nodeId = requirePositional(0, '<nodeId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(
-    `${url}/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}/play/${encodeURIComponent(nodeId)}`,
-    {},
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
-}
-
-async function runEmit() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
-  const status = requireArg(3, '<status>');
-  if (status !== 'running' && status !== 'done' && status !== 'error') {
-    printError(`Invalid status: ${status} (expected running | done | error)`);
-  }
-
-  const runId = flagValue('run-id');
-  const rawPayload = flagValue('payload');
-  let payload: unknown;
-  if (rawPayload !== undefined) {
-    try {
-      payload = JSON.parse(rawPayload);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      printError(`--payload must be valid JSON: ${message}`);
-    }
-  }
-
-  // Explicit --studio-url targets a specific instance; skip auto-start since
-  // the caller is asserting where the studio lives.
-  const studioUrlFlag = flagValue('studio-url');
-  let url: string;
-  if (studioUrlFlag) {
-    url = studioUrlFlag.replace(/\/+$/, '');
-  } else {
-    ({ url } = await studioUrlOrDie(hasFlag('no-start')));
-  }
-
-  const body: Record<string, unknown> = { flowId, nodeId, status };
-  if (runId !== undefined) body.runId = runId;
-  if (payload !== undefined) body.payload = payload;
-
-  const res = await postJson(`${url}/api/emit`, body);
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
-}
-
 async function runNodesAdd() {
   const { slug } = requireProjectFlow();
   const body = await bodyFromFlags();
@@ -1231,20 +1149,6 @@ function applyJqOrDie(input: unknown, filterStr: string): unknown {
     }
     throw err;
   }
-}
-
-async function runE2e() {
-  const { project, flow } = requireProjectFlow();
-  const skipNodesRaw = flagValue('skip-nodes');
-  const skipNodes = skipNodesRaw ? skipNodesRaw.split(',').filter(Boolean) : [];
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const { validateEndToEnd } = await import('./cli-e2e.ts');
-  const report = await validateEndToEnd({ project, flow, url, skipNodes });
-  if (!report.ok) {
-    process.stderr.write(`${JSON.stringify(report)}\n`);
-    process.exit(1);
-  }
-  printOk(report);
 }
 
 async function runIcons() {

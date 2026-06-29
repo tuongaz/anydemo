@@ -8,16 +8,7 @@
       "data": {
         "name": "POST /orders",
         "description": "Creates order, kicks off the pipeline.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "request"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "args": ["run"],
-          "scriptPath": "scripts/play.ts"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -27,10 +18,7 @@
         "name": "Inventory Service",
         "description": "Reserves stock.",
         "detail": "file://detail.md",
-        "icon": "a-arrow-down-icon",
-        "stateSource": {
-          "kind": "event"
-        }
+        "icon": "a-arrow-down-icon"
       }
     },
     {
@@ -39,10 +27,7 @@
       "data": {
         "name": "Payment Service",
         "description": "Charges card.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "event"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -51,10 +36,7 @@
       "data": {
         "name": "Fulfillment Service",
         "description": "Enqueues shipment.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "event"
-        }
+        "detail": "file://detail.md"
       }
     }
   ],

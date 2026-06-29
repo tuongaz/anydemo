@@ -85,15 +85,12 @@ test.describe('canvas — kitchen-sink fixture', () => {
   });
 });
 
-// US-009: flat-node-types e2e coverage. Three contracts, each registers a
-// dedicated flow on top of the shared worker-scoped studio so the kitchen-
-// sink fixture stays untouched.
+// US-009: flat-node-types e2e coverage. Each test registers a dedicated flow on
+// top of the shared worker-scoped studio so the kitchen-sink fixture stays
+// untouched.
 //   1. 12-tag render-matrix snapshot — the visual regression spine for the
 //      flat schema (one node per type laid out in a grid).
-//   2. Capability-chrome-rectangle-only invariant end-to-end — a database
-//      carrying playAction renders no play button (the renderer phasing
-//      rule from the design doc, fenced from the user's perspective).
-//   3. Draw-mode draws the chosen geometric tag — clicking a non-rectangle
+//   2. Draw-mode draws the chosen geometric tag — clicking a non-rectangle
 //      toolbar shape button and drag-drawing on the pane creates a node
 //      whose type matches the chosen variant.
 test.describe('canvas — flat node types (US-009)', () => {
@@ -164,85 +161,6 @@ test.describe('canvas — flat node types (US-009)', () => {
     }
     const root = page.locator('.seeflow-canvas-root').first();
     await expect(root).toHaveScreenshot('render-matrix.png', { maxDiffPixelRatio: 0.02 });
-  });
-
-  test('database with playAction renders the inline skirt PlayButton', async ({ page, studio }) => {
-    const resolvedFlow = {
-      version: 2 as const,
-      name: 'Database Capability Skirt',
-      nodes: [
-        {
-          id: 'db1',
-          type: 'database' as const,
-          position: { x: 100, y: 100 },
-          data: {
-            name: 'Orders',
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
-          },
-        },
-      ],
-      connectors: [],
-    };
-    const registered = await registerFlow(studio.studio, 'capability-skirt', resolvedFlow, {
-      name: 'Capability Skirt',
-    });
-    await page.goto(
-      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
-    );
-    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
-    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await waitForCanvasSettled(page);
-
-    // The database node mounts and renders the capability-chrome skirt with
-    // an inline PlayButton — this is the visual end of the data path the
-    // schema has been threading since the flat-node-types refactor.
-    await expect(page.locator('[data-node-type="database"]')).toHaveCount(1);
-    await expect(page.locator('[data-testid="geometric-node-skirt"]')).toHaveCount(1);
-    await expect(page.locator('[data-testid="play-button"]')).toHaveCount(1);
-    // The rectangle-only status-badge testid still must not appear — the
-    // illustrative skirt uses geometric-node-status-badge, distinct from
-    // rectangle-node-status-badge.
-    await expect(page.locator('[data-testid="rectangle-node-status-badge"]')).toHaveCount(0);
-  });
-
-  test('database with playAction visual snapshot', async ({ page, studio }) => {
-    const resolvedFlow = {
-      version: 2 as const,
-      name: 'DB With Play',
-      nodes: [
-        {
-          id: 'db1',
-          type: 'database' as const,
-          position: { x: 100, y: 100 },
-          data: {
-            name: 'Orders',
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
-          },
-        },
-      ],
-      connectors: [],
-    };
-    const registered = await registerFlow(studio.studio, 'db-with-play', resolvedFlow, {
-      name: 'DB With Play',
-    });
-    await page.goto(
-      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
-    );
-    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
-    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await waitForCanvasSettled(page);
-
-    const node = page.locator('[data-node-type="database"]');
-    await expect(node).toBeVisible();
-    await expect(node).toHaveScreenshot('database-with-play.png', { maxDiffPixelRatio: 0.02 });
   });
 
   // Connector head shapes: arrow (native ArrowClosed marker) + the five custom

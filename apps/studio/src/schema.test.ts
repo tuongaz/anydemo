@@ -10,7 +10,6 @@ import {
   NodeTypeSchema,
   ResolvedFlowSchema,
   SeeflowManifestSchema,
-  StatusReportSchema,
   StyleSchema,
 } from './schema.ts';
 
@@ -84,31 +83,25 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
-            stateSource: { kind: 'request' as const },
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
           },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
         {
           id: 'c',
           type: 'rectangle' as const,
           position: { x: 200, y: 0 },
-          data: { name: 'C', stateSource: { kind: 'event' as const } },
+          data: { name: 'C' },
         },
         {
           id: 'd',
           type: 'rectangle' as const,
           position: { x: 300, y: 0 },
-          data: { name: 'D', stateSource: { kind: 'event' as const } },
+          data: { name: 'D' },
         },
       ],
       connectors: [
@@ -258,12 +251,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
-            stateSource: { kind: 'request' as const },
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
             width: 200,
             height: 80,
             borderColor: 'blue' as const,
@@ -276,7 +263,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 100, y: 0 },
           data: {
             name: 'S',
-            stateSource: { kind: 'event' as const },
             width: 160,
             height: 60,
           },
@@ -311,7 +297,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', stateSource: { kind: 'request' as const } },
+          data: { name: 'S' },
         },
       ],
       connectors: [],
@@ -330,7 +316,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
-            stateSource: { kind: 'request' as const },
             width,
             height,
           },
@@ -354,7 +339,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
-            stateSource: { kind: 'request' as const },
             borderColor: 'magenta',
           },
         },
@@ -379,13 +363,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', label: 'see also' }],
@@ -407,13 +391,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -460,13 +444,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -497,13 +481,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
@@ -526,13 +510,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -563,13 +547,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
@@ -592,13 +576,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -622,13 +606,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -655,13 +639,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', style: 'wavy' }],
@@ -678,13 +662,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', direction: 'sideways' }],
@@ -701,13 +685,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'magenta' }],
@@ -726,7 +710,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
-            stateSource: { kind: 'request' as const },
             borderSize: nodeBorderSize,
           },
         },
@@ -734,7 +717,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [
@@ -775,12 +758,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
-            stateSource: { kind: 'request' as const },
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
             cornerRadius,
           },
         },
@@ -1065,7 +1042,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', stateSource: { kind: 'request' as const } },
+          data: { name: 'S' },
         },
         {
           id: 'img-1',
@@ -1096,7 +1073,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', stateSource: { kind: 'request' as const } },
+          data: { name: 'S' },
         },
         {
           id: 'icon-1',
@@ -1325,13 +1302,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: 16 }],
@@ -1353,13 +1330,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
+          data: { name: 'A' },
         },
         {
           id: 'b',
           type: 'rectangle' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', stateSource: { kind: 'request' as const } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: size }],
@@ -1381,20 +1358,13 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'POST /action',
-            stateSource: { kind: 'request' },
-            playAction: {
-              kind: 'script',
-              interpreter: 'bun',
-              args: ['run'],
-              scriptPath: 'scripts/play.ts',
-            },
           },
         },
         {
           id: 'worker',
           type: 'rectangle',
           position: { x: 300, y: 0 },
-          data: { name: 'my-worker', stateSource: { kind: 'event' } },
+          data: { name: 'my-worker' },
         },
       ],
       connectors: [{ id: 'c1', source: 'svc', target: 'worker' }],
@@ -1410,7 +1380,6 @@ describe('ResolvedFlowSchema', () => {
   it('treats data.handlerModule as optional and reserved (no runtime use yet)', () => {
     const baseData = {
       name: 'worker',
-      stateSource: { kind: 'event' as const },
     };
     const baseDemo = (data: Record<string, unknown>) => ({
       version: 2 as const,
@@ -1448,8 +1417,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'p',
-              stateSource: { kind: 'request' },
-              playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
               description: 'short body',
               detail: 'long-form\nnotes',
             },
@@ -1463,7 +1430,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 's',
-              stateSource: { kind: 'event' },
               description: 'short body',
               detail: 'long-form notes',
             },
@@ -1696,7 +1662,7 @@ describe('ResolvedFlowSchema', () => {
             id: 's',
             type: 'rectangle' as const,
             position: { x: 0, y: 0 },
-            data: { name: 'S', stateSource: { kind: 'request' as const } },
+            data: { name: 'S' },
           },
           {
             id: 'html-1',
@@ -1894,299 +1860,6 @@ describe('ResolvedFlowSchema', () => {
       expect(FlowSchema.safeParse(flow).success).toBe(false);
     });
   });
-
-  // US-001: script-based playAction + optional statusAction + StatusReport.
-  describe('script-based playAction + statusAction (US-001)', () => {
-    const makeDemoWithPlayAction = (playAction: unknown) => ({
-      version: 2 as const,
-      name: 'script-demo',
-      nodes: [
-        {
-          id: 'p',
-          type: 'rectangle' as const,
-          position: { x: 0, y: 0 },
-          data: {
-            name: 'P',
-            stateSource: { kind: 'request' as const },
-            playAction,
-          },
-        },
-      ],
-      connectors: [],
-    });
-
-    it('parses a valid script-shaped playAction with optional input and timeoutMs', () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        args: ['run'],
-        scriptPath: 'scripts/play.ts',
-        input: { foo: 'bar' },
-        timeoutMs: 5000,
-      });
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-      }
-      const node = result.data.nodes[0];
-      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
-      const action = node.data.playAction;
-      if (!action) throw new Error('expected playAction');
-      expect(action.kind).toBe('script');
-      expect(action.interpreter).toBe('bun');
-      expect(action.scriptPath).toBe('scripts/play.ts');
-      expect(action.timeoutMs).toBe(5000);
-    });
-
-    it('rejects an absolute scriptPath', () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: '/etc/passwd',
-      });
-      const result = ResolvedFlowSchema.safeParse(demo);
-      expect(result.success).toBe(false);
-    });
-
-    it("rejects a scriptPath with '..' traversal", () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: '../../etc/passwd',
-      });
-      const result = ResolvedFlowSchema.safeParse(demo);
-      expect(result.success).toBe(false);
-    });
-
-    it('rejects a playAction with missing interpreter', () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        scriptPath: 'scripts/play.ts',
-      });
-      const result = ResolvedFlowSchema.safeParse(demo);
-      expect(result.success).toBe(false);
-    });
-
-    it('rejects a playAction with zero or negative timeoutMs', () => {
-      const zero = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-        timeoutMs: 0,
-      });
-      expect(ResolvedFlowSchema.safeParse(zero).success).toBe(false);
-
-      const negative = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-        timeoutMs: -1,
-      });
-      expect(ResolvedFlowSchema.safeParse(negative).success).toBe(false);
-    });
-
-    it('rejects a playAction with timeoutMs above 600_000', () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-        timeoutMs: 600_001,
-      });
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
-    });
-
-    it('accepts a playAction with timeoutMs at the upper bound (600_000)', () => {
-      const demo = makeDemoWithPlayAction({
-        kind: 'script',
-        interpreter: 'bun',
-        scriptPath: 'scripts/play.ts',
-        timeoutMs: 600_000,
-      });
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
-    });
-
-    it('parses a valid statusAction on a rectangle', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'status-demo',
-        nodes: [
-          {
-            id: 'p',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'P',
-              stateSource: { kind: 'request' as const },
-              playAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/play.ts',
-              },
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                args: ['run'],
-                scriptPath: 'scripts/status.ts',
-                maxLifetimeMs: 60_000,
-              },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-      }
-      const node = result.data.nodes[0];
-      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
-      expect(node.data.statusAction?.kind).toBe('script');
-      expect(node.data.statusAction?.scriptPath).toBe('scripts/status.ts');
-      expect(node.data.statusAction?.maxLifetimeMs).toBe(60_000);
-    });
-
-    it('parses a valid statusAction on a rectangle (no playAction required)', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'state-status-demo',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/status.ts',
-              },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-      }
-      const node = result.data.nodes[0];
-      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
-      expect(node.data.statusAction?.scriptPath).toBe('scripts/status.ts');
-    });
-
-    it('rejects a statusAction with maxLifetimeMs above 3_600_000', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'bad-lifetime',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/status.ts',
-                maxLifetimeMs: 3_600_001,
-              },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
-    });
-
-    it('accepts a statusAction with maxLifetimeMs at the upper bound (3_600_000)', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'lifetime-boundary',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/status.ts',
-                maxLifetimeMs: 3_600_000,
-              },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
-    });
-
-    it('rejects a statusAction with zero or negative maxLifetimeMs', () => {
-      const buildDemo = (maxLifetimeMs: number) => ({
-        version: 2 as const,
-        name: 'lifetime-bound',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/status.ts',
-                maxLifetimeMs,
-              },
-            },
-          },
-        ],
-        connectors: [],
-      });
-      expect(ResolvedFlowSchema.safeParse(buildDemo(0)).success).toBe(false);
-      expect(ResolvedFlowSchema.safeParse(buildDemo(-1)).success).toBe(false);
-    });
-
-    it('parses a valid StatusReport with all fields', () => {
-      const report = {
-        state: 'ok',
-        summary: 'all good',
-        detail: 'longer text\nwith newlines',
-        data: { count: 3, label: 'x' },
-        ts: Date.now(),
-      };
-      const result = StatusReportSchema.safeParse(report);
-      if (!result.success) {
-        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-      }
-      expect(result.data.state).toBe('ok');
-      expect(result.data.summary).toBe('all good');
-    });
-
-    it('parses a minimal StatusReport (only state)', () => {
-      const result = StatusReportSchema.safeParse({ state: 'pending' });
-      expect(result.success).toBe(true);
-    });
-
-    it('rejects a StatusReport with an invalid state value', () => {
-      const result = StatusReportSchema.safeParse({ state: 'in-progress' });
-      expect(result.success).toBe(false);
-    });
-
-    it('rejects a StatusReport whose summary exceeds 120 chars', () => {
-      const long = 'a'.repeat(121);
-      const result = StatusReportSchema.safeParse({ state: 'ok', summary: long });
-      expect(result.success).toBe(false);
-    });
-  });
 });
 
 describe("type:'html' autoSize (via ResolvedFlowSchema)", () => {
@@ -2235,8 +1908,6 @@ describe('FlowSchema', () => {
           type: 'rectangle',
           data: {
             name: 'POST /x',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
         },
       ],
@@ -2255,8 +1926,6 @@ describe('FlowSchema', () => {
           type: 'rectangle',
           data: {
             name: 'X',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
             fontSize: 15,
           },
         },
@@ -2277,8 +1946,6 @@ describe('FlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'X',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
         },
       ],
@@ -2297,14 +1964,12 @@ describe('FlowSchema', () => {
           type: 'rectangle',
           data: {
             name: 'A',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
         },
         {
           id: 'b',
           type: 'rectangle',
-          data: { name: 'B', stateSource: { kind: 'event' } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'blue' }],
@@ -2332,14 +1997,12 @@ describe('FlowSchema', () => {
           type: 'rectangle',
           data: {
             name: 'A',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
         },
         {
           id: 'b',
           type: 'rectangle',
-          data: { name: 'B', stateSource: { kind: 'event' } },
+          data: { name: 'B' },
         },
       ],
       connectors: [{ id: 'c', source: 'a', target: 'b', eventName: 'evt', label: 'hi' }],
@@ -2471,8 +2134,8 @@ describe('flow description field', () => {
 // US-009: flat-node-types refactor — coverage that pins the 14-tag discriminator
 // surface, the per-type required fields, and the capability-on-every-type
 // invariant at the schema level. The flat schema's central claim is that
-// `playAction` / `statusAction` / `stateSource` are independent of `type` —
-// these tests fence that claim against drift.
+// `handlerModule` is independent of `type` — these tests fence that claim
+// against drift.
 describe('US-009: flat node types — 17-tag matrix + capability invariants', () => {
   const ALL_TYPES = [
     'rectangle',
@@ -2639,16 +2302,14 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
     expect(FlowSchema.safeParse(flow).success).toBe(false);
   });
 
-  // Core schema-level claim of the flat-types refactor: capabilities
-  // (playAction, statusAction, stateSource) are independent of `type` and
-  // accepted on every variant. The renderer phasing gates *chrome* to
-  // rectangle, but the schema accepts the data fields on all 12 types.
-  it('every one of the 14 type tags accepts playAction in data', () => {
+  // Core schema-level claim of the flat-types refactor: the `handlerModule`
+  // capability is independent of `type` and accepted on every variant.
+  it('every one of the 14 type tags accepts handlerModule in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
         version: 2 as const,
-        name: `playable-${type}`,
+        name: `handler-${type}`,
         nodes: [
           {
             id,
@@ -2656,11 +2317,7 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
             position: { x: 0, y: 0 },
             data: {
               ...minimalData(type, id),
-              playAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/play.ts',
-              },
+              handlerModule: `${type}-handler`,
             },
           },
         ],
@@ -2669,100 +2326,22 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
       const result = ResolvedFlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with playAction to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
       const node = result.data.nodes[0];
       if (node?.type !== type) throw new Error(`expected ${type}`);
-      expect((node.data as { playAction?: unknown }).playAction).toBeDefined();
-    }
-  });
-
-  it('every one of the 14 type tags accepts statusAction in data', () => {
-    for (const type of ALL_TYPES) {
-      const id = `n-${type}`;
-      const demo = {
-        version: 2 as const,
-        name: `stateful-${type}`,
-        nodes: [
-          {
-            id,
-            type,
-            position: { x: 0, y: 0 },
-            data: {
-              ...minimalData(type, id),
-              statusAction: {
-                kind: 'script' as const,
-                interpreter: 'bun',
-                scriptPath: 'scripts/status.ts',
-              },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(
-          `expected ${type} with statusAction to parse, got: ${JSON.stringify(result.error.issues)}`,
-        );
-      }
-      const node = result.data.nodes[0];
-      if (node?.type !== type) throw new Error(`expected ${type}`);
-      expect((node.data as { statusAction?: unknown }).statusAction).toBeDefined();
-    }
-  });
-
-  it('every one of the 14 type tags accepts stateSource in data', () => {
-    for (const type of ALL_TYPES) {
-      const id = `n-${type}`;
-      const demo = {
-        version: 2 as const,
-        name: `sourced-${type}`,
-        nodes: [
-          {
-            id,
-            type,
-            position: { x: 0, y: 0 },
-            data: {
-              ...minimalData(type, id),
-              stateSource: { kind: 'event' as const },
-            },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(
-          `expected ${type} with stateSource to parse, got: ${JSON.stringify(result.error.issues)}`,
-        );
-      }
-      const node = result.data.nodes[0];
-      if (node?.type !== type) throw new Error(`expected ${type}`);
-      expect((node.data as { stateSource?: unknown }).stateSource).toEqual({ kind: 'event' });
+      expect((node.data as { handlerModule?: unknown }).handlerModule).toBe(`${type}-handler`);
     }
   });
 
   // FlowSchema (disk-side) variant of the capability-on-every-type claim —
   // since the disk-side data schemas are `.strict()`, this is a stronger
-  // assertion than the ResolvedFlowSchema variant above: the capability fields
-  // are explicitly enumerated in each variant's allowed-keys set.
-  it('FlowSchema accepts playAction + statusAction + stateSource on every one of the 14 types', () => {
+  // assertion than the ResolvedFlowSchema variant above: the capability field
+  // is explicitly enumerated in each variant's allowed-keys set.
+  it('FlowSchema accepts handlerModule on every one of the 14 types', () => {
     const minimalFlowData = (type: (typeof ALL_TYPES)[number], id: string) => {
-      const base = {
-        playAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/play.ts',
-        },
-        statusAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/status.ts',
-        },
-        stateSource: { kind: 'request' as const },
-      };
+      const base = { handlerModule: `${type}-handler` };
       if (type === 'image') return { ...base, path: `nodes/${id}/pixel.png` };
       if (type === 'icon') return { ...base, icon: 'shopping-cart' };
       return base;
@@ -2779,7 +2358,7 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
       const result = FlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with all 3 capabilities to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
     }
@@ -2788,14 +2367,14 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
 
 // US-003: 'component' node lands in NodeTypeSchema with the spec/action shapes
 // needed to drive a json-render reactive tree. The round-trip below proves the
-// Resolved schema accepts spec + state + both action kinds; the negative case
+// Resolved schema accepts spec + state + set actions; the negative case
 // fences SetAction.path against missing leading '/'.
 describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
   it('NodeTypeSchema accepts "component"', () => {
     expect(NodeTypeSchema.safeParse('component').success).toBe(true);
   });
 
-  it('ResolvedFlowSchema round-trips a component node with set + script actions', () => {
+  it('ResolvedFlowSchema round-trips a component node with set actions', () => {
     const flow = {
       version: 2 as const,
       name: 'demo',
@@ -2814,16 +2393,11 @@ describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
                   path: '/tab',
                   value: { $param: 'to' },
                 },
-                refresh: {
-                  kind: 'script' as const,
-                  interpreter: 'bun',
-                  scriptPath: 'actions/refresh.ts',
-                },
               },
               elements: {
                 root: {
                   type: 'Button',
-                  props: { label: 'Hi', onClick: { $action: 'refresh' } },
+                  props: { label: 'Hi', onClick: { $action: 'switchTab' } },
                 },
               },
             },
@@ -2842,7 +2416,6 @@ describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
     if (node?.type !== 'component') throw new Error('expected component node');
     expect(node.data.spec.root).toBe('root');
     expect(node.data.spec.actions?.switchTab?.kind).toBe('set');
-    expect(node.data.spec.actions?.refresh?.kind).toBe('script');
   });
 
   it('ResolvedFlowSchema rejects a set action whose path lacks the leading "/"', () => {

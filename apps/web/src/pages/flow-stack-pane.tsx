@@ -1,10 +1,7 @@
 import { useDemoData } from '@/hooks/use-demo-data';
 import { type FlowStackEntry, useFlowStack } from '@/hooks/use-navigate-flow';
-import { useNodeEvents } from '@/hooks/use-node-events';
-import { useNodeRuns } from '@/hooks/use-node-runs';
-import { useNodeStatuses } from '@/hooks/use-node-statuses';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
-import { type FlowDetail, type FlowSummary, playFlowNode } from '@/lib/api';
+import type { FlowDetail, FlowSummary } from '@/lib/api';
 import { DemoView } from '@/pages/demo-view';
 import type { SeeflowCanvasHandle } from '@seeflow/canvas';
 import { type RefObject, useCallback, useRef, useState } from 'react';
@@ -109,19 +106,11 @@ export function DemoStackEntry({ entry, demos, refreshFlows, canvasRef }: DemoSt
   // `flow:reload`. DemoView's undo-history stale-clear keys off this so a
   // routine SSE reconnect catch-up doesn't wipe a populated undo stack.
   const [externalReloadSignal, setExternalReloadSignal] = useState(0);
-  const { runs, apply: applyRun } = useNodeRuns(flowId);
-  const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
-  const {
-    statusByNode,
-    apply: applyNodeStatus,
-    reset: resetNodeStatuses,
-  } = useNodeStatuses(flowId);
 
   const onHello = useCallback(() => {
-    resetNodeStatuses();
     refreshDetail();
     refreshFlows();
-  }, [refreshDetail, refreshFlows, resetNodeStatuses]);
+  }, [refreshDetail, refreshFlows]);
 
   const onFlowReload = useCallback(
     (payload: FlowReloadPayload) => {
@@ -152,30 +141,7 @@ export function DemoStackEntry({ entry, demos, refreshFlows, canvasRef }: DemoSt
     [flowId, currentSummary, applyDetail],
   );
 
-  const onEvent = useCallback(
-    (event: Parameters<typeof applyRun>[0]) => {
-      applyRun(event);
-      applyNodeEvent(event);
-      applyNodeStatus(event);
-    },
-    [applyRun, applyNodeEvent, applyNodeStatus],
-  );
-
-  useStudioEvents(flowId, { onHello, onFlowReload, onEvent });
-
-  const onPlayNode = useCallback(
-    (nodeId: string) => {
-      playFlowNode(project, flow, nodeId).catch((err) => {
-        applyRun({
-          type: 'node:error',
-          nodeId,
-          message: err instanceof Error ? err.message : String(err),
-          ts: Date.now(),
-        });
-      });
-    },
-    [project, flow, applyRun],
-  );
+  useStudioEvents(flowId, { onHello, onFlowReload });
 
   return (
     <DemoView
@@ -185,11 +151,7 @@ export function DemoStackEntry({ entry, demos, refreshFlows, canvasRef }: DemoSt
       demos={demos}
       detail={detail}
       loading={loading}
-      runs={runs}
-      nodeEvents={nodeEvents}
-      statusByNode={statusByNode}
       externalReloadSignal={externalReloadSignal}
-      onPlayNode={onPlayNode}
       refreshFlows={refreshFlows}
       applyDetail={applyDetail}
       canvasRef={effectiveCanvasRef}

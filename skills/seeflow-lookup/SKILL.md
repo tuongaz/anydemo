@@ -47,21 +47,21 @@ To pluck a slice out of a large schema payload, pass a jq path filter via `--jq`
 
 Runtime behavior the CLI assumes — not encoded in the schema:
 
-- **Decorative node types** — `sticky`, `text`, `icon`, `image`, `html` with empty content, and geometric shapes (`ellipse`, `database`, `queue`, `cloud`, `server`, `user`) carrying no capabilities — are visual only. **Skip them for architectural reasoning.** Treat any node as architectural when its `data.playAction` or `data.statusAction` is set, regardless of `type`.
+- **Decorative node types** — `sticky`, `text`, `icon`, `image`, `html` with empty content, and geometric shapes (`ellipse`, `database`, `queue`, `cloud`, `server`, `user`) carrying no semantic data — are visual only. **Skip them for architectural reasoning.** Treat a node as architectural when it carries semantic data — a `data.name` and/or `data.description` / `data.detail` (or a `handlerModule`) — regardless of `type`; such a node represents a real system component rather than a decorative label or shape.
 - **Semantics live on the nodes, not the connectors.** Read the source / target node's `data.name` (and `codePointers` from the brief) to understand what an edge means.
 - **`file://` content fields** (e.g. `detail`, `html`) are auto-externalised on write. Whether they come back inlined depends on the subcommand — check `seeflow help` for the variant that returns full content.
-- **Action `scriptPath` values** are relative under `nodes/<nodeId>/`. Read those files directly with `Read` to inspect the script source.
+- **`action` entries** are set-kind local canvas-state mutations — they carry no `scriptPath` and have no script files to read.
 
 Deeper reference: `../seeflow/references/schema.md` in this plugin (conventions only — no field shapes).
 
 ## Usage pattern (cost ladder)
 
-Start with the cheapest lookup the CLI offers (a summary across flows), pick a flow, then ask for that flow's structure, and only fetch individual nodes when their content is needed. Reserve any "full inline" variant for small flows or when every detail is genuinely required. Reading `play.ts` / `status.ts` directly is reserved for cases where the script source itself drives the decision.
+Start with the cheapest lookup the CLI offers (a summary across flows), pick a flow, then ask for that flow's structure, and only fetch individual nodes when their content is needed. Reserve any "full inline" variant for small flows or when every detail is genuinely required.
 
 ## Common mistakes
 
 - **Assuming subcommand names from memory** — always confirm with `seeflow help` first.
 - **Reaching for the "full" variant first** on a large flow — burns context. Climb the ladder.
-- **Treating decorative nodes as architecture** — geometric shapes without capabilities, plus `sticky` / `text` / `icon` / `image` / empty `html`, are visual only.
+- **Treating decorative nodes as architecture** — geometric shapes without semantic data, plus `sticky` / `text` / `icon` / `image` / empty `html`, are visual only.
 - **Re-emitting JSON as prose** — pass the CLI output through unchanged. Don't rewrite it as markdown.
-- **Reading `file://` refs as filesystem paths** — let the CLI inline them; only fall back to direct `Read` for `scriptPath`.
+- **Reading `file://` refs as filesystem paths** — let the CLI inline them rather than reading the referenced files off disk yourself.

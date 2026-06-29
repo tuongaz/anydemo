@@ -4,13 +4,10 @@ import type { ComponentSpec } from '../types.ts';
 
 type StateMap = Record<string, unknown>;
 
-type StateAction =
-  | { kind: 'set'; path: string; value: unknown }
-  | { kind: 'merge'; partial: StateMap };
+type StateAction = { kind: 'set'; path: string; value: unknown };
 
 function reducer(state: StateMap, action: StateAction): StateMap {
-  if (action.kind === 'set') return { ...state, [action.path]: action.value };
-  return { ...state, ...action.partial };
+  return { ...state, [action.path]: action.value };
 }
 
 type Ref = {
@@ -68,59 +65,20 @@ function resolveProps(
 export interface ComponentRuntimeProps {
   spec: ComponentSpec;
   nodeId: string;
-  /** Base URL for the script-action dispatch endpoint. Defaults to '/api'. */
-  apiBaseUrl?: string;
-  /** Project slug. Required for script-kind dispatch under the multi-flow route. */
-  projectSlug?: string;
-  /** Flow slug. Required for script-kind dispatch under the multi-flow route. */
-  flowSlug?: string;
 }
 
-export function ComponentRuntime({
-  spec,
-  nodeId,
-  apiBaseUrl = '/api',
-  projectSlug,
-  flowSlug,
-}: ComponentRuntimeProps): ReactNode {
+export function ComponentRuntime({ spec, nodeId: _nodeId }: ComponentRuntimeProps): ReactNode {
   const [state, dispatchState] = useReducer(reducer, spec.state ?? {});
   const actionNames = new Set(Object.keys(spec.actions ?? {}));
 
   const dispatch = useCallback<Dispatch>(
-    async (name, payload) => {
+    (name, payload) => {
       const action = spec.actions?.[name];
       if (!action) return;
-      if (action.kind === 'set') {
-        const resolved = resolveSetValue(action.value, payload, state);
-        dispatchState({ kind: 'set', path: action.path, value: resolved });
-        return;
-      }
-      if (!projectSlug || !flowSlug) return;
-      const url = `${apiBaseUrl}/projects/${encodeURIComponent(projectSlug)}/flows/${encodeURIComponent(flowSlug)}/nodes/${encodeURIComponent(nodeId)}/actions/${encodeURIComponent(name)}`;
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payload ?? {}),
-        });
-        if (!res.ok) {
-          const text = await res.text();
-          dispatchState({ kind: 'set', path: `/__errors/${name}`, value: text });
-          return;
-        }
-        const body = (await res.json()) as unknown;
-        if (body !== null && typeof body === 'object') {
-          dispatchState({ kind: 'merge', partial: body as StateMap });
-        }
-      } catch (err) {
-        dispatchState({
-          kind: 'set',
-          path: `/__errors/${name}`,
-          value: err instanceof Error ? err.message : String(err),
-        });
-      }
+      const resolved = resolveSetValue(action.value, payload, state);
+      dispatchState({ kind: 'set', path: action.path, value: resolved });
     },
-    [spec.actions, projectSlug, flowSlug, apiBaseUrl, nodeId, state],
+    [spec.actions, state],
   );
 
   return renderElement(spec.root, spec, state, dispatch, actionNames);

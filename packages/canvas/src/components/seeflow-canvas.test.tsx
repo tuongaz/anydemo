@@ -2896,7 +2896,7 @@ describe('SeeflowCanvas', () => {
     });
   });
 
-  describe('US-014: component-node flowId + apiBaseUrl injection', () => {
+  describe('US-014: component-node data injection', () => {
     const COMPONENT_SPEC: ComponentSpec = {
       root: 'root',
       elements: {
@@ -2919,56 +2919,6 @@ describe('SeeflowCanvas', () => {
       if (!rf) throw new Error('ReactFlow element not found');
       return (rf.props.nodes as Node[]).find((n) => n.id === id);
     }
-
-    it('injects data.projectSlug === projectId and data.flowSlug === flowSlug for component nodes', () => {
-      const tree = callSeeflowCanvas({
-        projectId: 'demo-42',
-        flowSlug: 'main',
-        nodes: [makeComponentNode('c1')],
-      });
-      const data = findRfNode(tree, 'c1')?.data as {
-        projectSlug?: string;
-        flowSlug?: string;
-      };
-      expect(data.projectSlug).toBe('demo-42');
-      expect(data.flowSlug).toBe('main');
-    });
-
-    it("defaults data.apiBaseUrl to '/api' when the prop is omitted", () => {
-      const tree = callSeeflowCanvas({
-        projectId: 'demo-42',
-        nodes: [makeComponentNode('c1')],
-      });
-      const data = findRfNode(tree, 'c1')?.data as { apiBaseUrl?: string };
-      expect(data.apiBaseUrl).toBe('/api');
-    });
-
-    it('threads the apiBaseUrl prop override into component node data', () => {
-      const tree = callSeeflowCanvas({
-        projectId: 'demo-42',
-        apiBaseUrl: 'https://embedder.example/api',
-        nodes: [makeComponentNode('c1')],
-      });
-      const data = findRfNode(tree, 'c1')?.data as { apiBaseUrl?: string };
-      expect(data.apiBaseUrl).toBe('https://embedder.example/api');
-    });
-
-    it('omits projectSlug + flowSlug + apiBaseUrl on non-component nodes (gated by type)', () => {
-      const tree = callSeeflowCanvas({
-        projectId: 'demo-42',
-        flowSlug: 'main',
-        apiBaseUrl: '/custom',
-        nodes: [makeShapeNode('a')],
-      });
-      const data = findRfNode(tree, 'a')?.data as {
-        projectSlug?: string;
-        flowSlug?: string;
-        apiBaseUrl?: string;
-      };
-      expect(data.projectSlug).toBeUndefined();
-      expect(data.flowSlug).toBeUndefined();
-      expect(data.apiBaseUrl).toBeUndefined();
-    });
 
     it('sets data.enableFullscreen = true for component nodes in edit + view modes', () => {
       for (const mode of ['edit', 'view'] as const) {
@@ -3388,12 +3338,11 @@ describe('SeeflowCanvas', () => {
       expect(rf.props.deleteKeyCode).toBeNull();
     });
 
-    it('lets a consumer flip individual flags back on (e.g. showStatusBadges)', () => {
+    it('lets a consumer flip individual flags back on (e.g. showControls)', () => {
       // The flag system still composes — mini is the floor, not a wall.
       const tree = callSeeflowCanvas({
         mode: 'mini',
         adapter: undefined,
-        showStatusBadges: true,
         showControls: true,
       });
       const controls = findElement(tree, (el) => el.type === Controls);
@@ -3514,17 +3463,15 @@ describe('SeeflowCanvas', () => {
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
     });
 
-    it('forwards adapter, statusReport, flowId, and field-edit callbacks', () => {
+    it('forwards adapter, flowId, and field-edit callbacks', () => {
       const onNameChange = () => {};
       const onDescriptionChange = () => {};
       const onDetailChange = () => {};
-      const statusReport = { state: 'ok' as const, summary: 's', ts: 7 };
       const tree = callSeeflowCanvas(
         {
           projectId: 'proj-123',
           nodes: [makeShapeNode('a')],
           selectedNodeIds: ['a'],
-          statusReport,
           onNameChange,
           onDescriptionChange,
           onDetailChange,
@@ -3536,14 +3483,12 @@ describe('SeeflowCanvas', () => {
       const props = panel?.props as {
         adapter?: CanvasAdapter | null;
         flowId?: string | null;
-        statusReport?: typeof statusReport;
         onNameChange?: typeof onNameChange;
         onDescriptionChange?: typeof onDescriptionChange;
         onDetailChange?: typeof onDetailChange;
       };
       expect(props.adapter).toBe(noopAdapter);
       expect(props.flowId).toBe('proj-123');
-      expect(props.statusReport).toBe(statusReport);
       expect(props.onNameChange).toBe(onNameChange);
       expect(props.onDescriptionChange).toBe(onDescriptionChange);
       expect(props.onDetailChange).toBe(onDetailChange);
@@ -4080,7 +4025,6 @@ describe('US-027: resolveFlags helper', () => {
       showToolbar: true,
       showStyleStrip: true,
       showDetailPanel: true,
-      showStatusBadges: true,
       showResizeHandles: true,
       showControls: true,
       showShareMenu: true,
@@ -4105,9 +4049,9 @@ describe('US-027: resolveFlags helper', () => {
 
   it("returns the view preset when no overrides are passed (mode='view')", () => {
     // The view preset hides chrome + disables every editing path, but keeps
-    // pan/zoom (so the canvas is navigable), status badges (so SSE-driven
-    // monitoring still surfaces), selection + local-state node drag, and
-    // the bottom-left Controls cluster (zoom-in/out/fit/tidy navigation aids).
+    // pan/zoom (so the canvas is navigable), selection + local-state node drag,
+    // and the bottom-left Controls cluster (zoom-in/out/fit/tidy navigation
+    // aids).
     expect(resolveFlags({ mode: 'view' })).toEqual({
       // View mode renders a slimmed-down toolbar (Select + Hand only) so the
       // outer flag stays on; SeeflowCanvas hides shape tiles via its
@@ -4115,7 +4059,6 @@ describe('US-027: resolveFlags helper', () => {
       showToolbar: true,
       showStyleStrip: false,
       showDetailPanel: false,
-      showStatusBadges: true,
       showResizeHandles: false,
       showControls: true,
       showShareMenu: true,
@@ -4138,14 +4081,12 @@ describe('US-027: resolveFlags helper', () => {
   it("returns the mini preset when no overrides are passed (mode='mini')", () => {
     // The mini preset turns every chrome affordance off (incl. the Controls
     // cluster) AND every input path inert (no pan/zoom, no selection, no
-    // node drag, no keyboard, no context menu). Status badges default off
-    // so thumbnails read visually neutral; consumers flip them on via
-    // override if they want a live-state preview.
+    // node drag, no keyboard, no context menu). Consumers flip individual
+    // flags back on via override if they want a richer preview.
     expect(resolveFlags({ mode: 'mini' })).toEqual({
       showToolbar: false,
       showStyleStrip: false,
       showDetailPanel: false,
-      showStatusBadges: false,
       showResizeHandles: false,
       showControls: false,
       showShareMenu: false,
@@ -4168,14 +4109,12 @@ describe('US-027: resolveFlags helper', () => {
   });
 
   it('lets a mini-mode consumer flip individual flags back on', () => {
-    // A thumbnail that wants live-state badges + pan-to-explore is still
-    // expressible via overrides; the mini preset is just the default floor.
+    // A thumbnail that wants pan-to-explore is still expressible via
+    // overrides; the mini preset is just the default floor.
     const resolved = resolveFlags({
       mode: 'mini',
-      showStatusBadges: true,
       enablePan: true,
     });
-    expect(resolved.showStatusBadges).toBe(true);
     expect(resolved.enablePan).toBe(true);
     // Other mini defaults stay off.
     expect(resolved.showControls).toBe(false);
@@ -4195,16 +4134,13 @@ describe('US-027: resolveFlags helper', () => {
   });
 
   it('lets a per-feature override turn a view-mode flag on', () => {
-    // View mode + opt-in to status badges (already on by default) and
-    // opt-in to keyboard shortcuts (off by default) — e.g. a kiosk where
-    // panning + zoom + ESC clear should still work.
+    // View mode + opt-in to keyboard shortcuts (off by default) — e.g. a
+    // kiosk where panning + zoom + ESC clear should still work.
     const resolved = resolveFlags({
       mode: 'view',
       enableKeyboard: true,
-      showStatusBadges: true,
     });
     expect(resolved.enableKeyboard).toBe(true);
-    expect(resolved.showStatusBadges).toBe(true);
     // Other view defaults stay view-off (the toolbar is now visible in view
     // mode, but only as the Select + Hand navigation pair — see the
     // showShapeTools gate in SeeflowCanvas).
@@ -4360,10 +4296,10 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
 });
 
 describe('US-004: flat node types — fixture coverage across the 12-tag set', () => {
-  // AC: "cover at least rectangle (with playAction + statusAction), one
-  // other geometric tag, image, html, and icon". Each fixture below renders
-  // through SeeflowCanvas and asserts the React Flow node payload carries the
-  // expected `type` discriminator. This guards the nodeTypes routing —
+  // AC: "cover at least rectangle, one other geometric tag, image, html, and
+  // icon". Each fixture below renders through SeeflowCanvas and asserts the
+  // React Flow node payload carries the expected `type` discriminator. This
+  // guards the nodeTypes routing —
   // rectangle → RectangleNode; the 8 other geometric tags → GeometricNode;
   // image/html/icon → their dedicated renderers — against silent regressions.
   function getRfNodes(
@@ -4379,42 +4315,19 @@ describe('US-004: flat node types — fixture coverage across the 12-tag set', (
     }>;
   }
 
-  it('renders a rectangle node carrying both playAction and statusAction capabilities', () => {
-    // Capabilities are independent optional fields on data — the canvas only
-    // threads them into the renderer payload (which decides whether to draw
-    // the play button / status pill). Asserting both pass through unchanged
-    // pins the new "capability is a field" contract end-to-end.
+  it('renders a rectangle node with the discriminator preserved', () => {
     const node: FlowNode = {
       id: 'r1',
       type: 'rectangle',
       position: { x: 0, y: 0 },
       data: {
         name: 'API call',
-        playAction: {
-          kind: 'script',
-          interpreter: 'bash',
-          scriptPath: 'scripts/play.sh',
-        },
-        statusAction: {
-          kind: 'script',
-          interpreter: 'bash',
-          scriptPath: 'scripts/status.sh',
-        },
       },
     };
     const rfNodes = getRfNodes([node]);
     expect(rfNodes).toHaveLength(1);
     expect(rfNodes[0]?.type).toBe('rectangle');
-    expect(rfNodes[0]?.data.playAction).toEqual({
-      kind: 'script',
-      interpreter: 'bash',
-      scriptPath: 'scripts/play.sh',
-    });
-    expect(rfNodes[0]?.data.statusAction).toEqual({
-      kind: 'script',
-      interpreter: 'bash',
-      scriptPath: 'scripts/status.sh',
-    });
+    expect(rfNodes[0]?.data.name).toBe('API call');
   });
 
   it('renders a database (non-rectangle geometric) node with the discriminator preserved', () => {

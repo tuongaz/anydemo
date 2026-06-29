@@ -2,12 +2,7 @@ import { type SseEvent, apiEventStream } from '@/lib/sse-client';
 import type { Flow } from '@seeflow/canvas';
 import { useEffect, useRef, useState } from 'react';
 
-export type StudioEventType =
-  | 'flow:reload'
-  | 'node:running'
-  | 'node:done'
-  | 'node:error'
-  | 'node:status';
+export type StudioEventType = 'flow:reload';
 
 export interface StudioEvent {
   type: StudioEventType;
@@ -39,8 +34,6 @@ export interface UseStudioEventsOptions {
    * layout-endpoint path that emits an empty payload).
    */
   onFlowReload?: (payload: FlowReloadPayload) => void;
-  /** All node:* events flow through here, unchanged from the original API. */
-  onEvent?: (event: StudioEvent) => void;
 }
 
 export interface UseStudioEventsResult {
@@ -57,7 +50,7 @@ export const useStudioEvents = (
   options: UseStudioEventsOptions = {},
 ): UseStudioEventsResult => {
   const [connected, setConnected] = useState(false);
-  const { onHello, onFlowReload, onEvent } = options;
+  const { onHello, onFlowReload } = options;
 
   // Mirror the callbacks into refs so the EventSource setup effect can read
   // the latest closure without listing them in its dep array. Without this,
@@ -67,12 +60,10 @@ export const useStudioEvents = (
   // loop. Only flowId belongs in the effect's deps.
   const onHelloRef = useRef(onHello);
   const onFlowReloadRef = useRef(onFlowReload);
-  const onEventRef = useRef(onEvent);
   useEffect(() => {
     onHelloRef.current = onHello;
     onFlowReloadRef.current = onFlowReload;
-    onEventRef.current = onEvent;
-  }, [onHello, onFlowReload, onEvent]);
+  }, [onHello, onFlowReload]);
 
   useEffect(() => {
     if (!flowId) {
@@ -92,16 +83,9 @@ export const useStudioEvents = (
 
     source.addEventListener('flow:reload', (e) => {
       const event = parsePayload(e, 'flow:reload');
-      onEventRef.current?.(event);
       const payload = toFlowReloadPayload(event);
       if (payload) onFlowReloadRef.current?.(payload);
     });
-
-    for (const type of ['node:running', 'node:done', 'node:error', 'node:status'] as const) {
-      source.addEventListener(type, (e) => {
-        onEventRef.current?.(parsePayload(e, type));
-      });
-    }
 
     return () => {
       source.close();

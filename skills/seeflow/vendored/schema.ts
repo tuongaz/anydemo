@@ -6,8 +6,7 @@ const PositionSchema = z.object({
   y: z.number(),
 });
 
-// `HttpMethodSchema` is documentation metadata on connectors. No node schema
-// uses it — PlayAction/StatusAction are script-based.
+// `HttpMethodSchema` is documentation metadata on connectors.
 const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 // Curated palette tokens. Stored on disk as readable names; the frontend maps
@@ -94,8 +93,7 @@ const NodeSemanticBaseShape = {
 };
 
 // Relative-path safety refine (textual). Mirrors the same rule used for
-// image-node and html-node script paths. Realpath verification is layered on
-// top by the proxy/status-runner before any spawn (symlink-escape defense).
+// image-node paths (no absolute / traversal).
 const isCleanRelativePath = (s: string): boolean => {
   if (s.length === 0) return false;
   if (s.startsWith('/') || s.startsWith('\\')) return false;
@@ -155,82 +153,9 @@ const addGroupMembershipIssues = (
   });
 };
 
-// Script-based action: the studio spawns `<interpreter> [...args] <scriptPath>`
-// from the project's repoPath. `scriptPath` is a relative path under the
-// project root (typically `nodes/<id>/scripts/<name>` for play/status, or any
-// project-root-relative path for reset); `args` (optional) prepend to the
-// interpreter; `input` (optional) gets JSON-serialized and written to the
-// child's stdin then closed; `timeoutMs` caps execution (default applied at
-// the spawn layer, not here).
-export const ScriptActionSchema = z.object({
-  kind: z.literal('script'),
-  interpreter: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
-  }),
-  input: z.unknown().optional(),
-  timeoutMs: z.number().int().positive().max(600_000).optional(),
-});
-
-export const PlayActionSchema = ScriptActionSchema;
-
-// Long-running status script. Same spawn shape as ScriptAction (interpreter +
-// args + scriptPath) but no stdin payload and a much longer max lifetime since
-// these processes tick continuously and stream StatusReports to stdout.
-export const StatusActionSchema = z.object({
-  kind: z.literal('script'),
-  interpreter: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
-  }),
-  maxLifetimeMs: z.number().int().positive().max(3_600_000).optional(),
-});
-
-// Per-tick status report a statusAction script writes to stdout (one JSON
-// record per line). `data` is a free-form key/value bag rendered as a table
-// in the sidebar.
-export const StatusReportSchema = z.object({
-  state: z.enum(['ok', 'warn', 'error', 'pending']),
-  summary: z.string().max(120).optional(),
-  detail: z.string().max(2000).optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
-  ts: z.number().int().positive().optional(),
-});
-
-export const StateSourceSchema = z
-  .discriminatedUnion('kind', [
-    z
-      .object({ kind: z.literal('request') })
-      .describe(
-        'Poll-based state: `statusAction` samples an endpoint on an interval (REST GET, healthcheck, DB query). Use for services you can probe.',
-      ),
-    z
-      .object({ kind: z.literal('event') })
-      .describe(
-        'Push-based state: `statusAction` subscribes to a stream (SSE, webhook, queue topic). Use for message buses, async pipelines, anything that announces state changes.',
-      ),
-  ])
-  .describe(
-    "Declares how this node's live state is sourced. Pair with `statusAction` so observers can tell at a glance whether the node's status is polled or pushed.",
-  );
-
-// Capabilities — any subset of these makes a node Playable / Stateful. All
-// optional, valid on every node type. A node is Playable iff `playAction` is
-// set; Stateful iff `statusAction` is set; Both iff both. `stateSource` is
-// informational metadata that pairs with statusAction. `handlerModule` is
-// reserved for a future skills runtime and is schema-only at v1.
+// Capabilities — optional metadata valid on every node type. `handlerModule`
+// is reserved for a future skills runtime and is schema-only at v1.
 const NodeCapabilitiesShape = {
-  playAction: PlayActionSchema.optional().describe(
-    'One-shot script the user invokes by clicking the node (a "Play" affordance). Studio spawns `<interpreter> [...args] <scriptPath>` from the project root with the optional `input` JSON-serialized to stdin. Use for HTTP calls, CLI invocations, anything triggered on demand.',
-  ),
-  statusAction: StatusActionSchema.optional().describe(
-    "Long-running status probe. Same spawn shape as `playAction` but the script ticks continuously and writes one JSON `StatusReport` per line to stdout; the canvas renders the most recent state badge. Pair with `stateSource` so observers know whether it's poll- or push-based.",
-  ),
-  stateSource: StateSourceSchema.optional().describe(
-    'Set this on any node that has a `statusAction`. Choose `request` for poll-based sources, `event` for push-based sources. Omit on decorative nodes (sticky, label-only text) and on action nodes whose only behavior is `playAction`.',
-  ),
   handlerModule: z
     .string()
     .optional()
@@ -313,13 +238,9 @@ const SetActionSchema = z.object({
   value: z.unknown(),
 });
 
-// Script-kind component actions reuse the existing ScriptActionSchema shape
-// (interpreter, scriptPath, timeoutMs, ...). The action runner roots scriptPath
-// under `<projectRoot>/nodes/<nodeId>/`.
-export const ComponentActionSchema = z.discriminatedUnion('kind', [
-  SetActionSchema,
-  ScriptActionSchema,
-]);
+// Component actions are declarative `set` mutations only — they update local
+// canvas state via a JSON Pointer path and never round-trip to the server.
+export const ComponentActionSchema = SetActionSchema;
 
 export const ComponentSpecSchema = z.object({
   root: z.string().min(1),
@@ -663,10 +584,6 @@ export type ConnectorPath = z.infer<typeof ConnectorPathSchema>;
 export type ConnectorHeadShape = z.infer<typeof ConnectorHeadShapeSchema>;
 export type EdgePin = z.infer<typeof EdgePinSchema>;
 export type EdgePinSide = z.infer<typeof EdgePinSideSchema>;
-export type PlayAction = z.infer<typeof PlayActionSchema>;
-export type StatusAction = z.infer<typeof StatusActionSchema>;
-export type StatusReport = z.infer<typeof StatusReportSchema>;
-export type StateSource = z.infer<typeof StateSourceSchema>;
 
 // =============================================================================
 // Flow schema — pure semantic data, every visual/layout field stripped.

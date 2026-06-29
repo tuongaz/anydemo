@@ -21,7 +21,6 @@ describe('COMMAND_MANIFEST', () => {
         'flows:delete',
         'flows:layout',
         'flow:add-bulk',
-        'flows:play',
         'projects:create',
         'projects:list',
         'export',
@@ -37,8 +36,6 @@ describe('COMMAND_MANIFEST', () => {
         'validate',
         'schema',
         'ids',
-        'e2e',
-        'emit',
         'icons:list',
         'icons:add',
         'icons:update',
@@ -47,9 +44,9 @@ describe('COMMAND_MANIFEST', () => {
     );
   });
 
-  it('marks live-only commands as requiresStudio: true', () => {
+  it('has no commands that require a running studio', () => {
     const live = COMMAND_MANIFEST.filter((e) => e.requiresStudio).map((e) => e.name);
-    expect(live.sort()).toEqual(['e2e', 'emit', 'flows:play'].sort());
+    expect(live).toEqual([]);
   });
 
   it('flag/arg names are unique within each command', () => {
@@ -71,17 +68,6 @@ describe('COMMAND_MANIFEST', () => {
   it('labels the ids command with outputKind: "text"', () => {
     const ids = COMMAND_MANIFEST.find((e) => e.name === 'ids');
     expect(ids?.outputKind).toBe('text');
-  });
-
-  it('keeps live commands on the default JSON envelope (they return after the run finishes)', () => {
-    // flows:play and e2e POST and wait for a single JSON response; they do not
-    // stream SSE events to the CLI's stdout. The studio still broadcasts
-    // SSE events on /api/events for any out-of-band subscriber, but the CLI
-    // is request/response.
-    const play = COMMAND_MANIFEST.find((e) => e.name === 'flows:play');
-    const e2e = COMMAND_MANIFEST.find((e) => e.name === 'e2e');
-    expect(play?.outputKind ?? 'json').toBe('json');
-    expect(e2e?.outputKind ?? 'json').toBe('json');
   });
 
   it('locks the ids command shape: `<type> <count>`, no flags, both examples present', () => {
@@ -161,27 +147,6 @@ describe('renderCommandHelp — text output', () => {
     const out = renderCommandHelp('stop');
     expect(out).not.toContain('"ok": true');
     expect(out).toMatch(/Stopped studio|No studio running/);
-  });
-});
-
-describe('renderCommandHelp — live JSON output', () => {
-  it('renders flows:play with the standard JSON envelope + requires-studio marker', () => {
-    const out = renderCommandHelp('flows:play');
-    expect(out).toContain('## Output');
-    expect(out).toContain('On success (stdout, exit 0):');
-    expect(out).toContain('"ok": true');
-    expect(out).toContain('"runId"');
-    expect(out).toContain('Requires studio running: yes');
-  });
-
-  it('renders e2e with the standard JSON envelope + plays/statuses/skipped sections', () => {
-    const out = renderCommandHelp('e2e');
-    expect(out).toContain('## Output');
-    expect(out).toContain('"ok": true');
-    expect(out).toContain('"plays"');
-    expect(out).toContain('"statuses"');
-    expect(out).toContain('"skipped"');
-    expect(out).toContain('Requires studio running: yes');
   });
 });
 

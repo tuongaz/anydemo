@@ -38,9 +38,7 @@ Build the brief inline from the user's prompt + any document text in the convers
 The planner branches on `inputClass === "document"` and defaults to `component` nodes (catalog-driven UI cards) per its §"Picking node `type` by input class". The orchestrator forwards `$componentCatalog` (from the Phase 0 schema cache) so the planner can pick legal `spec.elements[].type` values.
 
 Downstream consequences (document branch):
-- **Phase 3 dynamic gate:** default to **static** without re-asking. Document flows have no runtime to react to.
-- **Phase 6 (e2e):** N/A — skip with a one-line note when summarising the run.
-- **`$learnPath`:** at Save #1 and Save #2, the upserted flow row carries a `(document)` marker in the purpose column so the next run knows the canvas is not wired to a real system.
+- **`$learnPath`:** at the Phase 3 save, the upserted flow row carries a `(document)` marker in the purpose column so the next run knows the canvas renders structured information rather than a real system's topology.
 
 ## Phase 1 → Phase 2 overlap
 
@@ -51,8 +49,8 @@ For `"code"`: start `seeflow-node-planner` as soon as the code-analyzer returns 
 When the system-analyzer returns:
 
 0. **Size-check the payload first.** Measure the JSON byte length. If > 16 KB (twice the agent's budget — see `../../agents/seeflow-system-analyzer.md` § "Output budget"), the analyzer drifted. Apply the per-field caps from that section before merging: truncate `gotchas[]` to 10, `fixtures[]`/`factories[]` to 8, prose fields to 400 chars, etc. Drop any inherited fact that already appears verbatim in `$learnPath` (the merger would keep it anyway). The trimmed payload is what feeds steps 1–3.
-1. **Stage** `learnUpdates` in memory — DO NOT write `$learnPath` to disk yet. The first disk hit is Save #1 in Phase 3 step 7, after the studio has registered the flow. Writing earlier risks leaving stale rows behind if the run aborts.
-2. Splice `runtimeProfile` + `$learnPath` facts (the existing on-disk content read at Phase 0, plus the staged updates) into the in-memory context brief used by Phase 4. **Forward the *trimmed* payload — never the raw analyzer output** — and only the fields each designer actually consumes (`runtimeProfile`, the matching `techAdaptations.<techId>` for techs in this flow, the relevant `dataEntryPaths`, top 5 `gotchas`).
-3. Stage `knownEndpoints` / `techStack` from the code-analyzer alongside the system-analyzer's updates — same staged buffer, same Save #1 destination.
+1. **Stage** `learnUpdates` in memory — DO NOT write `$learnPath` to disk yet. The disk hit is the Save in Phase 3 step 7, after the studio has registered the flow. Writing earlier risks leaving stale rows behind if the run aborts.
+2. Keep `runtimeProfile` + the trimmed `learnUpdates` in memory alongside the `$learnPath` facts read at Phase 0. Phase 3's detail-backfill reads `dataEntryPaths` / `gotchas` / `techAdaptations` when synthesising node `detail.md`; the Phase 3 Save merges the full staged buffer into `$learnPath`. **Carry the *trimmed* payload — never the raw analyzer output.**
+3. Stage `knownEndpoints` / `techStack` from the code-analyzer alongside the system-analyzer's updates — same staged buffer, same Save destination.
 
-**Resolve tech refs.** Map each `techId` in the staged `techStack` (union of `$learnPath`'s existing `## Tech stack` and the analyzer updates) to `../tech/<techId>.md`. Forward those paths and the matching staged `techAdaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` `$learnPath` already had on read; the planner produces a first draft and the user reviews in Phase 3 anyway.
+**Resolve tech refs.** Map each `techId` in the staged `techStack` (union of `$learnPath`'s existing `## Tech stack` and the analyzer updates) to `../tech/<techId>.md`. Forward those paths and the matching staged `techAdaptations` into the Phase 2 planner prompt (~3–5 refs per flow), where they inform node modelling. If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` `$learnPath` already had on read; the planner produces a first draft and the user reviews in Phase 3 anyway.
