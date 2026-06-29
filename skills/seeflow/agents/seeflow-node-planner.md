@@ -192,7 +192,12 @@ behavioural sub-type — pick the SEMANTIC shape that matches the entity.
   panel. The full `component` node shape comes from `$SEEFLOW schema
   node component`; the legal element-type names + their props come from
   the separate `componentCatalog` category (`$SEEFLOW schema
-  componentCatalog [<Name>]`), forwarded by the orchestrator.
+  componentCatalog [<Name>]`), forwarded by the orchestrator. **Author
+  the `spec` object inline at `data.spec` — it is required** (`spec.root`
+  + `spec.elements`, shape from `$SEEFLOW schema componentSpec`); a
+  `component` node without `data.spec` fails `flow:add-bulk` with
+  `badSchema`. See the inline-`data.spec` worked example in the
+  orchestrator's forwarded `planner/examples.md`.
 - **`html`** — **last-resort** escape hatch for content that no
   `component` catalog entry covers (custom one-off layouts, bespoke
   legends, prose that needs Tailwind utility classes the catalog

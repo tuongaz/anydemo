@@ -132,3 +132,47 @@ there are zero connectors, so the orchestrator cannot render the flow
 direction; (c) each node is missing `data.detail`, so every card renders
 blank. Collapse to a single `order-server` `type:'rectangle'` and wire
 connectors to the downstream entities.
+
+## Worked example — `type:'component'` node (inline `data.spec`)
+
+The **first choice for rich information-display content** (status cards,
+comparisons, KPI tiles, checklists) — preferred over `type:'html'`
+whenever a `componentCatalog` entry covers it. The defining field is
+`data.spec`: a json-render tree you author **inline on the node**.
+
+**Author `spec` inline at `data.spec`, even though `seeflow schema node
+component` describes it as externalized.** That note describes the
+on-disk file (`flow.json`), not the authoring contract: `flow:add-bulk`
+validates the resolved node, where `data.spec` is **required**. Omit it
+and the batch fails `badSchema` with `data.spec Required`. The studio
+strips `spec` to `<project>/nodes/<id>/spec.json` *after* it accepts your
+node — your job is to supply it.
+
+- `spec.root` names the entry element; every id in `children` must exist
+  in `spec.elements`.
+- Every `elements[].type` must be a `componentCatalog` name and its
+  `props` must match that component's props schema (`$SEEFLOW schema
+  componentCatalog <Name>`). Unknown types / bad props → `badSchema`.
+
+```json
+{
+  "id": "foundry-overview",
+  "type": "component",
+  "data": {
+    "name": "Foundry Agent Service",
+    "spec": {
+      "root": "card",
+      "elements": {
+        "card": { "type": "Card",   "props": { "title": "Foundry Agent Service" }, "children": ["lede", "m1", "m2"] },
+        "lede": { "type": "Text",   "props": { "text": "Managed platform to build, deploy, and scale AI agents on Azure.", "muted": true } },
+        "m1":   { "type": "Metric", "props": { "label": "Agent types", "value": "3" } },
+        "m2":   { "type": "Metric", "props": { "label": "Managed by",  "value": "Azure" } }
+      }
+    }
+  }
+}
+```
+
+`data.detail` is optional on `component` nodes — the `spec` carries the
+content. Only add `detail` when the sidebar needs prose beyond what the
+card shows.

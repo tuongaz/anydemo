@@ -790,6 +790,28 @@ export const FlowComponentNodeSchema = z
   })
   .strict();
 
+// Authoring shape surfaced by `seeflow schema node component` — the contract an
+// agent reads to BUILD a component node, NOT the on-disk parse shape above. The
+// on-disk FlowComponentNodeData omits `spec` because the studio externalizes it
+// to <project>/nodes/<id>/spec.json on write, but add_node / add_bulk / patch
+// callers MUST supply `spec` inline at data.spec or the post-merge
+// ResolvedFlowSchema reparse rejects the node ("data.spec Required"). Surfacing
+// the spec-less on-disk schema for introspection is actively misleading (its
+// additionalProperties:false reads as "spec forbidden"), so the catalog points
+// at this authoring schema instead. Parsing flow.json still uses the spec-less
+// FlowComponentNodeSchema above; this schema is introspection-only.
+export const FlowComponentNodeAuthoringSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('component'),
+    data: FlowComponentNodeData.extend({
+      spec: ComponentSpecSchema.describe(
+        'Required when authoring a component node. The json-render element tree for the reactive UI — pass it inline here on add_node / add_bulk / patch. Shape: `seeflow schema componentSpec`; legal elements[].type + props: `seeflow schema componentCatalog`. The studio externalizes it to <project>/nodes/<id>/spec.json on write, so it is absent from flow.json on disk (and from the on-disk node schema).',
+      ),
+    }),
+  })
+  .strict();
+
 export const FlowLinkflowNodeSchema = z
   .object({
     ...FlowNodeBaseShape,

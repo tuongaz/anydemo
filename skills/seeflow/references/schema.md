@@ -335,6 +335,17 @@ legal `componentSpec.elements[].type` as a subname, and
 component's props JSON Schema. The orchestrator forwards the legal
 names to the planner in Phase 2 alongside the contract.
 
+**`data.spec` is REQUIRED and authored inline on the node** — pass the
+full `spec` object in the `flow:add-bulk` / `add_node` / `nodes:patch`
+payload (shape: `$SEEFLOW schema componentSpec`). `flow:add-bulk`
+validates the resolved node and rejects a missing spec with `badSchema`
+(`data.spec Required`). The studio externalizes `spec` to
+`<project>/nodes/<id>/spec.json` *after* accepting the node, which is
+why it does not persist in `flow.json` — but you still supply it inline
+at author time. `$SEEFLOW schema node component` advertises `spec` in
+`data` (required) so the contract you author against matches what
+`flow:add-bulk` enforces.
+
 Prefer `component` over `html` whenever a catalog entry covers the
 content — components are typed, theme-aware, and participate in
 updates automatically. Reach for `html` only when the catalog
