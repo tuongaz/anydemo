@@ -2,7 +2,7 @@
 
 Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, a **sliced** view of the node schema, `$schemaCache.connector`, and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
 
-**Don't forward `$schemaCache.node` whole.** The full payload is ~54 KB — fifteen variants, each re-inlining the identical `playAction` / `statusAction` / `stateSource` sub-schemas the planner never authors at P2 (those land in Phase 4). Forward instead:
+**Don't forward `$schemaCache.node` whole.** The full payload is large — fifteen variants, most of which the brief never needs. Forward instead:
 
 1. **The variant menu** — the node subname list from the schema index (`$SEEFLOW schema`, ~1.6 KB), so the planner sees every type it can pick.
 2. **Per-variant slices for the working set** — `$SEEFLOW schema node <subname>` returns one variant (~3.5 KB each, vs 54 KB for all fifteen). Forward the variants the brief actually needs. Defaults: a `code` / `conversation` flow → `rectangle, database, queue, cloud, server, user` (plus `component` whenever rich content is in play); a `document` flow → mostly `component` plus the decorative `sticky` / `text`.
@@ -17,7 +17,7 @@ For any `component` node, also forward `$SEEFLOW schema node component` alongsid
 
 ## Abstraction rules
 
-- **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own node, typed `rectangle` with a matching Lucide `icon` (`database`, `list-ordered`, `radio-tower`, `cloud`, `server`) and a `statusAction` capability when state is worth probing.
+- **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own node, typed with the matching illustrative shape (`database`, `queue`, `cloud`, `server`) or `rectangle` + a Lucide `icon` when no shape fits.
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches, and services hosting multiple independent state machines.
 - **Duplicate shared resources for clarity.** When a DB / queue / bus is referenced by many nodes and the lines tangle the canvas, split it into role-specific copies (`orders-db-read`, `orders-db-write`) sharing the same `type` + `data.icon` + `data.name` but distinct `id`s.
 

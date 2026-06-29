@@ -30,14 +30,7 @@ export interface CommandArg {
   description: string;
 }
 
-export type CommandCategory =
-  | 'lifecycle'
-  | 'flows'
-  | 'nodes'
-  | 'connectors'
-  | 'project'
-  | 'live'
-  | 'meta';
+export type CommandCategory = 'lifecycle' | 'flows' | 'nodes' | 'connectors' | 'project' | 'meta';
 
 export type CommandOutputKind = 'json' | 'text' | 'stream';
 
@@ -447,32 +440,6 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow flow:add-bulk --project order-pipeline --flow main --file batch.json',
     ],
   },
-  {
-    name: 'flows:play',
-    synopsis: 'seeflow flows:play --project <p> --flow <f> <nodeId> [--no-start]',
-    description:
-      "Trigger the node's playAction on the studio and wait for the spawn-level " +
-      'result. The studio also broadcasts node:running/done/error events on the ' +
-      "flow's SSE stream — subscribe separately if you want live progress. " +
-      'Requires a running studio.',
-    category: 'live',
-    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
-    flags: [
-      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
-      {
-        name: 'flow',
-        valuePlaceholder: '<f>',
-        description: 'Flow id within the project',
-        required: true,
-      },
-      { name: 'no-start', description: 'Fail if the studio is not already running' },
-    ],
-    outputs: {
-      okExample: { runId: 'run-9b3', status: 200, body: { ok: true } },
-    },
-    requiresStudio: true,
-    examples: ['seeflow flows:play --project order-pipeline --flow main api-checkout'],
-  },
   // ---- project -----------------------------------------------------------
   {
     name: 'projects:create',
@@ -579,7 +546,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     body: {
       example: {
         type: 'rectangle',
-        data: { name: 'hello', stateSource: { kind: 'request' } },
+        data: { name: 'hello' },
       },
     },
     outputs: {
@@ -909,7 +876,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       '`subnames`, and a `jqHints` block listing concrete filter paths to try ' +
       'next.\n' +
       '  3. `seeflow schema <category> <subname>` → just one named schema ' +
-      "(e.g. `node rectangle`, `action playAction`). The response's " +
+      "(e.g. `node rectangle`, `action componentAction`). The response's " +
       '`jqHints.dataFields` lists every `data.<field>` available on the variant, ' +
       'and `jqHints.examples` gives ready-to-paste `--jq` paths pointing at ' +
       'each one — drill straight to the field you care about without re-paying ' +
@@ -943,7 +910,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
           'Optional named schema within the category — e.g. for `node`: ' +
           'rectangle, ellipse, sticky, text, database, server, user, queue, ' +
           'cloud, diamond, hexagon, image, html, icon, component, linkflow. For ' +
-          '`action`: playAction, statusAction, statusReport, componentAction. For ' +
+          '`action`: componentAction. For ' +
           '`componentSpec`: componentSpec, componentSpecElement.',
       },
     ],
@@ -981,97 +948,13 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow schema node',
       'seeflow schema node component',
       'seeflow schema node rectangle',
-      'seeflow schema action playAction',
+      'seeflow schema action componentAction',
       'seeflow schema connector',
       'seeflow schema componentSpec',
       'seeflow schema node --jq .schemas.rectangle',
-      "seeflow schema node rectangle --jq '.schemas.rectangle.properties.data.properties.playAction'",
+      "seeflow schema node rectangle --jq '.schemas.rectangle.properties.data.properties.name'",
       "seeflow schema node --jq '.schemas.image.properties.data.properties.path'",
       "seeflow schema node --jq '.schemas[]'",
-    ],
-  },
-  // ---- live --------------------------------------------------------------
-  {
-    name: 'e2e',
-    synopsis: 'seeflow e2e --project <p> --flow <f> [--skip-nodes a,b] [--no-start]',
-    description:
-      'End-to-end validate a registered flow. Walks every node with a playAction ' +
-      "in flow.json order, POSTs each play, then drains the flow's SSE stream " +
-      'for node:done/error + node:status reports. Returns a single JSON report ' +
-      'when finished; exits non-zero if any play failed, any statusAction failed ' +
-      'to report, or the 120s ceiling was exceeded. Requires a running studio.',
-    category: 'live',
-    args: [],
-    flags: [
-      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
-      {
-        name: 'flow',
-        valuePlaceholder: '<f>',
-        description: 'Flow id within the project',
-        required: true,
-      },
-      {
-        name: 'skip-nodes',
-        valuePlaceholder: '<a,b>',
-        description: 'Comma-separated node ids to skip',
-      },
-      { name: 'no-start', description: 'Fail if the studio is not already running' },
-    ],
-    outputs: {
-      okExample: {
-        ok: true,
-        plays: [{ nodeId: 'api-checkout', outcome: 'ok', runId: 'run-9b3' }],
-        statuses: [],
-        skipped: [],
-      },
-    },
-    requiresStudio: true,
-    examples: [
-      'seeflow e2e --project order-pipeline --flow main',
-      'seeflow e2e --project order-pipeline --flow main --skip-nodes flaky-1,flaky-2',
-    ],
-  },
-  {
-    name: 'emit',
-    synopsis:
-      'seeflow emit <flowId> <nodeId> <status> [--run-id <id>] [--payload <json>] [--studio-url <url>]',
-    description:
-      'Broadcast a node-status event to the studio (status: running | done | error). ' +
-      'User apps shell out to this command instead of importing an in-repo helper; ' +
-      "the studio re-broadcasts the event on the flow's SSE stream.",
-    category: 'live',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
-      { name: 'status', required: true, description: 'Status: running | done | error' },
-    ],
-    flags: [
-      {
-        name: 'run-id',
-        valuePlaceholder: '<id>',
-        description: 'Correlate events emitted within a single run',
-      },
-      {
-        name: 'payload',
-        valuePlaceholder: '<json>',
-        description: 'JSON string merged into the event payload',
-      },
-      {
-        name: 'studio-url',
-        valuePlaceholder: '<url>',
-        description: 'Override studio base URL (skips auto-start; targets the URL as-is)',
-      },
-      { name: 'no-start', description: 'Fail if the studio is not already running' },
-    ],
-    outputs: {
-      okExample: { ok: true },
-      errorKinds: [],
-    },
-    requiresStudio: true,
-    examples: [
-      'seeflow emit abc12345 api-charge done',
-      'seeflow emit abc12345 api-charge error --payload \'{"code":402}\'',
-      'seeflow emit abc12345 api-charge running --run-id run-9b3 --studio-url http://localhost:4321',
     ],
   },
   // ---- icons (local cache) ----------------------------------------------
@@ -1328,19 +1211,10 @@ function renderOutputText(entry: CommandManifestEntry): string[] {
   }
   return out;
 }
-function renderOutputStream(entry: CommandManifestEntry): string[] {
+function renderOutputStream(_entry: CommandManifestEntry): string[] {
   const out: string[] = [];
   out.push('Streams progress events to stdout until the run completes.');
   out.push('Exit 0 on success, non-zero on failure.');
-  if (entry.name === 'flows:play') {
-    out.push('');
-    out.push("Triggers the node's play action and prints status updates as the studio drives it.");
-  } else if (entry.name === 'e2e') {
-    out.push('');
-    out.push(
-      'Walks every node in topological order, prints per-node status, exits non-zero on the first failure.',
-    );
-  }
   return out;
 }
 
@@ -1382,15 +1256,7 @@ function renderExitCodeTable(): string {
 
 export function renderCommandList(): string {
   // Stable category order for predictable output regardless of manifest order.
-  const order: CommandCategory[] = [
-    'lifecycle',
-    'flows',
-    'nodes',
-    'connectors',
-    'project',
-    'live',
-    'meta',
-  ];
+  const order: CommandCategory[] = ['lifecycle', 'flows', 'nodes', 'connectors', 'project', 'meta'];
   const byCategory = new Map<CommandCategory, CommandManifestEntry[]>();
   for (const entry of COMMAND_MANIFEST) {
     const arr = byCategory.get(entry.category) ?? [];

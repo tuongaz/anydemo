@@ -13,7 +13,7 @@
  *    banner that fades after 3s when `justCreated` is true.
  *
  * Adapter callbacks (createNode, deleteNode, createConnector,
- * deleteConnector, updateNode-with-name, playAction) are wrapped by
+ * deleteConnector, updateNode-with-name) are wrapped by
  * `wrapAdapter` so each successful mutation fires `bridge.sendMessage` on the
  * MCP-Apps host (200ms coalesced). Selection / drag / viewport telemetry
  * routes through `bridge.updateModelContext` (250ms debounced, 1s throttled).
@@ -202,7 +202,6 @@ export function App() {
           mode="edit"
           adapter={wrappedAdapter}
           projectId={projectSlug ?? ''}
-          flowSlug={flowSlug ?? ''}
           nodes={load.nodes}
           connectors={load.connectors}
           selectedNodeIds={selectedNodeIds}
@@ -247,9 +246,6 @@ export function App() {
           }}
           onNameChange={(nodeId, value) => {
             void wrappedAdapter.updateNode(nodeId, { name: value });
-          }}
-          onPlayNode={(nodeId) => {
-            void wrappedAdapter.playAction?.(nodeId);
           }}
         />
       </div>

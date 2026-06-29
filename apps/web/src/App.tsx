@@ -188,8 +188,6 @@ export function App() {
   // imperative handle. FlowStackPane plumbs the ref onto the TOP stack
   // entry's SeeflowCanvas only — non-top mounts use a throwaway local ref so
   // a hidden flow can't silently overwrite the visible flow's handle.
-  // `onPlayNode` no longer lives here: post-linkflow it's owned by
-  // DemoStackEntry alongside the rest of the per-entry data wiring.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);

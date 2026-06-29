@@ -1,10 +1,3 @@
-/**
- * Per-node run lifecycle. `undefined` (no entry in the runs map) is treated
- * as `'idle'` visually — see deriveVisualStatus in
- * `./nodes/lib/visual-status.ts`.
- */
-export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
-
 export type ColorToken =
   | 'none'
   | 'default'
@@ -59,35 +52,11 @@ export interface NodeDescription {
   detail?: string;
 }
 
-export interface ScriptAction {
-  kind: 'script';
-  interpreter: string;
-  args?: string[];
-  scriptPath: string;
-  input?: unknown;
-  timeoutMs?: number;
-}
-
-export interface StatusAction {
-  kind: 'script';
-  interpreter: string;
-  args?: string[];
-  scriptPath: string;
-  maxLifetimeMs?: number;
-}
-
-export type StateSource = { kind: 'request' } | { kind: 'event' };
-
 /**
- * Capabilities — any subset of these makes a node Playable / Stateful. All
- * optional, valid on every node type. A node is Playable iff `playAction` is
- * set; Stateful iff `statusAction` is set; Both iff both. `stateSource` is
- * informational metadata that pairs with statusAction.
+ * Optional, schema-only capability fields shared by every node type. Valid on
+ * every node type.
  */
 export interface NodeCapabilities {
-  playAction?: ScriptAction;
-  statusAction?: StatusAction;
-  stateSource?: StateSource;
   /** Reserved for v2 skills runtime. Schema-only at v1. */
   handlerModule?: string;
 }
@@ -170,9 +139,6 @@ export const CANVAS_NODE_DATA_FIELDS = {
   cornerRadius: true,
   shadow: true,
   // capabilities
-  playAction: true,
-  statusAction: true,
-  stateSource: true,
   handlerModule: true,
 } as const satisfies Record<keyof GeometricNodeData, true>;
 
@@ -254,11 +220,11 @@ export interface SetComponentAction {
 }
 
 /**
- * A component-node action. `set` mutates internal state in-place; `script`
- * spawns a node-rooted script over HTTP (`POST /api/flows/:id/nodes/:nodeId/
- * actions/:name`) and merges the JSON response into state.
+ * A component-node action. Only the `set` kind is supported — it mutates
+ * internal state in-place. Kept as an alias (rather than inlining
+ * `SetComponentAction`) so existing references read clearly.
  */
-export type ComponentAction = SetComponentAction | ScriptAction;
+export type ComponentAction = SetComponentAction;
 
 /**
  * The json-render tree backing a `type:'component'` node. On disk this lives
@@ -402,37 +368,6 @@ export interface Connector extends ConnectorBase {
   url?: string;
   eventName?: string;
   queueName?: string;
-}
-
-// Mirror of `StatusReportSchema['state']` in apps/studio/src/schema.ts.
-// `apps/web/src/lib/api.ts` re-exports this type from `@seeflow/canvas` so the
-// canvas remains the single source of truth.
-export type StatusReportState = 'ok' | 'warn' | 'error' | 'pending';
-
-// Runtime status payload emitted by a node's statusAction script and fanned
-// out via SSE. The canvas needs the type so the rectangle renderer can
-// reference it without an `@/lib/api` import; apps/web/src/lib/api.ts re-
-// exports this from @seeflow/canvas.
-export interface StatusReport {
-  state: StatusReportState;
-  summary?: string;
-  detail?: string;
-  data?: Record<string, unknown>;
-  ts?: number;
-}
-
-// Per-node SSE run state.
-export interface RunResult {
-  status: NodeStatus;
-  runId?: string;
-  /** Filled when status === 'done': upstream HTTP status. */
-  responseStatus?: number;
-  /** Filled when status === 'done': parsed JSON or text body. */
-  body?: unknown;
-  /** Filled when status === 'error': human-readable message. */
-  error?: string;
-  /** ms since epoch of the most recent transition. */
-  ts?: number;
 }
 
 export interface Flow {

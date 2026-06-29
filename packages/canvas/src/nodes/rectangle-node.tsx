@@ -4,29 +4,16 @@ import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { resolveFontStack } from '../lib/font-stacks.ts';
-import type { GeometricNodeData, NodeStatus, StatusReport } from '../types.ts';
+import type { GeometricNodeData } from '../types.ts';
 import { NodeHeader } from './lib/node-header.tsx';
-import { PlayButton } from './lib/play-button.tsx';
-import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
-import { StatusBadge } from './status-badge.tsx';
 import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 /**
  * Runtime data attached to a rectangle node by the canvas host. Extends the
- * persisted GeometricNodeData with the SSE-driven status + the action
- * callbacks the canvas injects. `playAction` and `statusAction` (on `data`)
- * are inherited from GeometricNodeData and are independently optional —
- * presence drives whether the play button and status badge render.
+ * persisted GeometricNodeData with the callbacks the canvas injects.
  */
 export type RectangleNodeData = GeometricNodeData & {
-  /** Latest run status from the runs map; undefined when never played. */
-  status?: NodeStatus;
-  /** Filled when status === 'error' — surfaced as the play-button tooltip. */
-  errorMessage?: string;
-  /** Latest StatusReport from this node's statusAction script (if any). */
-  statusReport?: StatusReport & { ts: number };
-  onPlay?: (nodeId: string) => void;
   onResize?: (
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
@@ -49,23 +36,7 @@ const MIN_H = 44;
 const DEFAULT_W = 250;
 
 function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<RectangleNodeType>) {
-  const status = data.status;
-  const action = data.playAction;
   const description = data.description;
-  const playable = !!action && !!data.onPlay;
-  const visualStatus = deriveVisualStatus(status, data.statusReport);
-  const isRunning = status === 'running';
-  const isError = visualStatus === 'error';
-  const buttonLabel =
-    visualStatus === 'active'
-      ? 'Running…'
-      : visualStatus === 'success'
-        ? 'Succeeded, run again'
-        : visualStatus === 'error'
-          ? data.errorMessage
-            ? `Failed: ${data.errorMessage}`
-            : 'Failed, run again'
-          : 'Play';
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
@@ -99,10 +70,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   // compose. Undefined keeps the existing baseline; explicit 0 wipes it.
   const shadowClass = data.shadow !== undefined ? '' : 'sf:shadow-sm';
   const containerStyle: CSSProperties = {
-    borderColor:
-      data.statusReport?.state === 'error'
-        ? colorTokenStyle('red', 'node').borderColor
-        : colorTokenStyle(data.borderColor, 'node').borderColor,
+    borderColor: colorTokenStyle(data.borderColor, 'node').borderColor,
     backgroundColor:
       data.backgroundColor !== undefined
         ? colorTokenStyle(data.backgroundColor, 'node').backgroundColor
@@ -132,10 +100,8 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
         'sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:transition-shadow',
         shadowClass,
         sized ? 'sf:h-full sf:w-full' : '',
-        isRunning ? 'seeflow-node-pulse' : '',
       )}
       style={containerStyle}
-      data-status={status ?? 'idle'}
       data-testid="rectangle-node"
       data-node-type="rectangle"
       onDoubleClick={handleWrapperDoubleClick}
@@ -174,22 +140,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           backgroundColor={data.backgroundColor}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}
-          trailing={
-            action ? (
-              <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
-                <PlayButton
-                  visualStatus={visualStatus}
-                  disabled={!playable || visualStatus === 'active'}
-                  buttonLabel={buttonLabel}
-                  isError={isError}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    data.onPlay?.(id);
-                  }}
-                />
-              </div>
-            ) : undefined
-          }
         />
       ) : null}
       <div
@@ -221,18 +171,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           </button>
         )}
       </div>
-      {data.statusReport && (
-        <div
-          className="sf:flex sf:items-center sf:px-3 sf:pb-2"
-          data-testid="rectangle-node-status-badge"
-        >
-          <StatusBadge
-            state={data.statusReport.state}
-            summary={data.statusReport.summary}
-            data-testid="status-badge"
-          />
-        </div>
-      )}
       <Handle
         type="source"
         position={Position.Right}

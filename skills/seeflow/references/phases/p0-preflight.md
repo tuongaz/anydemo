@@ -1,6 +1,6 @@
 # Phase 0 — pre-flight (parallel)
 
-Pre-flight does six things in order: route through the lookup-first gate, set up a task checklist, probe CLI capability, cache the schema, run the silent type-surface diff, decide the input class, and probe the studio.
+Pre-flight does these things in order: route through the lookup-first gate, set up a task checklist, probe CLI capability, cache the schema, run the silent type-surface diff, decide the input class, and probe the studio.
 
 ## Lookup-first gate — run before anything else
 
@@ -10,11 +10,11 @@ Creation-only triggers (skip the gate): the prompt explicitly says "create / sca
 
 ## Task checklist
 
-Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
+Create a `TaskCreate` checklist of the four phases (`Phase 0 — pre-flight` … `Phase 3 — scaffold, populate, layout, review`); `TaskUpdate` each as it finishes. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
 
 ## Capability probe — run before anything else
 
-Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `register`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `schema`, `ids`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more — `ids` was added with the project-local scaffold flow; `projects:create` is the current new-project entry point.) For each missing subcommand, surface to the user and stop.
+Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `register`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `schema`, `ids`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more — `ids` was added with the project-local scaffold flow; `projects:create` is the current new-project entry point.) For each missing subcommand, surface to the user and stop.
 
 - Required missing → tell the user which subcommand is missing and that the fix is `npm i -g @tuongaz/seeflow@latest`. Then stop — do **not** start Phase 1.
 - All present → continue.
@@ -43,9 +43,9 @@ $SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector 
 
 Then **only if `$hasComponentCatalog === true`** (set in the capability probe above), add one more call — `$SEEFLOW schema componentCatalog` → `$schemaCache.componentCatalog`. Keep it **out** of the five-way batch: bundling a category that may not exist into a parallel batch lets its `notFound` cancel the sibling fetches. Run it on its own (or in a second batch) so a version miss never collateral-damages `style`.
 
-Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so unforwarded fields are invisible to them; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the five stable calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop. A failed `componentCatalog` call does **not** stop the run — treat it as `$hasComponentCatalog === false` and degrade per the capability probe.
+Phase 2 (node-planner) reads from this cache via its launching prompt — it never re-fetches. The planner has no shell, so unforwarded fields are invisible to it; skipping the forward lets it invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the five stable calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop. A failed `componentCatalog` call does **not** stop the run — treat it as `$hasComponentCatalog === false` and degrade per the capability probe.
 
-> **Drilling further.** When a downstream agent only needs one variant (e.g. forwarding just the `component` node contract to the status-designer), the orchestrator can either slice the cached payload or re-fetch a narrow slice with `$SEEFLOW schema <category> <subname>` — for example `$SEEFLOW schema node component`, `$SEEFLOW schema action playAction`. Same shape, same `notes`, just one schema. Prefer slicing the cache when it's already in hand; reach for the sub-lookup when re-running mid-session or when stitching launching prompts from MCP/REST (`seeflow_schema { name, subname }` / `GET /api/schema/:name/:subname`).
+> **Drilling further.** When the planner only needs one variant (e.g. forwarding just the `component` node contract), the orchestrator can either slice the cached payload or re-fetch a narrow slice with `$SEEFLOW schema <category> <subname>` — for example `$SEEFLOW schema node component`, `$SEEFLOW schema node rectangle`. Same shape, same `notes`, just one schema. Prefer slicing the cache when it's already in hand; reach for the sub-lookup when re-running mid-session or when stitching launching prompts from MCP/REST (`seeflow_schema { name, subname }` / `GET /api/schema/:name/:subname`).
 
 **Extract the component catalog (only when `$hasComponentCatalog`).** The `componentCatalog` schema category IS the catalog — one subname per legal `componentSpec.elements[].type`, each carrying that element's props schema. When the conditional fetch above ran, cache `$schemaCache.componentCatalog.subnames` as `$componentCatalog` (the list of legal element-type names) — no in-process parsing:
 
@@ -58,9 +58,9 @@ $componentCatalog = $schemaCache.componentCatalog.subnames
 
 When `$hasComponentCatalog === false`, `$componentCatalog = null` — the planner has no runtime element-type list and falls back to `html` for rich content (see the capability-probe degradation note). Never substitute a hand-typed list or read the canvas catalog source; the absence is a version signal, not a lookup to work around.
 
-When the planner (or a designer authoring a `spec.json`) needs the props one element type accepts, drill: `$SEEFLOW schema componentCatalog <Name>` (e.g. `$SEEFLOW schema componentCatalog Chart`) returns just that component's props JSON Schema. Pair with `--jq` (e.g. `--jq '.schemas.Chart.required'`) when you want a single slice — every response carries `jqHints.rootPath` so you never guess the filter prefix.
+When the planner needs the props one element type accepts, drill: `$SEEFLOW schema componentCatalog <Name>` (e.g. `$SEEFLOW schema componentCatalog Chart`) returns just that component's props JSON Schema. Pair with `--jq` (e.g. `--jq '.schemas.Chart.required'`) when you want a single slice — every response carries `jqHints.rootPath` so you never guess the filter prefix.
 
-`$componentCatalog` is required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows) — forward both the name list and, for any element type the planner commits to, the drilled props schema, since the designers have no shell. If `$componentCatalog` is null, tell the planner so up front so it routes rich content to `html` instead of inventing element types.
+`$componentCatalog` is required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows) — forward both the name list and, for any element type the planner commits to, the drilled props schema, since the planner has no shell. If `$componentCatalog` is null, tell the planner so up front so it routes rich content to `html` instead of inventing element types.
 
 ## Schema-type surface diff — silent
 

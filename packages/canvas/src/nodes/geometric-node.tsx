@@ -14,14 +14,9 @@ import type {
   ColorToken,
   GeometricNodeType as GeometricKind,
   GeometricNodeData,
-  NodeStatus,
-  StatusReport,
 } from '../types.ts';
-import { PlayButton } from './lib/play-button.tsx';
-import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
-import { StatusBadge } from './status-badge.tsx';
 import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 // Illustrative shapes own their visuals via inline-SVG components under
@@ -36,35 +31,7 @@ export function isIllustrativeShape(shape: GeometricKind): boolean {
   return ILLUSTRATIVE_SHAPES.has(shape);
 }
 
-/**
- * Height in pixels of the capability-chrome skirt rendered below the
- * illustrative-shape SVG when `data.playAction` or `data.statusReport` is
- * present. The wrapper bounding box stays invariant — the SVG renderer's
- * `height` shrinks by this amount so connectors anchored at the wrapper's
- * bottom edge don't shift when status first arrives.
- */
-export const SKIRT_HEIGHT = 32;
-
 export type GeometricNodeRuntimeData = GeometricNodeData & {
-  /**
-   * Latest run status (from the runs map). Undefined when the node has
-   * never been played. Threaded onto every node's data by seeflow-canvas;
-   * the type catches up here so the skirt renderer derives the visual
-   * status without a cast.
-   */
-  status?: NodeStatus;
-  /** Filled when status === 'error' — surfaces as the PlayButton tooltip. */
-  errorMessage?: string;
-  /**
-   * Latest StatusReport from this node's statusAction script (if any).
-   * Presence drives the skirt's StatusBadge for illustrative shapes; the
-   * field has always been on RectangleNodeData and was already threaded
-   * canvas-wide. Carrying it on the GeometricNode type makes the skirt
-   * conditional type-safe.
-   */
-  statusReport?: StatusReport & { ts: number };
-  /** Invoked when the user clicks the inline PlayButton in the skirt. */
-  onPlay?: (nodeId: string) => void;
   onResize?: (
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
@@ -337,30 +304,6 @@ function GeometricNodeImpl({
         }
       : undefined;
 
-  // Capability-chrome skirt: render the inline PlayButton + StatusBadge row
-  // for illustrative shapes whenever the node has a play or status capability.
-  // The wrapper's bounding box stays invariant — the SVG renderer's `height`
-  // shrinks by SKIRT_HEIGHT so connectors anchored at the wrapper's bottom
-  // edge (the Position.Bottom Handle) don't shift when status first arrives.
-  // Derivation is pure — no useState slot — per the hook-shim positional rule.
-  const hasPlayCapability = !!data.playAction && !!data.onPlay;
-  const hasStatusReport = !!data.statusReport;
-  const showSkirt = isIllustrativeShape(shape) && (hasPlayCapability || hasStatusReport);
-  const skirtOffset = showSkirt ? SKIRT_HEIGHT : 0;
-  const visualStatus = deriveVisualStatus(data.status, data.statusReport);
-  const buttonLabel =
-    visualStatus === 'active'
-      ? 'Running…'
-      : visualStatus === 'success'
-        ? 'Succeeded, run again'
-        : visualStatus === 'error'
-          ? data.errorMessage
-            ? `Failed: ${data.errorMessage}`
-            : data.statusReport?.summary
-              ? `Failed: ${data.statusReport.summary}`
-              : 'Failed, run again'
-          : 'Play';
-
   let illustrativeOverlay: ReactNode = null;
   const Renderer = ILLUSTRATIVE_SHAPE_RENDERERS[shape];
   if (Renderer) {
@@ -368,13 +311,10 @@ function GeometricNodeImpl({
     const h = data.height ?? size.height;
     const { borderColor, backgroundColor } = resolveIllustrativeColors(data);
     illustrativeOverlay = (
-      <div
-        className="sf:pointer-events-none sf:absolute sf:left-0 sf:right-0 sf:top-0"
-        style={{ bottom: skirtOffset }}
-      >
+      <div className="sf:pointer-events-none sf:absolute sf:inset-0">
         <Renderer
           width={w}
-          height={h - skirtOffset}
+          height={h}
           borderColor={borderColor}
           backgroundColor={backgroundColor}
           borderSize={data.borderSize}
@@ -383,36 +323,6 @@ function GeometricNodeImpl({
       </div>
     );
   }
-
-  const skirt: ReactNode = showSkirt ? (
-    <div
-      data-testid="geometric-node-skirt"
-      className="sf:absolute sf:bottom-0 sf:left-0 sf:right-0 sf:flex sf:items-center sf:justify-between sf:gap-2 sf:px-2 sf:py-1"
-      style={{ height: SKIRT_HEIGHT }}
-    >
-      {hasStatusReport && data.statusReport ? (
-        <StatusBadge
-          state={data.statusReport.state}
-          summary={data.statusReport.summary}
-          data-testid="geometric-node-status-badge"
-        />
-      ) : (
-        <span aria-hidden />
-      )}
-      {hasPlayCapability ? (
-        <PlayButton
-          visualStatus={visualStatus}
-          disabled={visualStatus === 'active'}
-          buttonLabel={buttonLabel}
-          isError={visualStatus === 'error'}
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onPlay?.(id);
-          }}
-        />
-      ) : null}
-    </div>
-  ) : null;
 
   const description = data.description ?? '';
   const hasDescription = description !== '';
@@ -567,9 +477,7 @@ function GeometricNodeImpl({
         visible={!!selected && !!data.onResize && !isEditing}
         cornerVariant="visible"
         minWidth={80}
-        // When the chrome skirt is active, lift the floor so the 32px skirt
-        // can't be squashed into the SVG. Otherwise the default 40px floor.
-        minHeight={showSkirt ? SKIRT_HEIGHT + 40 : 40}
+        minHeight={40}
         onResizeStart={onResizeStart}
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
@@ -593,7 +501,6 @@ function GeometricNodeImpl({
         />
       )}
       {useHeaderLayout ? headerBodyContent : singleLabelContent}
-      {skirt}
       {!isText && (
         <Handle
           type="source"

@@ -1,18 +1,17 @@
 ---
 name: seeflow
-description: This skill should be used when the user explicitly asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", or "add a flow to this repo" — or when a previous /seeflow-lookup has already reported no matching flow exists. Inspection phrasing ("show me", "how does X work", "diagram our system", "explain the flow") routes to /seeflow-lookup first; that skill auto-hands off here only when nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at <project>/flow.json (node-attached files live under <projectPath>/nodes/<id>/).
+description: This skill should be used when the user explicitly asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", or "add a flow to this repo" — or when a previous /seeflow-lookup has already reported no matching flow exists. Inspection phrasing ("show me", "how does X work", "diagram our system", "explain the flow") routes to /seeflow-lookup first; that skill auto-hands off here only when nothing is registered. Orchestrates three sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at <project>/flow.json (node-attached files live under <projectPath>/nodes/<id>/).
 ---
 
 # seeflow
 
-Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flows/<flowSlug>/flow.json` (skill-created projects default to `flowSlug: 'main'`), with node-attached content (scripts, detail.md, view.html) under `$repoPath/flows/<flowSlug>/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `seeflow.json` or `flow.json` by hand (`projects:create` writes both the manifest and the first flow envelope).
+Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flows/<flowSlug>/flow.json` (skill-created projects default to `flowSlug: 'main'`), with node-attached content (detail.md, view.html) under `$repoPath/flows/<flowSlug>/nodes/<id>/`. Orchestrate three sub-agents and the `seeflow` CLI; never read the codebase directly, never author `seeflow.json` or `flow.json` by hand (`projects:create` writes both the manifest and the first flow envelope).
 
 ## When NOT to invoke
 
 - Editing nodes on an existing flow → use the canvas, or hit the CLI directly (`nodes:patch`).
 - Deleting a flow → `flows:delete`.
 - Re-laying out an existing flow without semantic changes → `flows:layout`.
-- Debugging a single broken Play/Status script → edit in-place, re-run Phase 6.
 
 (A project with no source tree is **not** an exclusion — it routes to the `document` branch at the Phase 0 input-source gate without asking.)
 
@@ -29,9 +28,8 @@ A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **
       flows/<flowSlug>/                  ← per-flow folder (one per flows[] entry)
         flow.json                        ← envelope + nodes/connectors
         style.json                       ← layout/visuals (managed by `flows:layout`)
-        nodes/<id>/                      ← per-node sidecar files (detail.md, view.html, scripts/)
+        nodes/<id>/                      ← per-node sidecar files (detail.md, view.html)
         .tmp/                            ← per-flow scratch ($SEEFLOW_TMP)
-        state/                           ← per-flow runtime script state
 ```
 
 Skill-created projects default to a single flow with `flowSlug: 'main'`; subsequent flows in the same project are added via `flows:create --project <projectSlug> --flow <flowSlug>`.
@@ -63,28 +61,27 @@ Always call `seeflow projects:create --path "$repoPath" --name "..."` — the CL
 **Run `$SEEFLOW schema` BEFORE designing or authoring any node.** The CLI is the only source of truth for field shapes, and it's built for cheap progressive disclosure:
 
 1. `$SEEFLOW schema` → catalog of categories with `subnames` inlined on each + a `usage` block.
-2. `$SEEFLOW schema <category>` (e.g. `node`, `action`) → full schemas, `notes`, `subnames`, and a `jqHints` block listing concrete drill paths to try next.
-3. `$SEEFLOW schema <category> <subname>` (e.g. `node rectangle`, `action playAction`) → one variant with `jqHints.dataFields` — the EXACT list of `data.<field>` names you can target with `--jq` on the next call.
+2. `$SEEFLOW schema <category>` (e.g. `node`, `connector`) → full schemas, `notes`, `subnames`, and a `jqHints` block listing concrete drill paths to try next.
+3. `$SEEFLOW schema <category> <subname>` (e.g. `node rectangle`, `node component`) → one variant with `jqHints.dataFields` — the EXACT list of `data.<field>` names you can target with `--jq` on the next call.
 
 Slice with `--jq` to pull a single field's contract instead of the whole schema, using a path from `jqHints.examples` or assembled from `jqHints.dataFields`:
 
 ```
 $SEEFLOW schema node rectangle \
-    --jq '.schemas.rectangle.properties.data.properties.playAction'
+    --jq '.schemas.rectangle.properties.data.properties.icon'
 ```
 
 Phase 0 caches the categories; downstream sub-agents are expected to drill into single subnames (with `--jq`) as they compose patches. Full grammar + every response field in `references/schema.md` § "Look up the contract at runtime" and `references/cli.md` § "Schema cache — fetched once at Phase 0".
 
 ### Scratch files & cleanup
 
-Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The per-flow path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `flows/*/.tmp/` explicitly if not).
+Any intermediate file the orchestrator needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The per-flow path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `flows/*/.tmp/` explicitly if not).
 
 **Lifecycle:**
 
-1. **Create on first use** — `mkdir -p "$SEEFLOW_TMP"` inside any script or wrapper that writes there. Idempotent, costs nothing.
-2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `flows/$flowSlug/.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
-3. **Cleanup at end of run** — after Phase 6 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
-4. **Never check in** — if `flows/*/.tmp/` is not yet gitignored, add it before committing.
+1. **Create on first use** — `mkdir -p "$SEEFLOW_TMP"` inside any wrapper that writes there. Idempotent, costs nothing.
+2. **Cleanup at end of run** — after Phase 3 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
+3. **Never check in** — if `flows/*/.tmp/` is not yet gitignored, add it before committing.
 
 ## Parallelism is the default
 
@@ -104,7 +101,7 @@ message 1: Task(seeflow-code-analyzer, …)
            Task(seeflow-system-analyzer, …)
 ```
 
-Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both overlay families, Phase 6 per-script fix-up) follows this pattern.
+Every parallel step (the Phase 1 analyzers, the Phase 3 detail-backfill patches across nodes) follows this pattern.
 
 **If `Agent(subagent_type: "seeflow-…")` errors with `Agent type '…' not found`,** the plugin's agent types aren't registered in this environment — fall back to dispatching `general-purpose` with the matching `agents/seeflow-*.md` contract inlined into the prompt. Same parallelism rule, same contracts; see `references/operations.md` §"Sub-agent reference". Never serialise or skip a phase just because the named type is missing.
 
@@ -126,17 +123,9 @@ P3    projects:create (path + name → seeflow.json + flows/main/flow.json regis
       → flow:add-bulk (nodes + connectors, atomic)
       → detail-backfill (unconditional; missing data.detail → nodes:patch)
       → flows:layout
-      → SILENT LEARN.md write #1 (merge staged learnUpdates + upsert flow row)
-      → USER REVIEW + dynamic gate (one combined ask)
-          static branch  → SILENT LEARN.md write #2 → final-flow line
-P4    play-designer ‖ status-designer (cached schema forwarded)
-P5    write scripts to nodes/<nodeId>/scripts/
-      → nodes:patch (per node, with playAction / statusAction)
-      → optional newTriggerNodes via flow:add-bulk
-      → flows:layout
-P6    e2e
-      → SILENT LEARN.md write #2 (re-upsert flow row + append P5/P6 deltas)
-      → final-flow line
+      → SILENT LEARN.md write (merge staged learnUpdates + upsert flow row)
+      → USER REVIEW (layout review; apply edits directly or re-run planner)
+      → final-flow line → rm -rf "$SEEFLOW_TMP"
 ```
 
 Each phase gates on the previous (with the Phase 1 → Phase 2 overlap).
@@ -150,30 +139,24 @@ Each phase has its mechanics, contracts, and edge cases in a dedicated reference
 | P0 | Lookup-first gate, capability probe, schema cache, input-source gate, studio probe | `references/phases/p0-preflight.md` |
 | P1 | Discover — three input-class branches (`code`, `conversation`, `document`) and Phase 1→2 overlap | `references/phases/p1-discover.md` |
 | P2 | Plan nodes — launch `seeflow-node-planner`, validate envelope, retry once on partial output | `references/phases/p2-plan-nodes.md` |
-| P3 | Scaffold via `projects:create`, normalize, mint canonical ids, `flow:add-bulk`, detail-backfill, layout, LEARN.md save #1, user review + dynamic gate | `references/phases/p3-scaffold.md` |
-| P4 | Design Play + Status (parallel) — launch `seeflow-play-designer` ‖ `seeflow-status-designer` | `references/phases/p4-design-overlays.md` |
-| P5 | Patch overlays + layout — write scripts, `nodes:patch`, edit-case retype routing, retry budget | `references/phases/p5-patch-overlays.md` |
-| P6 | End-to-end validation — `e2e` subcommand, fix-up loop, LEARN.md save #2, cleanup | `references/phases/p6-validation.md` |
+| P3 | Scaffold via `projects:create`, normalize, mint canonical ids, `flow:add-bulk`, detail-backfill, layout, LEARN.md save, user review, final-flow line + cleanup | `references/phases/p3-scaffold.md` |
 
 ## Core rules
 
 Full text in `references/core-rules.md`:
 
-1. **No mocks.** Real services, real state. If something isn't running, stop and ask.
-2. **Bigger picture before INSERTs.** Use the natural data-entry path (API, file-drop, producer, seed, webhook).
-3. **Match the project's primary language.** Use `runtimeProfile.primaryLanguage` for every script.
+1. **Model the real system, not a guess.** Every node maps to an entity the analyzers actually found; never invent topology to fill the canvas.
+2. **One node per concept.** One service / workflow / queue / DB / external API per node — collapse unless an explicit exception earns the split.
+3. **Resources are mandatory.** Every DB, queue, bus, cache, file store, and external SaaS the brief touches gets its own node — that's where the audience sees state land.
 
 ## Common mistakes
 
 - **Serial sub-agent dispatch.** One message, N Task calls — see §"Parallelism is the default" above.
 - **Authoring `flow.json` directly.** Every mutation is a CLI call.
 - **Asking "what's your codebase?".** Launch the analyzers — that is their job. (Exception: `inputClass === "conversation" | "document"` — the brief comes from elsewhere.)
-- **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"`.
-- **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
-- **Ignoring the project's existing setup.** Inspect how the project boots local services and runs integration tests (Makefile / `scripts/` / compose / test harness / factory modules) and reuse those wrappers, helpers, and packages. Don't write a raw client when a project module already does the job — the system-analyzer surfaces these in `learnUpdates.dataEntryPaths`, `factories`, and `techAdaptations.<techId>.helpers[]`; Play/Status designers must consult them before inventing new code.
+- **Ignoring the project's existing setup.** Inspect how the project boots local services and runs integration tests (Makefile / `scripts/` / compose / test harness / factory modules) so the brief reflects how the system actually runs. The system-analyzer surfaces these in `learnUpdates.dataEntryPaths`, `factories`, and `techAdaptations.<techId>.helpers[]`; they enrich the node detail the planner writes.
 - **Calling `flows:create` instead of `projects:create` for a brand-new project.** `flows:create --project <p> --flow <f>` adds a flow to an *existing* project's manifest; a brand-new project always starts with `projects:create`, which writes both `seeflow.json` and the first `flows/main/flow.json` in one shot.
 - **Using the planner's `slug` as `--project`.** The registry slug is `slugify(--name)`, returned by `projects:create` — capture it from the response and reassign `$projectSlug`. The planner's `slug` field only names the `--path` directory and may differ; carrying it into `--project` makes `flow:add-bulk` / `flows:layout` fail with `projectNotFound`.
-- **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder under `flows/<flowSlug>/nodes/<id>/` — emit just `scripts/play.ts`.
 - **Writing `LEARN.md` inside a per-project or per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every project + flow** in the host repo — never inside `<projectSlug>/` or `<projectSlug>/flows/<flowSlug>/`.
 - **Reaching for `type:'html'` before trying `type:'component'`.** The component catalog is the typed, theme-aware way to render rich node content (status cards, comparison tables, checklists, KPI tiles, gap rows) — and the rule is universal across every `inputClass`, not just `document`. `html` is a last-resort escape hatch, only legitimate once `$SEEFLOW schema componentCatalog` is confirmed not to cover the content (gap cited in `rationales[nodeId]`) **or** when the catalog is unavailable on the installed binary (`$hasComponentCatalog === false`, i.e. seeflow predates 0.1.94 — see `phases/p0-preflight.md`). See `references/schema.md` §"When to use which node type" and `agents/seeflow-node-planner.md` §"Picking node `type`".
 
@@ -181,18 +164,17 @@ Full text in `references/core-rules.md`:
 
 If you catch yourself thinking any of the following, you are rationalising — stop and re-read the relevant rule.
 
-- "I'll mock this one service so the script runs." → Rule 1 in `references/core-rules.md`. Stop and ask the user.
+- "I'll add a node for an entity the analyzers didn't find — it rounds out the diagram." → Rule 1 in `references/core-rules.md`. Model only what the brief actually surfaces; mark unfound entities out of scope.
 - "I'll write the empty envelope by hand — it's only two lines." → use `projects:create`. The CLI writes the manifest and the first flow envelope atomically; hand-authoring desyncs the two.
 - "`projects:create` returned `alreadyExists` — I'll quietly run `register` and continue." → no. Surface the existing-project gate in `phases/p3-scaffold.md` § 1; auto-fallback is data-loss-adjacent.
 - "The planner gave me a `slug`, so I'll use it for `--project`." → no. The addressing slug is `slugify(--name)`, returned by `projects:create`. Reassign `$projectSlug` from the response; the planner's `slug` only names the `--path` directory. Mismatch → `projectNotFound` on `flow:add-bulk` / `flows:layout`.
 - "Serial sub-agent dispatch is fine — parallelism is just an optimisation." → it is the contract (see §"Parallelism is the default"). One message, N `Task` calls.
-- "Direct INSERT into the DB is faster than going through the API." → Rule 2. The natural data-entry path is what the flow exists to show.
-- "Phase 6 e2e looks fine from the scripts — I'll skip the run." → mandatory for `inputClass === "code"`. Only `"document"` flows legitimately skip it.
-- "I'll narrate the LEARN.md write so the user knows it happened." → both writes are silent by contract; narration is noise.
+- "The service writes to a DB, but I'll skip the DB node — the service node is enough." → Rule 3. The resource is where the audience sees state land; every store / queue / bus / cache the brief touches earns its own node.
+- "I'll narrate the LEARN.md write so the user knows it happened." → the write is silent by contract; narration is noise.
 - "I'll just drop in an `html` node — it's only a small comparison table / status card / checklist." → no. `type:'component'` is the first choice for complex node content (any `inputClass`); `html` is only legitimate after `$SEEFLOW schema componentCatalog` is confirmed not to cover it (gap cited in `rationales[nodeId]`) or when `$hasComponentCatalog === false` on the installed binary.
 - "Schema output is just JSON — I'll parse `$schemaCache.node` myself (Python / hand-rolled walker / inline JS)." → no. The "don't memorise CLI syntax — run `$SEEFLOW help`" rule in §"Conventions" applies to every subcommand, schema included. Run `$SEEFLOW help schema` once: it documents the `<subname>` positional for per-variant drill-down AND the `--jq <filter>` flag for path extraction (jq-subset grammar, `badJq` exit 2). Reach for those before in-process JSON parsing.
 - "My `--jq` got `badJq` — I'll parse the JSON with Python/JS instead." → no. `badJq` = wrong path, not a tool failure. Re-run the parent call (`$SEEFLOW schema node rectangle`) WITHOUT `--jq`, read `jqHints.examples` (and `jqHints.dataFields` for node variants — that's the exact `data.<field>` list you can target), then retry `--jq` with one of those paths. Never switch tools.
-- "The user approved the layout, then asked to add two nodes — I'll re-run the full node-planner and re-ask the combined question." → no, for a small fully-specified edit. Apply it directly: `flow:add-bulk` for new nodes/connectors, `nodes:patch` for field edits, `nodes:delete` for removals, then `flows:layout` — and don't re-ask a dynamic gate the user already answered. The planner is for turning an open-ended brief into a graph, not for relaying a tweak the user already spelled out. Re-run the planner only for substantive/structural changes. See `phases/p3-scaffold.md` §"User review + dynamic gate".
+- "The user approved the layout, then asked to add two nodes — I'll re-run the full node-planner." → no, for a small fully-specified edit. Apply it directly: `flow:add-bulk` for new nodes/connectors, `nodes:patch` for field edits, `nodes:delete` for removals, then `flows:layout`. The planner is for turning an open-ended brief into a graph, not for relaying a tweak the user already spelled out. Re-run the planner only for substantive/structural changes. See `phases/p3-scaffold.md` §"User review".
 - "I'll design the node first and look up the schema when I'm ready to patch." → no. `$SEEFLOW schema` runs in milliseconds and tells you exactly which fields each variant accepts; designing before checking burns sub-agent iterations on shapes the CLI would have rejected. Run `$SEEFLOW schema <category>` (then `<subname>` for the variant you're about to author) before you draft a single `nodes:add` / `nodes:patch` body.
 
 ## Operations
@@ -201,7 +183,7 @@ If you catch yourself thinking any of the following, you are rationalising — s
 |---|---|
 | CLI resolver + discovery via `$SEEFLOW help` | `references/cli.md` |
 | Error handling, retry caps, sub-agent table | `references/operations.md` |
-| Per-node file convention, action runtime budgets, when-to-use guidance | `references/schema.md` |
+| Per-node file convention, when-to-use guidance | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
 | `$learnPath` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |

@@ -15,8 +15,6 @@ const VALID_DEMO = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],
@@ -194,8 +192,6 @@ describe('createWatcher', () => {
         type: 'rectangle',
         data: {
           name: 'I',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           path: imgPath,
         },
       },
@@ -315,8 +311,6 @@ describe('createWatcher', () => {
           type: 'rectangle',
           data: {
             name: 'A',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: '/etc/passwd',
           },
         },
@@ -325,8 +319,6 @@ describe('createWatcher', () => {
           type: 'rectangle',
           data: {
             name: 'B',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: '../secrets.png',
           },
         },
@@ -335,8 +327,6 @@ describe('createWatcher', () => {
           type: 'rectangle',
           data: {
             name: 'C',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: 'data:image/png;base64,iVBORw0KGgo=',
           },
         },
@@ -378,8 +368,6 @@ describe('createWatcher', () => {
           type: 'rectangle',
           data: {
             name: 'N',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             detail: 'file://detail.md',
           },
         },

@@ -15,9 +15,6 @@ category: storage
 >    uploader/repository symbols, test-harness helpers, `Makefile`/
 >    `scripts/` boot targets, compose service names.
 >
-> Sub-agents port the bash recipes below into the project's primary
-> language only when no CLI / wrapper covers the action.
->
 > Append anything new you learn this run back into LEARN.md so the next
 > flow reuses it.
 
@@ -43,72 +40,19 @@ export STORAGE_EMULATOR_HOST=http://localhost:4443
 echo "gcs ready on :4443"
 ```
 
-## How to insert data
-
-- Reuse any project uploader/helper or `bin/` CLI before raw curl.
-- Honour the emulator endpoint in *this* shell (`STORAGE_EMULATOR_HOST`).
-- Pull payload shape from a real fixture if one ships.
-
-```bash
-# Option A — gsutil against the emulator
-gsutil -o "Credentials:gs_json_host=localhost" \
-       -o "Credentials:gs_json_port=4443" \
-  cp ./fixture.json gs://orders/$(date -u +%Y%m%dT%H%M%S).json
-
-# Option B — raw JSON API (no gcloud required)
-curl -fsS -X POST \
-  "http://localhost:4443/upload/storage/v1/b/orders/o?uploadType=media&name=hello.json" \
-  -H "Content-Type: application/json" --data-binary @./fixture.json
-
-# Option C — exec into the project's compose container
-docker compose exec app /app/bin/upload-order ./fixture.json
-```
-
-## How to verify run success
-
-Cheapest one-shot confirmation that the object landed.
-
-```bash
-gsutil -o "Credentials:gs_json_host=localhost" -o "Credentials:gs_json_port=4443" \
-  ls gs://orders/hello.json >/dev/null && echo ok
-# or, no gsutil:
-curl -fsS "http://localhost:4443/storage/v1/b/orders/o/hello.json" -o /dev/null && echo ok
-```
-
-## How to verify query data
-
-Status loop — list with a tight prefix, emit `StatusReport` JSON each tick.
-
-- Reuse project read helpers when present.
-- Tolerate empty buckets → `state:"warn"`, never throw.
-- Emit `state`, `summary`, `data`, `ts`.
-
-```bash
-while true; do
-  curl -fsS "http://localhost:4443/storage/v1/b/orders/o?prefix=" \
-    | jq -c '{state:"ok",
-              summary:"\(.items|length) objects",
-              data:[.items[].name],
-              ts:(now|floor)}' \
-    || echo '{"state":"warn","summary":"no bucket","data":[],"ts":'$(date +%s)'}'
-  sleep 2
-done
-```
-
 ## Node modelling
 
 - One node (`type:'cloud'`) per bucket, not per object or prefix. The
-  cloud glyph conveys "external object store"; capability chrome
-  renders in the skirt. (Use `type:'database'` instead if the project
-  treats GCS as its primary persistence layer rather than as a remote
-  bucket.)
+  cloud glyph conveys "external object store". (Use `type:'database'`
+  instead if the project treats GCS as its primary persistence layer
+  rather than as a remote bucket.)
 - Duplicate the bucket node next to each consumer for readability (same
   `type` + `data.name`, unique `id`).
 
 ## Gotchas
 
 - `STORAGE_EMULATOR_HOST` silently swaps real GCS for fake-gcs-server —
-  set it in the Play *and* Status env, or one side hits prod.
+  unset in a dev shell, code hits prod.
 - fake-gcs-server doesn't enforce IAM; code that "works locally" can
   401 against real GCS.
 - Bucket names are global; emulator allows duplicates, real GCS doesn't.

@@ -1,44 +1,39 @@
 # Core authoring rules
 
-Three rules every flow must honour. Each is invariant — bend them and the flow either lies, looks wrong, or refuses to run.
+Three rules every flow must honour. Each is invariant — bend them and the flow either lies about the system, looks wrong, or refuses to render.
 
-## Rule 1 — no mocks, ever
+## Rule 1 — model the real system, not a guess
 
-**NEVER mock a service, fake a response, or simulate what a real service returns.**
+**Every node maps to an entity the analyzers actually found in the codebase (or the brief actually names).** Never invent topology to fill the canvas.
 
-Scripts have exactly two purposes:
+- If a `codePointers.why` or `rootEntity` points at a real service / store / queue, it earns a node.
+- If you can't find the entry point or entity the user asked about, say so (`audienceFraming`) and keep `rootEntities` accurate to what you did find — don't fabricate a plausible-looking box.
+- For `inputClass === "document"`, the document text IS the source of truth — render its sections, don't embellish them with system components that aren't described.
 
-1. **Trigger a real service** — call a real endpoint, drop a real file, publish a real event. Only invented content allowed is *input data* (fixture body, sample file); the service receiving it must be real.
-2. **Read real resource state** — query a real DB, poll a real queue depth, call a real health endpoint. Never fabricate state.
+A flow with one honest gap is better than one that silently lies about the architecture.
 
-If a required service is not running, **stop and ask the user**. A flow with one honest gap is better than one that silently lies.
+## Rule 2 — one node per concept
 
-## Rule 2 — see the bigger picture before inserting data
+**Collapse by default; split only when an explicit exception earns it.** A microservice with twelve internal routes is one node; a Postgres database with forty tables is one node; a Temporal workflow with four activities is one node. Internal routes, tables, middleware, and helper classes are implementation detail — they are not separate nodes.
 
-Before writing a play script that INSERTs into a DB, publishes to a queue, or writes to a store, check whether the system already has a natural data-entry path. Direct inserts bypass validation and the code paths the flow is meant to show.
+The exceptions that DO earn multiple nodes (cite the exception number in `rationales[nodeId]`):
 
-Check these patterns first (ask the system-analyzer — `dataEntryPaths` in its `learnUpdates`):
+1. **Pipeline stages independently meaningful to the audience** (`validate → score → rank → publish`).
+2. **Fan-out consumers, each its own business concept** (`order.created → notify + restock + ship`).
+3. **Choices / branches the audience must understand** (`paid → fulfill` vs `failed → refund`).
+4. **One service hosting N independent state machines** (a payments service with distinct `charge` / `refund` / `subscription` lifecycles).
 
-| Pattern | What to look for | Use instead |
-|---|---|---|
-| **API endpoint** | REST/gRPC/GraphQL endpoint that accepts the data | Call it |
-| **File-drop processor** | File watcher / S3-event listener | Drop a fixture file into the watched path |
-| **Event/message producer** | Publisher service or CLI that writes to the queue | Trigger the producer |
-| **Seed / fixture command** | `make seed`, `bun run seed`, ORM factory | Run the seed command |
-| **Webhook receiver** | `/webhooks/stripe`, `/events/github` | POST a synthetic webhook body |
-| **Admin / backoffice API** | Internal endpoint for creating records | Use it |
-| **File-based import** | CSV/JSON/NDJSON import endpoint or CLI | Drop a fixture or call the import endpoint |
+Full rule text + worked examples: `../agents/seeflow-node-planner.md` §"Node abstraction rules" and `planner/examples.md`.
 
-If no higher-level path exists, document the reason in `rationale` and resort to a direct INSERT/PUBLISH.
+## Rule 3 — resources are mandatory
 
-## Rule 3 — follow the project's existing approach for running scripts
+**Every database, queue, event bus, cache, file/object store, and external SaaS the brief touches gets its own node and a connector pointing to it.** Resources are where the audience can SEE state land — a service that writes to a DB without that DB having its own node is a broken canvas.
 
-Before picking an interpreter, **inspect how the project already invokes code** and mirror that. The project's existing approach is always the right first choice; the script you ship runs in the same toolchain the project already supports, with the same helpers and clients the project already maintains.
+Do NOT skip a resource node because:
 
-**Decision order — apply in this order every time:**
+- "It's just a side effect" — side effects are exactly what the audience needs to see.
+- "The service already has a node" — the service and its resource are two different things; both deserve a node.
+- "It wasn't listed in `rootEntities`" — infer resources from service behaviour (the system-analyzer's `dataEntryPaths` and the code-analyzer's `codePointers` are the signal).
+- "It's internal to the service" — internal HTTP routes are implementation detail; an external DB or queue the service calls is NOT internal.
 
-1. **Use the project's existing approach.** Look at Phase 1 evidence — `runtimeProfile` (`primaryLanguage`, `packageManager`, dev/test commands, `integrationTestCommand`, `setupPattern`), `codePointers`, integration tests, fixtures, seed scripts, `Makefile` targets, helper modules. Whatever interpreter the project already uses to run scripts of this kind (call the running app, seed data, drop a fixture, poll state), use the **same** interpreter, the **same** args, and the **same** helper modules / clients. Integration tests in particular are pre-existing examples of "how this app gets called" — copy their pattern.
-2. **No existing approach?** Pick the option that lets the script reach the real service most directly with the smallest payload, using a runtime the project's host already has available. Prefer something present in `runtimeProfile.devCommand` / `testCommand` over introducing a new tool.
-3. **Explain any deviation** in `rationale` whenever you do not match `runtimeProfile.primaryLanguage`. Reviewers should see the reason for the fallback at a glance.
-
-The interpreter MUST be runnable on the project's host — never require a runtime the project does not already declare. Never invent a script convention the project doesn't already use.
+The mandatory-resource table (which resources, when they must appear) lives in `../agents/seeflow-node-planner.md` §"Resource nodes are mandatory".

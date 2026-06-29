@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const SKILL_ROOT = resolve(__dirname, '..');
@@ -28,7 +28,6 @@ describe('seeflow skill <-> CLI contract', () => {
       'flow:add-bulk',
       'nodes:patch',
       'flows:layout',
-      'e2e',
       'ids',
       'schema',
     ]) {
@@ -41,28 +40,47 @@ describe('seeflow skill <-> CLI contract', () => {
     expect(skill).toContain('$SEEFLOW help');
   });
 
-  it('no skill or agent prompt uses the legacy `<slug>/scripts/` prefix', () => {
-    // The node-folder anchor (`scripts/play.ts`) replaced the legacy slug-prefixed
-    // form; any reappearance regresses the play-designer / status-designer contract.
-    // Allow `nodes/<id>/scripts/...` and explicit counter-examples inside fenced blocks.
+  it('no skill or agent prompt references the removed Play/Status feature', () => {
+    // The Play-script + Status-probe + component-script-action feature was removed.
+    // No prose, schema example, or agent contract may resurrect its node
+    // capabilities, designers, or runtime tokens.
+    const banned = [
+      /\bplayAction\b/,
+      /\bstatusAction\b/,
+      /\bstateSource\b/,
+      /\bStatusReport\b/,
+      /\bplay-designer\b/,
+      /\bstatus-designer\b/,
+      /seeflow-play-designer/,
+      /seeflow-status-designer/,
+      /scripts\/(?:play|status)/,
+    ];
     const docs = [
       { path: SKILL_MD, body: readFileSync(SKILL_MD, 'utf8') },
       ...readAllMarkdown(AGENTS_DIR),
       ...readAllMarkdown(REFERENCES_DIR),
     ];
     for (const { path, body } of docs) {
-      const lines = body.split('\n');
-      let fenceDepth = 0;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.trimStart().startsWith('```')) fenceDepth = fenceDepth === 0 ? 1 : 0;
-        if (fenceDepth === 1) continue;
-        const match = /([A-Za-z0-9_-]+)\/scripts\/(?:play|status)/.exec(line);
-        if (!match) continue;
-        const prefix = match[1];
-        if (prefix === 'nodes' || prefix === '<nodeId>' || prefix === 'scripts') continue;
-        throw new Error(`${path}:${i + 1} uses legacy "${match[0]}" prefix`);
+      for (const pattern of banned) {
+        const match = pattern.exec(body);
+        if (match) {
+          const line = body.slice(0, match.index).split('\n').length;
+          throw new Error(`${path}:${line} references removed Play/Status token "${match[0]}"`);
+        }
       }
+    }
+  });
+
+  it('the Play/Status designer agent prompts are deleted', () => {
+    for (const stale of ['seeflow-play-designer.md', 'seeflow-status-designer.md']) {
+      expect(existsSync(join(AGENTS_DIR, stale))).toBe(false);
+    }
+  });
+
+  it('the play/status overlay + validation phase docs are deleted', () => {
+    const phasesDir = join(REFERENCES_DIR, 'phases');
+    for (const stale of ['p4-design-overlays.md', 'p5-patch-overlays.md', 'p6-validation.md']) {
+      expect(existsSync(join(phasesDir, stale))).toBe(false);
     }
   });
 

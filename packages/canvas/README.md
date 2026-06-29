@@ -21,7 +21,7 @@ The host app must provide:
 - `react-dom` (^18) — required by Radix UI primitives
 - `@xyflow/react` (^12)
 - `lucide-react` (icons)
-- `react-markdown` (^10) and `remark-gfm` (^4) — required for the built-in sidebar's status section
+- `react-markdown` (^10) and `remark-gfm` (^4) — required for the built-in sidebar's Detail-field markdown rendering
 
 ## Styling
 
@@ -74,7 +74,7 @@ import { SeeflowCanvas } from '@seeflow/canvas';
 ```
 
 Mini mode is just the floor — `CanvasFeatureOverrides` still composes, so a
-thumbnail that wants live-state badges can pass `showStatusBadges={true}`
+thumbnail that wants pan-to-explore can pass `enablePan={true}`
 without leaving mini mode.
 
 ## Quickstart — edit mode
@@ -104,7 +104,7 @@ const adapter = createRestAdapter({ baseUrl: '', project: 'my-project', flow: 'm
 The `CanvasAdapter` interface in
 [`src/adapter/types.ts`](./src/adapter/types.ts) is the full mutation
 contract — create / update / delete nodes and connectors, reorder, upload
-image, optional play. `createRestAdapter` in
+image. `createRestAdapter` in
 [`src/adapter/rest.ts`](./src/adapter/rest.ts) is the built-in REST
 implementation targeting the SeeFlow studio's HTTP endpoints; implement your
 own adapter to plug the canvas into a different backend.

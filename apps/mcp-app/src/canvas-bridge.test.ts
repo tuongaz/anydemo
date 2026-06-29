@@ -275,50 +275,6 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
     expect(recorded.sendMessage).toHaveLength(0);
   });
 
-  it('playAction → node-played with runId', async () => {
-    const timers = createFakeTimers();
-    const { host, recorded } = makeHost();
-    const bridge = createBridge({
-      setTimer: timers.setTimer,
-      clearTimer: timers.clearTimer,
-      now: timers.getNow,
-      getHost: () => host,
-    });
-    const base = makeBaseAdapter({
-      playAction: async () => ({ runId: 'run-1', status: 200 }),
-    });
-    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
-
-    await adapter.playAction?.('node-3');
-    timers.advance(COALESCE_WINDOW_MS);
-
-    expect(recorded.sendMessage).toHaveLength(1);
-    expect(recorded.sendMessage[0]).toEqual({
-      events: [
-        {
-          event: 'node-played',
-          projectSlug: 'demo-project',
-          flowSlug: 'demo',
-          payload: { nodeId: 'node-3', runId: 'run-1', status: 200, error: undefined },
-        },
-      ],
-    });
-  });
-
-  it('omits playAction when the base adapter omits it', () => {
-    const timers = createFakeTimers();
-    const { host } = makeHost();
-    const bridge = createBridge({
-      setTimer: timers.setTimer,
-      clearTimer: timers.clearTimer,
-      now: timers.getNow,
-      getHost: () => host,
-    });
-    const base = makeBaseAdapter({ playAction: undefined });
-    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
-    expect(adapter.playAction).toBeUndefined();
-  });
-
   it('failed adapter calls do NOT emit (rejection propagates, no event)', async () => {
     const timers = createFakeTimers();
     const { host, recorded } = makeHost();

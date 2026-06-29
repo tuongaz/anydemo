@@ -78,9 +78,7 @@ describe('schema-catalog', () => {
           'user',
         ].sort(),
       );
-      expect(byName.action?.subnames?.sort()).toEqual(
-        ['componentAction', 'playAction', 'statusAction', 'statusReport'].sort(),
-      );
+      expect(byName.action?.subnames?.sort()).toEqual(['componentAction'].sort());
       expect(byName.componentSpec?.subnames?.sort()).toEqual(
         ['componentSpec', 'componentSpecElement'].sort(),
       );
@@ -152,25 +150,6 @@ describe('schema-catalog', () => {
       expect(payload.notes.some((n) => /image.*path.*nodes/.test(n))).toBe(true);
       // component spec-sidecar note must surface so authors find spec.json.
       expect(payload.notes.some((n) => /component.*spec\.json/i.test(n))).toBe(true);
-      // stateSource guidance notes must surface so AI authors know when/how to set it.
-      expect(payload.notes.some((n) => /stateSource.*statusAction/.test(n))).toBe(true);
-      // Every node variant must carry a description on data.stateSource so the
-      // JSON Schema teaches the AI how to use the field at the call site.
-      for (const variantName of Object.keys(payload.schemas)) {
-        const schema = payload.schemas[variantName] as Record<string, unknown>;
-        const props = (schema.properties as Record<string, unknown>) ?? {};
-        const data = props.data as { properties?: Record<string, unknown> } | undefined;
-        const stateSource = data?.properties?.stateSource as
-          | { description?: string; anyOf?: Array<{ description?: string }> }
-          | undefined;
-        expect(stateSource).toBeDefined();
-        expect(stateSource?.description?.length ?? 0).toBeGreaterThan(0);
-        const anyOf = stateSource?.anyOf ?? [];
-        expect(anyOf.length).toBe(2);
-        for (const member of anyOf) {
-          expect(member.description?.length ?? 0).toBeGreaterThan(0);
-        }
-      }
     });
 
     it('connector → single shape', () => {
@@ -180,14 +159,11 @@ describe('schema-catalog', () => {
       expect(payload.notes).toEqual([]);
     });
 
-    it('action → playAction, statusAction, statusReport, componentAction', () => {
+    it('action → componentAction', () => {
       const payload = loadCategory('action');
       const keys = Object.keys(payload.schemas).sort();
-      expect(keys).toEqual(
-        ['playAction', 'statusAction', 'statusReport', 'componentAction'].sort(),
-      );
-      expect(payload.notes.some((n) => /scriptPath/.test(n))).toBe(true);
-      // componentAction discriminator note must surface so authors know set vs script.
+      expect(keys).toEqual(['componentAction'].sort());
+      // componentAction note must surface so authors know the set-mutation shape.
       expect(payload.notes.some((n) => /componentAction/.test(n))).toBe(true);
     });
 
@@ -265,9 +241,9 @@ describe('schema-catalog', () => {
     });
 
     it('works for every multi-schema category (action subname, componentSpec subname)', () => {
-      const action = getCategorySubschema('action', 'playAction');
-      if (!action) throw new Error('expected action.playAction');
-      expect(Object.keys(action.schemas)).toEqual(['playAction']);
+      const action = getCategorySubschema('action', 'componentAction');
+      if (!action) throw new Error('expected action.componentAction');
+      expect(Object.keys(action.schemas)).toEqual(['componentAction']);
       const spec = getCategorySubschema('componentSpec', 'componentSpecElement');
       if (!spec) throw new Error('expected componentSpec.componentSpecElement');
       expect(Object.keys(spec.schemas)).toEqual(['componentSpecElement']);
@@ -341,15 +317,13 @@ describe('schema-catalog', () => {
       const fields = getDataFieldNames('node', 'rectangle');
       expect(fields).not.toBeNull();
       // Rectangle is the kitchen-sink variant — must surface the capability
-      // fields the play/status designers patch.
-      expect(fields).toEqual(expect.arrayContaining(['playAction', 'statusAction', 'stateSource']));
-      // And the descriptive header fields the planner sets.
-      expect(fields).toEqual(expect.arrayContaining(['name', 'detail']));
+      // field and the descriptive header fields the planner sets.
+      expect(fields).toEqual(expect.arrayContaining(['name', 'detail', 'handlerModule']));
     });
 
     it('returns null for shapes / categories with no data.properties wrapper', () => {
       // Action schemas are top-level — no data wrapper.
-      expect(getDataFieldNames('action', 'playAction')).toBeNull();
+      expect(getDataFieldNames('action', 'componentAction')).toBeNull();
       // Bogus subname / category.
       expect(getDataFieldNames('node', 'bogus')).toBeNull();
       expect(getDataFieldNames('bogus', 'rectangle')).toBeNull();
@@ -379,9 +353,7 @@ describe('schema-catalog', () => {
       expect(hints).not.toBeNull();
       if (!hints) return;
       // dataFields must surface the per-shape data.* keys so the agent can target one.
-      expect(hints.dataFields).toEqual(
-        expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
-      );
+      expect(hints.dataFields).toEqual(expect.arrayContaining(['name', 'detail', 'handlerModule']));
       // Every example path under data.properties must be addressable by .schemas.rectangle.
       for (const example of hints.examples) {
         if (example.startsWith('.schemas.')) {
@@ -410,13 +382,13 @@ describe('schema-catalog', () => {
     });
 
     it('per-subname hints on action variants (no data wrapper) skip dataFields gracefully', () => {
-      const hints = buildJqHints('action', 'playAction');
+      const hints = buildJqHints('action', 'componentAction');
       expect(hints).not.toBeNull();
       if (!hints) return;
       expect(hints.dataFields).toBeUndefined();
       // Examples still point at the variant.
       expect(hints.examples).toEqual(
-        expect.arrayContaining(['.schemas.playAction', '.schemas.playAction.required']),
+        expect.arrayContaining(['.schemas.componentAction', '.schemas.componentAction.required']),
       );
     });
 
@@ -447,9 +419,8 @@ describe('schema-catalog', () => {
   });
 
   // Description discipline — every AI-facing field on a node variant's `data`
-  // object must carry a `.describe()` string in schema.ts. The smoking gun
-  // this was written to prevent: `stateSource` shipping without one, leaving
-  // the model unable to set it. Keep the opt-out set small.
+  // object must carry a `.describe()` string in schema.ts, so the model knows
+  // how to set it. Keep the opt-out set small.
   describe('description discipline', () => {
     // Mechanical / structurally-self-explanatory fields. Adding to this set
     // is a deliberate decision — prefer adding a `.describe()` in schema.ts.

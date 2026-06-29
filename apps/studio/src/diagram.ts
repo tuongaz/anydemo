@@ -308,7 +308,6 @@ export interface ValidateReport {
     tier: Tier;
     nodeCount: number;
     connectorCount: number;
-    playableCount: number;
     issueCount: number;
     warningCount: number;
   };
@@ -318,7 +317,7 @@ export interface ValidateReport {
 
 // Filesystem-bound checks (harness coverage, event-emitter index) deliberately
 // stay in the skill — the studio doesn't reach into the user's `$TARGET`. The
-// endpoint covers schema + node-count cap + tier playability only.
+// endpoint covers schema + node-count cap only.
 export const validateDemo = (req: ValidateRequest): ValidateReport => {
   const tier: Tier = req.tier ?? 'static';
   const issues: ValidateIssue[] = [];
@@ -335,9 +334,9 @@ export const validateDemo = (req: ValidateRequest): ValidateReport => {
     }
   }
 
-  // Best-effort access to nodes/connectors so cap + tier checks still surface
-  // on a demo that fails Zod (e.g. one extra/missing field shouldn't hide a
-  // 50-node count problem).
+  // Best-effort access to nodes/connectors so the cap check still surfaces on a
+  // demo that fails Zod (e.g. one extra/missing field shouldn't hide a 50-node
+  // count problem).
   const rawDemo = (req.demo ?? {}) as {
     nodes?: unknown;
     connectors?: unknown;
@@ -353,38 +352,12 @@ export const validateDemo = (req: ValidateRequest): ValidateReport => {
     warnings.push({ kind: 'cap', message: `Node count ${nodes.length} approaching cap 30` });
   }
 
-  const playable = nodes.filter((n) => {
-    const data = n.data as { playAction?: unknown } | undefined;
-    // Flat-types refactor: a node is playable iff it carries a playAction
-    // capability, regardless of variant.
-    return data?.playAction !== undefined;
-  });
-  if (tier !== 'static' && playable.length === 0) {
-    issues.push({
-      kind: 'tier-mismatch',
-      message: `Tier '${tier}' requires at least one playable node; found 0. Set data.playAction on a node or set tier=static.`,
-    });
-  }
-
-  if (tier === 'real') {
-    for (const n of nodes) {
-      const action = (n.data as { playAction?: { kind?: string; method?: string; url?: string } })
-        ?.playAction;
-      if (action?.kind !== 'http' || !action.url) continue;
-      warnings.push({
-        kind: 'real-tier-reachability',
-        message: `Node '${String(n.id)}': ensure ${action.method ?? '?'} ${action.url} is reachable in your dev server before clicking.`,
-      });
-    }
-  }
-
   return {
     ok: issues.length === 0,
     stats: {
       tier,
       nodeCount: nodes.length,
       connectorCount: connectors.length,
-      playableCount: playable.length,
       issueCount: issues.length,
       warningCount: warnings.length,
     },

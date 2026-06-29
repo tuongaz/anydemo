@@ -21,7 +21,6 @@ import type {
   NodeCreateInput,
   NodePatch,
   PackSummary,
-  PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,
   UploadImageResult,
@@ -254,16 +253,6 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         throw new Error(errorBody?.error ?? `POST ${url} → ${res.status}`);
       }
       return (await res.json()) as UploadImageResult;
-    },
-
-    async playAction(nodeId: string): Promise<PlayActionResult> {
-      return await requestJson<PlayActionResult>(
-        fetchImpl,
-        'POST',
-        `${flowBase}/play/${nodeId}`,
-        headers,
-        {},
-      );
     },
 
     async openFile(path: string): Promise<void> {

@@ -45,13 +45,10 @@ import {
   FlowSchema,
   LinkflowTargetSchema,
   NodeTypeSchema,
-  PlayActionSchema,
   type ResolvedFlow,
   ResolvedFlowSchema,
   type SeeflowManifest,
   SourceHandleIdSchema,
-  StateSourceSchema,
-  StatusActionSchema,
   StyleSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
@@ -167,14 +164,6 @@ export const NodePatchBodySchema = z
     // `<project>/nodes/<id>/view.html` by patchNodeImpl; the file:// ref on
     // the node persists. Empty string empties the file but keeps the ref.
     html: z.string().optional(),
-    // Capability attach: lets the skill (or any consumer) wire executable
-    // behaviour onto a previously-created node without re-issuing it. All
-    // capabilities are valid on every node type — presence drives renderer
-    // chrome. Final validity is enforced by the post-merge
-    // ResolvedFlowSchema reparse.
-    playAction: PlayActionSchema.optional(),
-    statusAction: StatusActionSchema.optional(),
-    stateSource: StateSourceSchema.optional(),
     // type:'component'-only: json-render spec describing the reactive UI.
     // Externalized to `<project>/nodes/<id>/spec.json` by patchNodeImpl; the
     // in-memory ResolvedFlow keeps `data.spec` populated for the post-merge
@@ -233,9 +222,6 @@ const NODE_DATA_PATCH_KEYS = [
   'description',
   'detail',
   'html',
-  'playAction',
-  'statusAction',
-  'stateSource',
   'spec',
   'target',
   'childIds',
@@ -256,10 +242,7 @@ const GEOMETRIC_SEMANTIC_KEYS: ReadonlySet<string> = new Set([
   'description',
   'detail',
   'icon',
-  'stateSource',
   'handlerModule',
-  'playAction',
-  'statusAction',
 ]);
 
 const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<string>> = {
@@ -277,40 +260,9 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   triangle: GEOMETRIC_SEMANTIC_KEYS,
   parallelogram: GEOMETRIC_SEMANTIC_KEYS,
   document: GEOMETRIC_SEMANTIC_KEYS,
-  image: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'path',
-    'alt',
-  ]),
-  html: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'html',
-  ]),
-  icon: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'alt',
-  ]),
+  image: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'path', 'alt']),
+  html: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'html']),
+  icon: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'alt']),
   // Component nodes externalize `spec` to <project>/nodes/<id>/spec.json; the
   // semantic-key set covers only the universal capability fields so retype
   // never drags `spec` through `data`. (US-007 wires the sidecar writer.)
@@ -319,57 +271,17 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   // flow. Retype preserves it alongside the universal semantic keys; the
   // post-merge ResolvedFlowSchema reparse drops it when retyping AWAY from
   // linkflow.
-  linkflow: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'target',
-  ]),
+  linkflow: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'target']),
   // Freehand nodes carry the normalized `points` array in flow.json data;
   // color/strokeWidth are visual keys (NODE_VISUAL_KEYS) routed to style.json.
-  freehand: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'points',
-  ]),
+  freehand: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'points']),
   // Line nodes carry the two normalized endpoint `points` in flow.json data;
   // stroke colour/width/style are visual keys routed to style.json.
-  line: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'points',
-  ]),
+  line: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'points']),
   // Group nodes carry the semantic `childIds` membership list (flow.json) plus
   // the universal semantic keys. Visual keys (background/border/cornerRadius)
   // are NODE_VISUAL_KEYS routed to style.json, preserved across a retype.
-  group: new Set([
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'stateSource',
-    'handlerModule',
-    'playAction',
-    'statusAction',
-    'childIds',
-  ]),
+  group: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'childIds']),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here

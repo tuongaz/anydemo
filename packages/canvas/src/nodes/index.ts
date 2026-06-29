@@ -26,10 +26,4 @@ export type { RectangleNodeData, RectangleNodeType } from './rectangle-node.tsx'
 export { ResizeControls } from './resize-controls.tsx';
 export type { ResizeControlsProps } from './resize-controls.tsx';
 export * from './shapes/index.ts';
-export { StatusBadge } from './status-badge.tsx';
-export type { StatusBadgeProps } from './status-badge.tsx';
-export { StatusIconPill } from './status-icon-pill.tsx';
-export type { StatusIconPillProps } from './status-icon-pill.tsx';
-export { deriveVisualStatus } from './lib/visual-status.ts';
-export type { VisualStatus } from './lib/visual-status.ts';
 export { useResizeGesture } from './use-resize-gesture.ts';

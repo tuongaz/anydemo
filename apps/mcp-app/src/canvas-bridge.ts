@@ -7,9 +7,9 @@
  *  1. `wrapAdapter(base, ctx)` — returns a new CanvasAdapter that delegates
  *     to `base` and additionally fires `bridge.sendMessage` on successful
  *     structural-edit calls (createNode, deleteNode, createConnector,
- *     deleteConnector, updateNode-with-name, playAction). The bridge's own
- *     200ms coalescer collapses bursts (e.g. paste a 5-node group) into one
- *     host `sendMessage` call.
+ *     deleteConnector, updateNode-with-name). The bridge's own 200ms coalescer
+ *     collapses bursts (e.g. paste a 5-node group) into one host `sendMessage`
+ *     call.
  *
  *  2. `createTelemetry(bridge, ctx)` — returns canvas-level callback handlers
  *     for selection / drag / viewport that route to
@@ -122,23 +122,6 @@ export const wrapAdapter = (
     uploadImage(nodeId, file, filename) {
       return base.uploadImage(nodeId, file, filename);
     },
-
-    ...(base.playAction
-      ? {
-          async playAction(nodeId: string) {
-            const baseFn = base.playAction;
-            if (!baseFn) throw new Error('playAction not implemented');
-            const result = await baseFn(nodeId);
-            emit('node-played', {
-              nodeId,
-              runId: result.runId,
-              status: result.status,
-              error: result.error,
-            });
-            return result;
-          },
-        }
-      : {}),
 
     ...(base.openFile ? { openFile: base.openFile.bind(base) } : {}),
     ...(base.revealFile ? { revealFile: base.revealFile.bind(base) } : {}),

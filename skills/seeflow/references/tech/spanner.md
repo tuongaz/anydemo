@@ -25,8 +25,7 @@ shim (`:9020`) that `gcloud spanner` drives.
 
 ## How to run it
 
-Start the emulator so the Play and Status scripts have something to
-talk to.
+How a developer brings the emulator up locally.
 
 - Project compose first: `docker compose up -d spanner-emulator` (or
   the service name the repo defines). Grep `docker-compose*.yml` /
@@ -60,57 +59,13 @@ gcloud spanner databases create test-db --instance=test-instance \
   --ddl='CREATE TABLE Orders (Id STRING(36) NOT NULL, Total INT64, CreatedAt TIMESTAMP) PRIMARY KEY (Id)'
 ```
 
-## How to insert data
-
-Canonical way to make Spanner _do real work_ from a Play script.
-
-- Project helper first: grep for repository / dao / migration / seed
-  symbols and reuse them — they already honour the project's emulator
-  env vars and DSN shape.
-- Pull payload shape from real fixtures when present.
-- Fall back to the `gcloud` template below.
-
-```bash
-gcloud spanner databases execute-sql test-db --instance=test-instance \
-  --sql="INSERT INTO Orders (Id, Total, CreatedAt) VALUES ('o_1', 4200, PENDING_COMMIT_TIMESTAMP())"
-```
-
-## How to verify run success
-
-`execute-sql` exits 0 on commit. Tighter check — confirm the row is
-readable:
-
-```bash
-gcloud spanner databases execute-sql test-db --instance=test-instance \
-  --sql="SELECT 1 FROM Orders WHERE Id='o_1'" >/dev/null && echo ok
-```
-
-## How to verify query data
-
-Pull state back out — for the Status script and ad-hoc checks. Read
-the smallest signal (one count), tolerate missing table as
-`state:"warn"`, emit `StatusReport` JSON each tick.
-
-```bash
-while true; do
-  gcloud spanner databases execute-sql test-db --instance=test-instance \
-    --sql='SELECT COUNT(*) AS n FROM Orders' --format=json 2>/dev/null \
-    | jq -c --arg ts "$(date +%s)" '
-        (.rows[0][0] // "0" | tonumber) as $n
-        | {state:"ok", summary:"\($n) orders", data:{count:$n}, ts:($ts|tonumber)}
-      ' \
-    || jq -nc --arg ts "$(date +%s)" '{state:"warn",summary:"Orders not ready",data:{},ts:($ts|tonumber)}'
-  sleep 2
-done
-```
-
 ## Node modelling
 
 Direct guidance for `seeflow-node-planner`. Two bullets max:
 
 - One node per database (`type:'database'`), not per table or per
   repository. The cylinder glyph IS the database; no `data.icon`
-  needed. Capability chrome (status badge) renders in the skirt.
+  needed.
 - Duplicate the node next to each consumer when it improves
   readability (same `type` + `data.name`, unique `id`).
 

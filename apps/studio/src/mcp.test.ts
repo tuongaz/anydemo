@@ -14,12 +14,6 @@ const VALID_DEMO = {
       type: 'rectangle',
       data: {
         name: 'POST /checkout',
-        stateSource: { kind: 'request' },
-        playAction: {
-          kind: 'script',
-          interpreter: 'bun',
-          scriptPath: 'scripts/checkout.ts',
-        },
       },
     },
   ],
@@ -258,7 +252,7 @@ describe('seeflow_schema', () => {
     // MCP per-subname response carries the same jqHints affordances the CLI prints —
     // dataFields enumerates `data.<field>` keys; examples include drill paths.
     expect(body.jqHints.dataFields).toEqual(
-      expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+      expect.arrayContaining(['name', 'description', 'detail', 'handlerModule']),
     );
     expect(
       body.jqHints.examples.some((e) =>
@@ -765,8 +759,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -774,8 +766,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'B',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -783,8 +773,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'C',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],
@@ -1252,12 +1240,11 @@ describe('seeflow_patch_node', () => {
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
       nodes: Array<{
         id: string;
-        data: { name: string; playAction: { kind: string } };
+        data: { name: string };
       }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.name).toBe('POST /checkout (renamed)');
-    expect(node?.data.playAction.kind).toBe('script');
   });
 
   it('merges multiple fields at once (label + borderColor + width + height)', async () => {
@@ -1442,8 +1429,6 @@ describe('seeflow_patch_node', () => {
           futureField: 'survives',
           data: {
             name: 'Future',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
         },
       ],
@@ -1468,8 +1453,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -1477,8 +1460,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'B',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],
@@ -1825,8 +1806,6 @@ describe('seeflow_add_bulk', () => {
           type: 'rectangle',
           data: {
             name: 'S',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
           },
         },
         {
@@ -1834,8 +1813,6 @@ describe('seeflow_add_bulk', () => {
           type: 'rectangle',
           data: {
             name: 'D',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
           },
         },
       ],

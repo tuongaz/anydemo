@@ -142,10 +142,7 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
     'description',
     'detail',
     'icon',
-    'stateSource',
     'handlerModule',
-    'playAction',
-    'statusAction',
   ] as const;
 
   const fullSemanticData = {
@@ -153,18 +150,7 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
     description: 'b',
     detail: 'c',
     icon: 'database',
-    stateSource: { kind: 'request' as const },
     handlerModule: 'src/h.ts',
-    playAction: {
-      kind: 'script' as const,
-      interpreter: 'bun',
-      scriptPath: 'scripts/play.ts',
-    },
-    statusAction: {
-      kind: 'script' as const,
-      interpreter: 'bun',
-      scriptPath: 'scripts/status.ts',
-    },
   };
 
   it('rectangle → database preserves every GEOMETRIC_SEMANTIC_KEYS field', () => {
@@ -181,7 +167,7 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
     }
     expect(data.name).toBe('a');
     expect(data.icon).toBe('database');
-    expect((data.playAction as { scriptPath?: string }).scriptPath).toBe('scripts/play.ts');
+    expect(data.handlerModule).toBe('src/h.ts');
   });
 
   it('database → ellipse preserves every GEOMETRIC_SEMANTIC_KEYS field', () => {
@@ -322,18 +308,14 @@ describe('mergeNodeUpdates retype: geometric ↔ image / html / icon strips per-
       type: 'rectangle',
       data: {
         name: 'rect',
-        playAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/play.ts',
-        },
+        handlerModule: 'src/h.ts',
       },
     };
     mergeNodeUpdates(node, { type: 'image' });
     expect(node.type).toBe('image');
     const data = node.data as Record<string, unknown>;
     expect(data.name).toBe('rect');
-    expect(data.playAction).toBeDefined(); // capabilities allowed on every type
+    expect(data.handlerModule).toBe('src/h.ts'); // capabilities allowed on every type
     expect('path' in data).toBe(false); // not supplied — caller must add
   });
 
@@ -380,23 +362,11 @@ describe('mergeNodeUpdates retype: geometric ↔ image / html / icon strips per-
       type: 'rectangle',
       data: {
         name: 'r',
-        playAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/play.ts',
-        },
-        statusAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/status.ts',
-        },
-        stateSource: { kind: 'event' as const },
+        handlerModule: 'src/h.ts',
       },
     };
     mergeNodeUpdates(node, { type: 'image' });
     const data = node.data as Record<string, unknown>;
-    expect(data.playAction).toBeDefined();
-    expect(data.statusAction).toBeDefined();
-    expect(data.stateSource).toEqual({ kind: 'event' });
+    expect(data.handlerModule).toBe('src/h.ts');
   });
 });

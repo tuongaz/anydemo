@@ -5,14 +5,7 @@
  * it uses a single shared partition (the single-tenant local studio).
  */
 
-export type StudioEventType =
-  | 'flow:reload'
-  | 'node:running'
-  | 'node:done'
-  | 'node:error'
-  | 'node:status'
-  | 'file:changed'
-  | 'registry:reload';
+export type StudioEventType = 'flow:reload' | 'file:changed' | 'registry:reload';
 
 export interface StudioEvent {
   type: StudioEventType;

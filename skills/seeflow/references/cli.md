@@ -23,13 +23,13 @@ exist.
 **Run schema lookups BEFORE designing or authoring any node.** The
 orchestrator fetches `$SEEFLOW schema {flow,node,connector,action,componentCatalog,style}`
 in parallel during Phase 0 and caches the outputs for the rest of the
-run. Phase 2 (node-planner) and Phase 4 (play/status designers) receive
-the relevant cached entries in their launching prompts — they don't
-re-fetch the whole category, but DO re-drill into a single subname
-(with `--jq` for a single field) when composing patches. The cache also
-drives the Phase 0 type-surface diff against `references/schema.md` §
-"Skill-known node types" (silent maintainer signal when the install
-drifts from the docs; no runtime effect).
+run. Phase 2 (node-planner) receives the relevant cached entries in its
+launching prompt — it doesn't re-fetch the whole category, but DOES
+re-drill into a single subname (with `--jq` for a single field) when
+composing patches. The cache also drives the Phase 0 type-surface diff
+against `references/schema.md` § "Skill-known node types" (silent
+maintainer signal when the install drifts from the docs; no runtime
+effect).
 
 If a Phase 0 schema call fails, the run stops and surfaces the failure
 to the user — downstream agents can't author conforming JSON without
@@ -58,7 +58,7 @@ $SEEFLOW schema componentCatalog      # every legal componentSpec.elements[].typ
 #    list of data.<field> names you can target with --jq.
 $SEEFLOW schema node component        # just the component variant
 $SEEFLOW schema node rectangle        # just the rectangle variant
-$SEEFLOW schema action playAction     # just the playAction shape
+$SEEFLOW schema connector             # connector variants
 $SEEFLOW schema componentCatalog Chart # just Chart's props schema
 #   → { name, subname, schemas, notes,
 #       jqHints: { dataFields: [...], examples: [...],
@@ -92,16 +92,16 @@ fields can I jq for?" Paste any of them into the canonical path:
 
 ```
 $SEEFLOW schema node rectangle \
-    --jq '.schemas.rectangle.properties.data.properties.playAction'
+    --jq '.schemas.rectangle.properties.data.properties.icon'
 
 $SEEFLOW schema node component \
     --jq '.schemas.component.properties.data.properties.spec'
 ```
 
-For non-node variants (action / connector / componentSpec / style)
+For non-node variants (connector / componentSpec / style)
 there is no `data` wrapper, so `dataFields` is absent on those
 responses — reach for `jqHints.examples` instead, which still
-pre-builds drill paths like `.schemas.playAction.required`.
+pre-builds drill paths like `.schemas.connector.required`.
 
 `badJq` means the path is wrong, **not** that the tool is broken —
 re-run the parent (`$SEEFLOW schema node rectangle`) without `--jq`,
@@ -112,7 +112,7 @@ and live examples.
 ## Addressing — `--project` + `--flow`
 
 Every flow-scoped CLI verb (`nodes:*`, `connectors:*`, `flow:add-bulk`,
-`flows:layout`, `flows:play`, `flows:get`, `flows:delete`, `e2e`, etc.)
+`flows:layout`, `flows:get`, `flows:delete`, etc.)
 takes `--project $projectSlug --flow $flowSlug` — two explicit flags,
 no positional `<flowId>`. The single combined `<projectSlug>/<flowSlug>`
 form was the old shape and is gone. The studio resolves the pair via
@@ -137,8 +137,8 @@ The canvas URL is `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`.
   `register --path <repoPath>` to re-scan `seeflow.json` and re-attach
   every declared flow. When `projects:create` exits with `alreadyExists`
   (code 4), the orchestrator stops and asks the user (see
-  `phases/p3-scaffold.md` §"Existing-flow gate"); `register` is only
-  invoked via the gate's "Open the existing flow" branch — never as an
+  `phases/p3-scaffold.md` §"Existing-project gate"); `register` is only
+  invoked via the gate's "Open the existing project" branch — never as an
   automatic fallback. Auto-falling-back was data-loss-adjacent (silently
   re-attached a stale envelope under a new name) and is forbidden.
 - **Add a flow to an existing project** — use
@@ -159,7 +159,7 @@ The canvas URL is `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`.
 - **List projects** — `projects:list` prints every registered project
   with its `projectSlug`, name, `defaultFlow`, and `flowCount`.
 
-Note: node-attached content (`detail.md`, `view.html`, `scripts/`)
+Note: node-attached content (`detail.md`, `view.html`, uploaded images)
 lives under `<repoPath>/flows/<flowSlug>/nodes/<nodeId>/` — one folder
 per node, anchored inside the owning flow's folder. The studio's per-
 node upload endpoint

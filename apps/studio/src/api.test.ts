@@ -26,12 +26,6 @@ const VALID_DEMO = {
       type: 'rectangle',
       data: {
         name: 'POST /checkout',
-        stateSource: { kind: 'request' },
-        playAction: {
-          kind: 'script',
-          interpreter: 'bun',
-          scriptPath: 'scripts/checkout.ts',
-        },
       },
     },
   ],
@@ -249,27 +243,6 @@ describe('POST /api/flows/validate', () => {
     expect(json.issues.some((i) => i.kind === 'zod')).toBe(true);
   });
 
-  it('flags tier-mismatch when tier=real but no playable nodes exist', async () => {
-    const { app } = buildApp();
-    const staticOnly = {
-      version: 2,
-      name: 'Static only',
-      nodes: [
-        {
-          id: 'box',
-          type: 'rectangle',
-          data: {},
-        },
-      ],
-      connectors: [],
-    };
-    const res = await post(app, '/api/flows/validate', { demo: staticOnly, tier: 'real' });
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as { ok: boolean; issues: Array<{ kind: string }> };
-    expect(json.ok).toBe(false);
-    expect(json.issues.some((i) => i.kind === 'tier-mismatch')).toBe(true);
-  });
-
   it('flags cap issue when node count exceeds 30', async () => {
     const { app } = buildApp();
     const bigDemo = {
@@ -285,17 +258,6 @@ describe('POST /api/flows/validate', () => {
     const res = await post(app, '/api/flows/validate', { demo: bigDemo, tier: 'static' });
     const json = (await res.json()) as { issues: Array<{ kind: string }> };
     expect(json.issues.some((i) => i.kind === 'cap')).toBe(true);
-  });
-
-  // US-001: HTTP-based reachability warning no longer applies — playActions are
-  // script-shaped now. A future story may add an analogous "does this script
-  // file exist?" warning, but the http branch in diagram.ts is dead code under
-  // the new schema.
-  it.skip('warns about reachability for tier=real with http playActions', async () => {
-    const { app } = buildApp();
-    const res = await post(app, '/api/flows/validate', { demo: VALID_DEMO, tier: 'real' });
-    const json = (await res.json()) as { warnings: Array<{ kind: string }> };
-    expect(json.warnings.some((w) => w.kind === 'real-tier-reachability')).toBe(true);
   });
 
   it('returns 400 for malformed JSON body', async () => {
@@ -359,15 +321,13 @@ describe('POST /api/diagram/assemble', () => {
             position: { x: 11, y: 23 },
             data: {
               name: 'API',
-              stateSource: { kind: 'request' },
-              playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             },
           },
           {
             id: 'db',
             type: 'rectangle',
             position: { x: 100, y: 100 },
-            data: { name: 'DB', stateSource: { kind: 'request' } },
+            data: { name: 'DB' },
           },
         ],
         connectors: [
@@ -427,14 +387,12 @@ describe('POST /api/layout', () => {
         type: 'rectangle',
         data: {
           name: 'API',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
         },
       },
       {
         id: 'db',
         type: 'rectangle',
-        data: { name: 'DB', stateSource: { kind: 'event' } },
+        data: { name: 'DB' },
       },
     ],
     connectors: [{ id: 'c1', source: 'api', target: 'db' }],
@@ -541,14 +499,12 @@ describe('POST /api/projects/:project/flows/:flow/layout', () => {
         type: 'rectangle',
         data: {
           name: 'API',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
         },
       },
       {
         id: 'db',
         type: 'rectangle',
-        data: { name: 'DB', stateSource: { kind: 'event' } },
+        data: { name: 'DB' },
       },
     ],
     connectors: [{ id: 'c1', source: 'api', target: 'db' }],
@@ -813,7 +769,7 @@ describe('GET /api/schema', () => {
       jqHints: { dataFields?: string[]; examples: string[] };
     };
     expect(body.jqHints.dataFields).toEqual(
-      expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+      expect.arrayContaining(['name', 'description', 'detail', 'handlerModule']),
     );
     expect(
       body.jqHints.examples.some((e) =>
@@ -1593,452 +1549,6 @@ describe('GET /api/projects/:project/flows/:flow', () => {
   });
 });
 
-describe('POST /api/projects/:project/flows/:flow/play/:nodeId', () => {
-  // Fake ProcessSpawner: returns a SpawnHandle whose stdout/stderr come from
-  // configurable strings, exited resolves on next microtask with `exitCode`
-  // (default 0), and `kill()` is a recorded no-op. Captures every spawn call.
-  type SpawnOpts = {
-    cmd: string[];
-    cwd: string;
-    env: Record<string, string>;
-    stdin: 'pipe' | 'ignore';
-  };
-  type FakeRecord = { spawnCalls: SpawnOpts[] };
-  const makeFakeSpawner = (
-    config: { stdout?: string; stderr?: string; exitCode?: number } = {},
-  ): {
-    spawner: import('./process-spawner.ts').ProcessSpawner;
-    record: FakeRecord;
-  } => {
-    const record: FakeRecord = { spawnCalls: [] };
-    const streamFromString = (s: string): ReadableStream<Uint8Array> =>
-      new ReadableStream<Uint8Array>({
-        start(c) {
-          if (s.length > 0) c.enqueue(new TextEncoder().encode(s));
-          c.close();
-        },
-      });
-    const spawner: import('./process-spawner.ts').ProcessSpawner = {
-      spawn(opts) {
-        record.spawnCalls.push({ cmd: opts.cmd, cwd: opts.cwd, env: opts.env, stdin: opts.stdin });
-        let resolveExit: (code: number) => void = () => {};
-        const exited = new Promise<number>((res) => {
-          resolveExit = res;
-        });
-        queueMicrotask(() => resolveExit(config.exitCode ?? 0));
-        let stdinStream: WritableStream<Uint8Array> | undefined;
-        if (opts.stdin === 'pipe') {
-          stdinStream = new WritableStream<Uint8Array>({ write() {}, close() {}, abort() {} });
-        }
-        return {
-          pid: 11111,
-          stdout: streamFromString(config.stdout ?? ''),
-          stderr: streamFromString(config.stderr ?? ''),
-          stdin: stdinStream,
-          exited,
-          kill() {},
-        };
-      },
-    };
-    return { spawner, record };
-  };
-
-  // Fake StatusRunner: records every restart/stop/stopAll call so tests can
-  // assert the /play handler fans out on each click.
-  type RunnerCalls = { restart: string[]; stop: string[]; stopAll: number };
-  const makeFakeStatusRunner = (): {
-    runner: import('./status-runner.ts').StatusRunner;
-    calls: RunnerCalls;
-  } => {
-    const calls: RunnerCalls = { restart: [], stop: [], stopAll: 0 };
-    const runner: import('./status-runner.ts').StatusRunner = {
-      async restart(flowId) {
-        calls.restart.push(flowId);
-      },
-      async stop(flowId) {
-        calls.stop.push(flowId);
-      },
-      async stopAll() {
-        calls.stopAll++;
-      },
-    };
-    return { runner, calls };
-  };
-
-  // Build an app with the fake spawner + fake statusRunner pre-wired so the
-  // /play tests can drive runPlay through the API surface without touching the
-  // OS process table or the filesystem-resident demo file beyond the spawn
-  // call assembly.
-  const buildPlayApp = (
-    spawnerConfig: { stdout?: string; stderr?: string; exitCode?: number } = {},
-  ) => {
-    const { spawner, record } = makeFakeSpawner(spawnerConfig);
-    const { runner, calls } = makeFakeStatusRunner();
-    const bus = createEventBus();
-    const registry = createRegistry({ path: tmpRegistry() });
-    const app = createApp({
-      mode: 'prod',
-      staticRoot: './dist/web',
-      registry,
-      events: bus,
-      disableWatcher: true,
-      processSpawner: spawner,
-      statusRunner: runner,
-    });
-    return { app, bus, registry, spawnerRecord: record, runnerCalls: calls };
-  };
-
-  // Flow with a play.ts script staged inside the per-node folder
-  // (<repo>/nodes/api-checkout/scripts/) so the realpath check in
-  // proxy.ts:resolveScript passes.
-  const demoWithPlayScript = (scriptPath = 'scripts/play.ts') => ({
-    ...VALID_DEMO,
-    nodes: [
-      {
-        ...VALID_DEMO.nodes[0],
-        data: {
-          ...VALID_DEMO.nodes[0]?.data,
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath },
-        },
-      },
-    ],
-  });
-
-  const tmpRepoWithPlayScript = (scriptName = 'play.ts') => {
-    const repoPath = tmpRepoWithDemo(demoWithPlayScript(`scripts/${scriptName}`));
-    const nodeScripts = join(repoPath, 'nodes', 'api-checkout', 'scripts');
-    mkdirSync(nodeScripts, { recursive: true });
-    writeFileSync(join(nodeScripts, scriptName), '// stub\n');
-    return repoPath;
-  };
-
-  it('spawns the script and returns parsed JSON body with status 200', async () => {
-    const { app, spawnerRecord } = buildPlayApp({ stdout: '{"ok":true,"echoed":42}\n' });
-    const repoPath = tmpRepoWithPlayScript();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
-      {},
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { runId: string; status?: number; body?: unknown };
-    expect(typeof body.runId).toBe('string');
-    expect(body.status).toBe(200);
-    expect(body.body).toEqual({ ok: true, echoed: 42 });
-
-    // Verify the spawner was actually invoked with the resolved abs script path.
-    expect(spawnerRecord.spawnCalls).toHaveLength(1);
-    const call = spawnerRecord.spawnCalls[0];
-    expect(call?.cmd[0]).toBe('bun');
-    expect(call?.cmd[1]?.endsWith('/scripts/play.ts')).toBe(true);
-    expect(call?.cwd).toBe(repoPath);
-    expect(call?.env.SEEFLOW_DEMO_ID).toBe(reg.id);
-    expect(call?.env.SEEFLOW_NODE_ID).toBe('api-checkout');
-  });
-
-  it('broadcasts node:running and node:done around the spawn', async () => {
-    const { app, bus } = buildPlayApp({ stdout: '{"ok":true}' });
-    const repoPath = tmpRepoWithPlayScript();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const captured: Array<{ type: string; payload: unknown }> = [];
-    bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
-
-    const playRes = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
-      {},
-    );
-    expect(playRes.status).toBe(200);
-
-    const types = captured.map((e) => e.type);
-    expect(types[0]).toBe('node:running');
-    expect(types[types.length - 1]).toBe('node:done');
-    const done = captured[captured.length - 1]?.payload as { nodeId: string; status: number };
-    expect(done.nodeId).toBe('api-checkout');
-    expect(done.status).toBe(200);
-  });
-
-  it('Play click triggers statusRunner.restart for the flowId', async () => {
-    const { app, runnerCalls } = buildPlayApp({ stdout: '{"ok":true}' });
-    const repoPath = tmpRepoWithPlayScript();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
-      {},
-    );
-    expect(res.status).toBe(200);
-
-    expect(runnerCalls.restart).toEqual([reg.id]);
-  });
-
-  it('a second Play click calls statusRunner.restart again', async () => {
-    const { app, runnerCalls } = buildPlayApp({ stdout: '{"ok":true}' });
-    const repoPath = tmpRepoWithPlayScript();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`, {});
-    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`, {});
-
-    expect(runnerCalls.restart).toEqual([reg.id, reg.id]);
-  });
-
-  it('returns 400 when the scriptPath escapes the project root via symlink', async () => {
-    const { app } = buildPlayApp({ stdout: '{}' });
-    // Build a demo whose playAction points at `escape.ts` (textually clean) and
-    // stage a symlink at <repo>/nodes/api-checkout/escape.ts pointing outside the root.
-    const repoPath = tmpRepoWithDemo({
-      ...VALID_DEMO,
-      nodes: [
-        {
-          ...VALID_DEMO.nodes[0],
-          data: {
-            ...VALID_DEMO.nodes[0]?.data,
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'escape.ts' },
-          },
-        },
-      ],
-    });
-    const outside = mkdtempSync(join(tmpdir(), 'seeflow-api-out-'));
-    writeFileSync(join(outside, 'evil.ts'), '// outside');
-    symlinkSync(join(outside, 'evil.ts'), join(repoPath, 'escape.ts'));
-
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
-      {},
-    );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe('scriptPath escapes project root');
-  });
-
-  it('returns 404 for unknown flowId', async () => {
-    const { app } = buildPlayApp();
-    const res = await post(app, '/api/projects/nope/flows/main/play/x', {});
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
-  });
-
-  it('returns 404 for unknown nodeId', async () => {
-    const { app } = buildPlayApp({ stdout: '{}' });
-    const repoPath = tmpRepoWithPlayScript();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/missing`,
-      {},
-    );
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 400 when the node has no playAction', async () => {
-    const { app } = buildPlayApp({ stdout: '{}' });
-    // Build a demo whose node is a rectangle (no playAction by definition).
-    const demo = {
-      version: 2,
-      name: 'Shape only',
-      nodes: [
-        {
-          id: 'shape-only',
-          type: 'rectangle',
-          data: {},
-        },
-      ],
-      connectors: [],
-    };
-    const repoPath = tmpRepoWithDemo(demo);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/shape-only`,
-      {},
-    );
-    expect(res.status).toBe(400);
-  });
-});
-
-describe('POST /api/emit', () => {
-  const buildAppWithBus = () => {
-    const bus = createEventBus();
-    const registry = createRegistry({ path: tmpRegistry() });
-    const app = createApp({
-      mode: 'prod',
-      staticRoot: './dist/web',
-      registry,
-      events: bus,
-      disableWatcher: true,
-    });
-    return { app, registry, bus };
-  };
-
-  it('broadcasts node:running for status=running and returns ok', async () => {
-    const { app, bus } = buildAppWithBus();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const captured: Array<{ type: string; payload: unknown }> = [];
-    bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
-
-    const res = await post(app, '/api/emit', {
-      flowId: reg.id,
-      nodeId: 'worker',
-      status: 'running',
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-
-    expect(captured).toHaveLength(1);
-    expect(captured[0]?.type).toBe('node:running');
-    expect((captured[0]?.payload as { nodeId: string }).nodeId).toBe('worker');
-  });
-
-  it('maps status=done → node:done and merges payload', async () => {
-    const { app, bus } = buildAppWithBus();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const captured: Array<{ type: string; payload: unknown }> = [];
-    bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
-
-    const res = await post(app, '/api/emit', {
-      flowId: reg.id,
-      nodeId: 'worker',
-      status: 'done',
-      runId: 'run-42',
-      payload: { status: 200, body: { ok: true } },
-    });
-    expect(res.status).toBe(200);
-
-    expect(captured).toHaveLength(1);
-    expect(captured[0]?.type).toBe('node:done');
-    const payload = captured[0]?.payload as {
-      nodeId: string;
-      runId: string;
-      status: number;
-      body: unknown;
-    };
-    expect(payload.nodeId).toBe('worker');
-    expect(payload.runId).toBe('run-42');
-    expect(payload.status).toBe(200);
-    expect(payload.body).toEqual({ ok: true });
-  });
-
-  it('maps status=error → node:error', async () => {
-    const { app, bus } = buildAppWithBus();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const captured: Array<{ type: string }> = [];
-    bus.subscribe(reg.id, (e) => captured.push({ type: e.type }));
-
-    const res = await post(app, '/api/emit', {
-      flowId: reg.id,
-      nodeId: 'worker',
-      status: 'error',
-      payload: { message: 'boom' },
-    });
-    expect(res.status).toBe(200);
-    expect(captured).toHaveLength(1);
-    expect(captured[0]?.type).toBe('node:error');
-  });
-
-  it('returns 404 when flowId is unknown', async () => {
-    const { app } = buildAppWithBus();
-    const res = await post(app, '/api/emit', {
-      flowId: 'does-not-exist',
-      nodeId: 'worker',
-      status: 'running',
-    });
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 400 when status is not one of running|done|error', async () => {
-    const { app } = buildAppWithBus();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(app, '/api/emit', {
-      flowId: reg.id,
-      nodeId: 'worker',
-      status: 'oops',
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 400 when body is not valid JSON', async () => {
-    const { app } = buildAppWithBus();
-    const res = await app.request('/api/emit', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{not-json',
-    });
-    expect(res.status).toBe(400);
-  });
-});
-
 describe('GET /api/events', () => {
   it('returns 400 when flowId is missing', async () => {
     const { app } = buildApp();
@@ -2396,7 +1906,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     expect(await res.json()).toEqual({ ok: true });
 
     const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      nodes: Array<{ id: string; data: { name: string; playAction: { kind: string } } }>;
+      nodes: Array<{ id: string; data: { name: string } }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       nodes: Record<
@@ -2406,7 +1916,6 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     };
     const node = arch.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.name).toBe('POST /checkout (renamed)');
-    expect(node?.data.playAction.kind).toBe('script');
     const styleEntry = style.nodes['api-checkout'];
     expect(styleEntry?.borderColor).toBe('blue');
     expect(styleEntry?.backgroundColor).toBe('amber');
@@ -3197,8 +2706,6 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
         type: 'rectangle',
         data: {
           name: 'A',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
       {
@@ -3206,8 +2713,6 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
         type: 'rectangle',
         data: {
           name: 'B',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
     ],
@@ -3254,8 +2759,6 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
           type: 'rectangle',
           data: {
             name: 'C',
-            stateSource: { kind: 'request' },
-            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
         },
       ],
@@ -3423,8 +2926,6 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
         type: 'rectangle',
         data: {
           name: 'A',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
       {
@@ -3432,8 +2933,6 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
         type: 'rectangle',
         data: {
           name: 'B',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
     ],
@@ -3711,8 +3210,6 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
         type: 'rectangle',
         data: {
           name: 'A',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
       {
@@ -3720,8 +3217,6 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
         type: 'rectangle',
         data: {
           name: 'B',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
     ],
@@ -3849,7 +3344,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
         {
           id: 'svc',
           type: 'rectangle',
-          data: { name: 'S', stateSource: { kind: 'request' } },
+          data: { name: 'S' },
         },
         {
           id: 'icon-1',
@@ -3895,7 +3390,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
         {
           id: 'svc',
           type: 'rectangle',
-          data: { name: 'S', stateSource: { kind: 'request' } },
+          data: { name: 'S' },
         },
       ],
       connectors: [],
@@ -3969,8 +3464,6 @@ describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existi
         type: 'rectangle',
         data: {
           name: 'A',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
       {
@@ -3978,8 +3471,6 @@ describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existi
         type: 'rectangle',
         data: {
           name: 'B',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
     ],
@@ -4055,8 +3546,6 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
         type: 'rectangle',
         data: {
           name: 'A',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
       {
@@ -4064,8 +3553,6 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
         type: 'rectangle',
         data: {
           name: 'B',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
       },
     ],
@@ -4794,229 +4281,6 @@ describe('GET /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
     const res = await app.request(
       `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/not-a-node`,
-    );
-    expect(res.status).toBe(404);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Unknown nodeId');
-  });
-});
-
-// US-009 / T-007: POST /api/flows/:id/nodes/:nodeId/actions/:name dispatches
-// the named action defined under spec.actions for a component node. The
-// runner spawns the script via the injected ProcessSpawner (shared in-memory
-// fake from the /play suite) so we can drive the success + failure branches
-// without spinning up real child processes.
-describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name (T-007)', () => {
-  type SpawnOpts = {
-    cmd: string[];
-    cwd: string;
-    env: Record<string, string>;
-    stdin: 'pipe' | 'ignore';
-  };
-  type FakeRecord = { spawnCalls: SpawnOpts[]; stdinPayloads: string[] };
-
-  const makeFakeSpawner = (
-    config: { stdout?: string; stderr?: string; exitCode?: number } = {},
-  ): { spawner: import('./process-spawner.ts').ProcessSpawner; record: FakeRecord } => {
-    const record: FakeRecord = { spawnCalls: [], stdinPayloads: [] };
-    const streamFromString = (s: string): ReadableStream<Uint8Array> =>
-      new ReadableStream<Uint8Array>({
-        start(c) {
-          if (s.length > 0) c.enqueue(new TextEncoder().encode(s));
-          c.close();
-        },
-      });
-    const spawner: import('./process-spawner.ts').ProcessSpawner = {
-      spawn(opts) {
-        record.spawnCalls.push({ cmd: opts.cmd, cwd: opts.cwd, env: opts.env, stdin: opts.stdin });
-        let resolveExit: (code: number) => void = () => {};
-        const exited = new Promise<number>((res) => {
-          resolveExit = res;
-        });
-        queueMicrotask(() => resolveExit(config.exitCode ?? 0));
-        let stdinStream: WritableStream<Uint8Array> | undefined;
-        if (opts.stdin === 'pipe') {
-          const idx = record.stdinPayloads.push('') - 1;
-          const decoder = new TextDecoder();
-          stdinStream = new WritableStream<Uint8Array>({
-            write(chunk) {
-              record.stdinPayloads[idx] += decoder.decode(chunk, { stream: true });
-            },
-            close() {},
-            abort() {},
-          });
-        }
-        return {
-          pid: 22222,
-          stdout: streamFromString(config.stdout ?? ''),
-          stderr: streamFromString(config.stderr ?? ''),
-          stdin: stdinStream,
-          exited,
-          kill() {},
-        };
-      },
-    };
-    return { spawner, record };
-  };
-
-  // Seed a project containing one component node + nodes/c1/spec.json carrying
-  // the supplied actions map. Optionally writes a stub script at
-  // nodes/c1/actions/<name>.ts so the realpath check in component-action-runner
-  // passes.
-  const seedComponentProject = (
-    actions: Record<string, unknown>,
-    scriptFiles: string[] = [],
-  ): string => {
-    const repoPath = tmpRepoWithDemo({
-      version: 2,
-      name: 'Component flow',
-      nodes: [{ id: 'c1', type: 'component', data: {} }],
-      connectors: [],
-    });
-    mkdirSync(join(repoPath, 'nodes', 'c1', 'actions'), { recursive: true });
-    const spec = {
-      root: 'root',
-      elements: { root: { type: 'Text', props: { text: 'hello' } } },
-      actions,
-    };
-    writeFileSync(join(repoPath, 'nodes', 'c1', 'spec.json'), `${JSON.stringify(spec, null, 2)}\n`);
-    for (const name of scriptFiles) {
-      writeFileSync(join(repoPath, 'nodes', 'c1', 'actions', name), '// stub\n');
-    }
-    return repoPath;
-  };
-
-  const buildActionApp = (
-    spawnerConfig: { stdout?: string; stderr?: string; exitCode?: number } = {},
-  ) => {
-    const { spawner, record } = makeFakeSpawner(spawnerConfig);
-    const bus = createEventBus();
-    const registry = createRegistry({ path: tmpRegistry() });
-    const app = createApp({
-      mode: 'prod',
-      staticRoot: './dist/web',
-      registry,
-      events: bus,
-      disableWatcher: true,
-      processSpawner: spawner,
-    });
-    return { app, registry, bus, spawnerRecord: record };
-  };
-
-  it('dispatches a script-kind action and returns its parsed JSON body with status 200', async () => {
-    const { app, spawnerRecord } = buildActionApp({ stdout: '{"queueDepth":3}' });
-    const repoPath = seedComponentProject(
-      {
-        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
-      },
-      ['refresh.ts'],
-    );
-
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/refresh`,
-      { force: true },
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { queueDepth: number };
-    expect(body).toEqual({ queueDepth: 3 });
-
-    // Spawn invocation shape: interpreter + resolved abs script path, plus
-    // the per-run env vars and the JSON-encoded payload on stdin.
-    expect(spawnerRecord.spawnCalls).toHaveLength(1);
-    const call = spawnerRecord.spawnCalls[0];
-    expect(call?.cmd[0]).toBe('bun');
-    expect(call?.cmd[1]?.endsWith('/nodes/c1/actions/refresh.ts')).toBe(true);
-    expect(call?.env.SEEFLOW_DEMO_ID).toBe(reg.id);
-    expect(call?.env.SEEFLOW_NODE_ID).toBe('c1');
-    expect(call?.env.SEEFLOW_ACTION_NAME).toBe('refresh');
-    expect(spawnerRecord.stdinPayloads[0]).toBe('{"force":true}');
-  });
-
-  it('404s when the action name is not present in spec.actions', async () => {
-    const { app } = buildActionApp({ stdout: '{}' });
-    const repoPath = seedComponentProject(
-      {
-        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
-      },
-      ['refresh.ts'],
-    );
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/missing`,
-      {},
-    );
-    expect(res.status).toBe(404);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Unknown action');
-  });
-
-  it('400s when the target node is not a component node', async () => {
-    const { app } = buildActionApp({ stdout: '{}' });
-    // Default VALID_DEMO carries a rectangle node id 'api-checkout'.
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/actions/refresh`,
-      {},
-    );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('not a component node');
-  });
-
-  it('400s when the resolved action is set-kind', async () => {
-    const { app } = buildActionApp({ stdout: '{}' });
-    const repoPath = seedComponentProject({
-      toggle: { kind: 'set', path: '/open', value: true },
-    });
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/toggle`,
-      {},
-    );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe('Only script actions are dispatched over HTTP');
-  });
-
-  it('returns 404 for an unknown flow id', async () => {
-    const { app } = buildActionApp();
-    const res = await post(app, '/api/projects/nope/flows/main/nodes/c1/actions/refresh', {});
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 404 for an unknown node id', async () => {
-    const { app } = buildActionApp({ stdout: '{}' });
-    const repoPath = seedComponentProject(
-      {
-        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
-      },
-      ['refresh.ts'],
-    );
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-    const res = await post(
-      app,
-      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/ghost/actions/refresh`,
-      {},
     );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };

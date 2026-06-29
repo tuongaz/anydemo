@@ -26,10 +26,9 @@ together.
 documents conventions, file layout, and when-to-use guidance — it does
 **not** document fields, types, or enum values. **Before designing or
 authoring any node, run the schema CLI** — Phase 0 caches the payload
-for the orchestrator, and Phase 2 (planner) / Phase 4 (designers)
-re-drill into specific variants as they compose patches. If a field
-name, type, required-list, or enum value is not in `$SEEFLOW schema`,
-it does not exist.
+for the orchestrator, and Phase 2 (planner) re-drills into specific
+variants as it composes patches. If a field name, type, required-list,
+or enum value is not in `$SEEFLOW schema`, it does not exist.
 
 ### Progressive workflow (run these before designing nodes)
 
@@ -49,7 +48,6 @@ with affordances the next step needs:
     $SEEFLOW schema flow             # top-level envelope
     $SEEFLOW schema node             # every node variant
     $SEEFLOW schema connector        # every connector variant
-    $SEEFLOW schema action           # every action variant
     $SEEFLOW schema componentSpec    # spec.json shape for type:'component'
     $SEEFLOW schema componentCatalog # every legal componentSpec.elements[].type
                                      # + the props each accepts (one subname
@@ -65,7 +63,7 @@ with affordances the next step needs:
     $SEEFLOW schema node rectangle
     $SEEFLOW schema node component
     $SEEFLOW schema node image
-    $SEEFLOW schema action playAction
+    $SEEFLOW schema connector
     $SEEFLOW schema componentSpec componentSpecElement
     $SEEFLOW schema componentCatalog Chart   # just Chart's props schema
     #    → { name, subname, schemas, notes,
@@ -93,21 +91,21 @@ optional `?`, pipe `|`). Single-output filters return `{ result:
 [<v1>, …] }`. Bad filters exit 2 with `code:"badJq"`.
 
 **Canonical pattern:** drill in with `subname`, then `--jq` straight to
-the `data.<field>` the planner or designer is about to set, using one
+the `data.<field>` the planner is about to set, using one
 of the paths the CLI listed in `jqHints.examples`:
 
     $SEEFLOW schema node rectangle \
-        --jq '.schemas.rectangle.properties.data.properties.playAction'
+        --jq '.schemas.rectangle.properties.data.properties.icon'
 
     $SEEFLOW schema node component \
         --jq '.schemas.component.properties.data.properties.spec'
 
-    $SEEFLOW schema action playAction \
-        --jq '.schemas.playAction.required'
+    $SEEFLOW schema connector \
+        --jq '.schemas.connector.required'
 
 `jqHints.dataFields` is the answer to "what fields can I jq for?" —
 for any node variant it lists every `data.<field>` you can target.
-Non-node variants (action, connector, componentSpec, style) have no
+Non-node variants (connector, componentSpec, style) have no
 `data` wrapper, so `dataFields` is absent on those responses; use
 `jqHints.examples` instead.
 
@@ -127,10 +125,9 @@ same `subnames`, `usage`, and `jqHints` fields) is reachable over MCP
 (`seeflow_schema` — accepts `name` and `subname`) and REST (`GET
 /api/schema[/:name[/:subname]]`) — pick whichever transport you're
 already on. The Phase 0 cache is forwarded to the node-planner (Phase
-2) and the play/status designers (Phase 4) in their launching prompts;
-downstream agents never re-fetch the whole category but ARE expected
-to re-drill into a single subname (with `--jq` for a single field)
-when composing patches.
+2) in its launching prompt; the planner never re-fetches the whole
+category but IS expected to re-drill into a single subname (with `--jq`
+for a single field) when composing patches.
 
 Do not infer a field shape from this file, from the agent prompts, or
 from older skill memory — read the cached answer.
@@ -173,17 +170,11 @@ node lives under the owning flow's folder at
             └── <nodeId>/
                 ├── detail.md          # auto-externalized from data.detail
                 ├── view.html          # auto-externalized from data.html (type:'html')
-                └── scripts/
-                    ├── play.ts
-                    └── status.ts
+                └── <uploaded files>   # e.g. images for type:'image'
 ```
 
-Action `scriptPath` values are **relative to the node folder** — no
-`flows/<flowSlug>/` prefix, no `nodes/<id>/` prefix. The studio's
-resolver prepends `<repoPath>/flows/<flowSlug>/nodes/<nodeId>/` and
-rejects any path that escapes the node folder (`..`, absolute).
-Deleting the node cascade-deletes the whole folder — no stranded
-scripts. For the exact shape of any action, run `$SEEFLOW schema action`.
+Deleting a node cascade-deletes its whole folder — no stranded files.
+For the exact shape of any field, run `$SEEFLOW schema node`.
 
 ## `file://` substitution
 
@@ -230,64 +221,34 @@ This section is the **decision guide** — what each variant is for and
 when to pick it. Pair it with the live schema before composing any
 patch body.
 
-The schema is **flat**: `type` is the visual shape (one of 12 tags),
-and `playAction` / `statusAction` / `stateSource` are top-level data
-fields valid on every type. There is no separate "play node" or
-"state node" tag — capabilities live on `data` regardless of shape,
-and the canvas renders chrome on `rectangle` (inline header) plus the
-illustrative shapes (`database`, `server`, `user`, `queue`, `cloud`)
-via a bottom skirt.
-
-### Capabilities — top-level data fields on every type
-
-| Capability | What it does | Renders chrome on |
-|---|---|---|
-| `data.playAction` | Adds a clickable Play button that runs the configured action. | `rectangle` (inline header) + illustrative shapes (`database`, `server`, `user`, `queue`, `cloud`) via a bottom skirt |
-| `data.statusAction` | Adds a status pill driven by a long-running probe script. | Same surfaces as `playAction` |
-| `data.stateSource` | Informational metadata about where state comes from. Pair with `statusAction` when relevant — optional everywhere. | (no chrome) |
-
-**Capability chrome surfaces on the matching SEMANTIC shape — pick the
-shape, don't fall back to `rectangle`.** The renderer draws Play
-buttons / status badges in two places:
-
-- **`rectangle`** — chrome lives inside the header strip (Play button
-  next to the name, status pill on the right). Use for named
-  services, HTTP endpoints, workers — anything without a better
-  matching shape.
-- **Illustrative shapes** (`database`, `server`, `user`, `queue`,
-  `cloud`) — chrome lives in a bottom **skirt** below the SVG icon
-  (see `packages/canvas/src/nodes/geometric-node.tsx`'s
-  `showSkirt = isIllustrativeShape(shape) && (hasPlayCapability || hasStatusReport)`).
-  Use these whenever the visual matches the entity — a Postgres
-  database is `type:'database'`, NOT `type:'rectangle'` with
-  `data.icon:'database'`.
-
-Decorative shapes (`ellipse`, `sticky`, `text`, `icon`, `image`) draw
-NO capability chrome. Putting a `playAction` on them is legal at the
-schema layer but the user can't click it — don't.
+The schema is **flat**: `type` is the visual shape. There is no
+behavioural sub-type — pick the shape that matches the entity, and put
+everything the audience needs to understand the node into `data.name`,
+`data.description`, `data.detail`, and (for resources) the matching
+illustrative shape.
 
 **Shape-selection rule:** the shape carries meaning. If a node IS a
 database, queue, file/object store, event bus, external SaaS, server,
 or human actor, use the matching illustrative shape; only fall back to
 `rectangle` when no illustrative shape fits (HTTP endpoints, workers,
-schedulers, services, generic processes).
+schedulers, services, generic processes). Decorative shapes
+(`ellipse`, `sticky`, `text`, `icon`, `image`) carry their content in
+their own fields.
 
 ### `rectangle`
 
-The named card with a header (name + optional icon), description, body,
-and capability chrome. Use for important nodes that **don't have a
-matching illustrative shape** — HTTP endpoints, microservices, workers,
-schedulers, generic processes. When the entity IS a database / queue /
-external SaaS / server / human, prefer the matching illustrative shape
-below.
+The named card with a header (name + optional icon), description, and
+body. Use for important nodes that **don't have a matching illustrative
+shape** — HTTP endpoints, microservices, workers, schedulers, generic
+processes. When the entity IS a database / queue / external SaaS /
+server / human, prefer the matching illustrative shape below.
 
-**RULE — detail on important nodes:** Every node that carries
-`playAction` or `statusAction` MUST include a `detail` field
-(regardless of shape — `rectangle` or illustrative). The content
-renders as **markdown** — use it to explain what the node does, what
-it emits, why it matters, sample payloads, links to source files, or
-anything an audience member would ask. Decorative shapes (sticky, text,
-icon) are exempt.
+**RULE — detail on non-decorative nodes:** Every `rectangle`,
+`database`, `queue`, `cloud`, `server`, and `user` node MUST include a
+`detail` field. The content renders as **markdown** — use it to explain
+what the node does, what it emits, why it matters, sample payloads,
+links to source files, or anything an audience member would ask.
+Decorative shapes (sticky, text, icon) are exempt.
 
 The markdown also renders fenced **` ```mermaid `** blocks inline as
 SVG (the detail panel upgrades `language-mermaid` code fences to a live
@@ -311,21 +272,19 @@ sequenceDiagram
 ```
 ````
 
-**RULE — icon on rectangle nodes:** Every `rectangle` that carries
-`playAction` or `statusAction` SHOULD include an icon — a kebab-case
-Lucide icon name (`server`, `radio-tower`, `cog`, `clock`,
-`terminal`) that visually echoes the node's role. Renders left of the
-name. Decorative; not a status indicator. Illustrative shapes
-(`database`, `server`, `user`, `queue`, `cloud`) already carry the
-matching SVG glyph — set `data.icon` only when you want an additional
-Lucide accent. Run `$SEEFLOW schema node` for the field shape.
+**RULE — icon on rectangle nodes:** Every non-decorative `rectangle`
+SHOULD include an icon — a kebab-case Lucide icon name (`server`,
+`radio-tower`, `cog`, `clock`, `terminal`) that visually echoes the
+node's role. Renders left of the name. Decorative; not a status
+indicator. Illustrative shapes (`database`, `server`, `user`, `queue`,
+`cloud`) already carry the matching SVG glyph — set `data.icon` only
+when you want an additional Lucide accent. Run `$SEEFLOW schema node`
+for the field shape.
 
 ### `database`, `server`, `user`, `queue`, `cloud` (illustrative shapes)
 
-The five illustrative shapes. Same data schema as `rectangle` — they
-ACCEPT every capability field, and the canvas now draws a Play
-button / status badge **skirt** under the SVG glyph when `playAction`
-or `statusAction` is set. Prefer them over `rectangle + data.icon`
+The five illustrative shapes. Same data schema as `rectangle`, but each
+carries its own SVG glyph. Prefer them over `rectangle + data.icon`
 whenever the entity matches the shape's semantics:
 
 | Entity | Shape | Why |
@@ -334,7 +293,7 @@ whenever the entity matches the shape's semantics:
 | SQS / Kafka topic / Pub/Sub topic / RabbitMQ / SNS | `queue` | Stacked-channel glyph reads as a queue/topic instantly. |
 | GCS / S3 / Cloudflare R2 / external SaaS (Stripe, SendGrid, OpenAI) | `cloud` | Conveys "external storage / service we don't own". |
 | Service / VM / host the audience needs to see as a server | `server` | Rack glyph reads as infrastructure. |
-| Actual human (UX click-through, support agent, approver) | `user` | Person glyph; chrome works the same way. |
+| Actual human (UX click-through, support agent, approver) | `user` | Person glyph reads as a human actor. |
 
 Placement rules that don't live in the schema:
 
@@ -344,26 +303,22 @@ Placement rules that don't live in the schema:
   worker / cron / webhook flows. Web UI / Mobile App / SDK consumers
   are *software* — model them as `rectangle` with `data.icon:
   "monitor"` / `"smartphone"` / `"plug"`, or omit them entirely.
-- **`database` carrying `statusAction`** — the status badge now
-  renders in the skirt. This used to require switching to `rectangle`
-  with `data.icon: "database"`; that workaround is obsolete.
-- **`queue` carrying `playAction`** — legitimate when the Play
-  simulates a producer pushing a message onto the queue (see Rule 3
-  in `seeflow-play-designer.md`'s Play-button placement rules).
+- **An observable resource keeps its illustrative shape.** A Postgres
+  store backing a service is `type:'database'`, NOT `type:'rectangle'`
+  with `data.icon: "database"`.
 
 ### `ellipse`, `sticky`, `text`
 
-Decorative geometric shapes with no capability chrome. `sticky` and
-`text` are inline labels / callouts. `ellipse` is a soft alternative
-shape for non-resource decoration. None of them carry capabilities in
-practice — putting `playAction` / `statusAction` on them is legal but
-invisible.
+Decorative geometric shapes. `sticky` and `text` are inline labels /
+callouts. `ellipse` is a soft alternative shape for non-resource
+decoration. They carry their content in their own fields, not in
+`detail`.
 
 ### `icon`
 
 Single Lucide glyph. The `data.icon` field is **required** here
-(unlike on geometric types, where it's optional decorative chrome).
-Decorative; carries no chrome in v1.
+(unlike on geometric types, where it's optional decorative). Purely
+decorative.
 
 ### `component`
 
@@ -407,9 +362,9 @@ trigger a live reload.
 **When NOT to use:**
 - If a `component` catalog entry covers the content, prefer that —
   components are typed, theme-aware, and participate in updates.
-- If a sticky-note / text label, an `icon` glyph, or a `rectangle`
-  with a status pill covers the content, prefer those — they
-  participate in theming and status updates automatically.
+- If a sticky-note / text label, an `icon` glyph, or a plain
+  `rectangle` covers the content, prefer those — they participate in
+  theming automatically.
 
 ### `image`
 
@@ -426,11 +381,10 @@ enforced). For the exact field shape, run `$SEEFLOW schema node`.
 Concrete `seeflow nodes:add` / `seeflow nodes:patch` payload shapes for
 each variant. Pair with `$SEEFLOW schema node` for the authoritative
 field list; the examples below illustrate the **flat-discriminator
-pattern** — `type` carries the shape; capabilities live as top-level
-data fields.
+pattern** — `type` carries the shape.
 
 ```json
-// 1. rectangle with playAction + statusAction (a trigger that's also observable)
+// 1. rectangle — a named HTTP service
 {
   "id": "node-Ab12cd34Ef",
   "type": "rectangle",
@@ -438,22 +392,17 @@ data fields.
     "name": "POST /orders",
     "icon": "server",
     "description": "Accepts a cart, creates an order, publishes order.created.",
-    "detail": "## POST /orders\n\nHTTP entry point for the pipeline.",
-    "stateSource": { "kind": "request" },
-    "playAction":  { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts",   "input": { "cart": [{ "sku": "SKU-1", "qty": 1 }] }, "timeoutMs": 15000 },
-    "statusAction":{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 }
+    "detail": "## POST /orders\n\nHTTP entry point for the pipeline."
   }
 }
 
-// 2. illustrative shape carrying a statusAction — pill renders in the skirt under the cylinder glyph
+// 2. illustrative shape — a database, drawn as a cylinder glyph
 {
   "id": "node-Gh56ij78Kl",
   "type": "database",
   "data": {
     "name": "Order Store",
-    "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`.",
-    "stateSource": { "kind": "event" },
-    "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 }
+    "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`."
   }
 }
 
@@ -499,28 +448,3 @@ Two runtime rules that don't live in the schema:
   `flow:add-bulk`.
 - Visual fields (style, direction, path, colors, sizing, handles) live
   in `style.json` — the skill leaves them to the canvas / `flows:layout`.
-
-## Action runtime budgets
-
-For the exact field shape of every action variant, run `$SEEFLOW schema
-action`. The decision-guide knobs that aren't in the schema:
-
-- **Interpreter** must match `runtimeProfile.primaryLanguage` (`bun`,
-  `go`, `python3`, `node`, `bash`).
-- **Path anchor** for `scriptPath` is the node folder
-  (`nodes/<nodeId>/`). No leading slash, no `..`. The reset
-  action stays anchored at the project root until a follow-up.
-- **Play timeout — be generous:**
-  - Simple HTTP call → 15 000 ms.
-  - Go / Rust (compile on first run) → 60 000–120 000 ms.
-  - Java / Kotlin (JVM startup) → 120 000 ms minimum.
-  - DB seeding / migrations → 60 000 ms minimum.
-- **Status max lifetime** — default ~10 min; bump to ~30 min for long
-  async flows. The studio kills the script on the next Play click or at
-  lifetime expiry.
-
-## Status reports
-
-Run `$SEEFLOW schema action` for the report shape. The contract beyond
-the schema: emit **one full JSON object per line** to stdout from the
-status script. Malformed lines are silently dropped.

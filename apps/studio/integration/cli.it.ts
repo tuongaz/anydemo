@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { slugify } from '../src/registry.ts';
@@ -114,7 +114,6 @@ describe('integration: CLI — meta (help / version / unknown)', () => {
       'flows:graph',
       'flows:delete',
       'flows:layout',
-      'flows:play',
       'nodes:add',
       'nodes:get',
       'nodes:patch',
@@ -126,7 +125,6 @@ describe('integration: CLI — meta (help / version / unknown)', () => {
       'flow:add-bulk',
       'connectors:delete',
       'validate',
-      'e2e',
       'version',
       'help',
     ]) {
@@ -346,59 +344,6 @@ describe('integration: CLI — projects + flows', () => {
   // reload. The CLI subcommand still exists but no longer survives the
   // round-trip — and per the manifest-only commit, the matching unit test
   // was deleted as obsolete. The integration analog is dropped here.
-
-  it('flows:play triggers a rectangle node with playAction and prints { ok, runId, status, body }', async () => {
-    // Mirrors rest.it.ts: seed a type:'rectangle' node carrying a playAction
-    // capability whose scriptPath resolves under <repoPath>/nodes/<id>/, then
-    // drop a tiny script that prints a JSON line and exits 0. CLI's flows:play
-    // POSTs to /play and the response is printed via printOk →
-    // `{"ok":true, runId, status, body}`. Under the flat schema, playAction is
-    // a capability valid on every node type — rectangle is the canonical host.
-    const created = await createProject(uniqueFlowId('cli-flows-play'));
-    const nodeId = 'cli-play-1';
-    const addRes = await fetch(`${flowApi(created.slug)}/nodes`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        id: nodeId,
-        type: 'rectangle',
-        data: {
-          name: 'Play',
-          stateSource: { kind: 'request' },
-          playAction: {
-            kind: 'script',
-            interpreter: 'bun',
-            scriptPath: 'scripts/play.ts',
-          },
-        },
-      }),
-    });
-    expect(addRes.status).toBe(200);
-
-    // `proxy.resolveScript` resolves `<cwd>/nodes/<nodeId>/<scriptPath>` where
-    // `cwd = entry.repoPath` (the project root) — independent of which flow
-    // the node belongs to. So the play script lives at `<workspace>/
-    // <projectSlug>/nodes/<nodeId>/scripts/play.ts`, NOT inside `flows/...`.
-    const [projectSlug] = created.slug.split('/');
-    const scriptDir = join(studio.workspace, projectSlug as string, 'nodes', nodeId, 'scripts');
-    mkdirSync(scriptDir, { recursive: true });
-    writeFileSync(
-      join(scriptDir, 'play.ts'),
-      'console.log(JSON.stringify({ hello: "cli-play" }));\nprocess.exit(0);\n',
-    );
-
-    const r = await runCli(['flows:play', ...flowFlags(created.slug), nodeId], { env: cliEnv });
-    expect(r.code).toBe(0);
-    const body = parseOkLine(r.stdout) as OkLine & {
-      runId: string;
-      status: number;
-      body: { hello?: string };
-    };
-    expect(body.ok).toBe(true);
-    expect(typeof body.runId).toBe('string');
-    expect(body.status).toBe(200);
-    expect(body.body).toEqual({ hello: 'cli-play' });
-  });
 });
 
 describe('integration: CLI — nodes', () => {
@@ -645,26 +590,6 @@ describe('integration: CLI — ids', () => {
     const zero = await runCli(['ids', 'node', '0']);
     expect(zero.code).not.toBe(0);
     expect(zero.stderr).toContain('Invalid count: 0');
-  });
-});
-
-describe('integration: CLI — e2e', () => {
-  // e2e iterates every node carrying playAction + every node carrying
-  // statusAction and runs them. With no nodes carrying either capability,
-  // both arrays are empty and the validator vacuously passes — sufficient as
-  // a smoke test for the subcommand wiring (arg parsing, SSE channel open,
-  // hard-ceiling, printOk).
-  it('e2e --project/--flow runs against a flow with no play/status capabilities and exits ok', async () => {
-    const created = await createProject(uniqueFlowId('cli-e2e'));
-    const r = await runCli(['e2e', ...flowFlags(created.slug)], { env: cliEnv });
-    expect(r.code).toBe(0);
-    const body = parseOkLine(r.stdout) as OkLine & {
-      plays: unknown[];
-      statuses: unknown[];
-    };
-    expect(body.ok).toBe(true);
-    expect(body.plays).toEqual([]);
-    expect(body.statuses).toEqual([]);
   });
 });
 

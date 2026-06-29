@@ -27,8 +27,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -36,8 +34,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'rectangle',
       data: {
         name: 'B',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],
@@ -59,8 +55,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'A',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -68,8 +62,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'B',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
     {
@@ -77,8 +69,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'rectangle',
       data: {
         name: 'C',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     },
   ],

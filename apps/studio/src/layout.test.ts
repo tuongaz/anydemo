@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { type LayoutEdge, type LayoutNode, computeLayout } from './layout.ts';
 
-// Rectangle is the canonical "playable" node — these dimensions mirror the
+// Rectangle is the canonical node — these dimensions mirror the
 // canvas SHAPE_DEFAULT_SIZE.rectangle entry that layout.ts uses by default.
 const PLAY_W = 200;
 const PLAY_H = 120;

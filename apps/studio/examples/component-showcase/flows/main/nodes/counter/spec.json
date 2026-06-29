@@ -16,7 +16,7 @@
     "intro": {
       "type": "Text",
       "props": {
-        "text": "Both buttons dispatch a set-kind action. State updates happen entirely in the browser — no script spawns.",
+        "text": "Both buttons dispatch a set-kind action. State updates happen entirely in the browser.",
         "muted": true
       }
     },

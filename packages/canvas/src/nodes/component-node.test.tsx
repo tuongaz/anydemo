@@ -165,26 +165,16 @@ describe('ComponentNode container', () => {
     expect(attr).toBe('component');
   });
 
-  it('mounts ComponentRuntime with the spec, nodeId, projectSlug, flowSlug and apiBaseUrl from data', () => {
-    const tree = callComponentNode({
-      projectSlug: 'demo-42',
-      flowSlug: 'main',
-      apiBaseUrl: '/custom',
-    });
+  it('mounts ComponentRuntime with the spec and nodeId from data', () => {
+    const tree = callComponentNode();
     const runtime = findRuntime(tree);
     expect(runtime).not.toBeNull();
     const props = runtime?.props as {
       spec?: ComponentSpec;
       nodeId?: string;
-      projectSlug?: string;
-      flowSlug?: string;
-      apiBaseUrl?: string;
     };
     expect(props.spec).toBe(TRIVIAL_SPEC);
     expect(props.nodeId).toBe('c1');
-    expect(props.projectSlug).toBe('demo-42');
-    expect(props.flowSlug).toBe('main');
-    expect(props.apiBaseUrl).toBe('/custom');
   });
 });
 
@@ -455,9 +445,6 @@ describe('ComponentNode zoom (fullscreen) button', () => {
   it('renders the live runtime inside the modal body with the same spec + nodeId', () => {
     const tree = callComponentNode({
       enableFullscreen: true,
-      projectSlug: 'demo-9',
-      flowSlug: 'main',
-      apiBaseUrl: '/x',
     });
     const body = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
@@ -469,15 +456,9 @@ describe('ComponentNode zoom (fullscreen) button', () => {
     const rp = runtime?.props as {
       spec?: ComponentSpec;
       nodeId?: string;
-      projectSlug?: string;
-      flowSlug?: string;
-      apiBaseUrl?: string;
     };
     expect(rp.spec).toBe(TRIVIAL_SPEC);
     expect(rp.nodeId).toBe('c1');
-    expect(rp.projectSlug).toBe('demo-9');
-    expect(rp.flowSlug).toBe('main');
-    expect(rp.apiBaseUrl).toBe('/x');
   });
 });
 

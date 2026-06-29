@@ -19,12 +19,6 @@ const VALID_DEMO = {
       type: 'rectangle',
       data: {
         name: 'POST /checkout',
-        stateSource: { kind: 'request' },
-        playAction: {
-          kind: 'script',
-          interpreter: 'bun',
-          scriptPath: 'scripts/checkout.ts',
-        },
       },
     },
   ],
@@ -245,12 +239,12 @@ describe('seeflow CLI new subcommands', () => {
           {
             id: 'n1',
             type: 'rectangle',
-            data: { name: 'one', stateSource: { kind: 'request' } },
+            data: { name: 'one' },
           },
           {
             id: 'n2',
             type: 'rectangle',
-            data: { name: 'two', stateSource: { kind: 'request' } },
+            data: { name: 'two' },
           },
         ],
         connectors: [{ id: 'n1-to-n2', source: 'n1', target: 'n2' }],
@@ -294,12 +288,12 @@ describe('seeflow CLI new subcommands', () => {
           {
             id: 'same',
             type: 'rectangle',
-            data: { name: 'a', stateSource: { kind: 'request' } },
+            data: { name: 'a' },
           },
           {
             id: 'same',
             type: 'rectangle',
-            data: { name: 'b', stateSource: { kind: 'request' } },
+            data: { name: 'b' },
           },
         ],
       });
@@ -606,7 +600,7 @@ describe('seeflow CLI new subcommands', () => {
       // jqHints.dataFields tells the agent which data.<field>s exist on the
       // variant so they can `--jq` straight to the one they care about.
       expect(parsed.jqHints.dataFields).toEqual(
-        expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+        expect.arrayContaining(['name', 'description', 'detail', 'handlerModule']),
       );
       // jqHints.examples must include at least one ready-to-paste data-field path.
       expect(
@@ -667,10 +661,10 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
-  it('schema action playAction returns just playAction (subname works for any multi-schema category)', async () => {
+  it('schema action componentAction returns just componentAction (subname works for any multi-schema category)', async () => {
     const studio = startTestStudio();
     try {
-      const r = await runCli(['schema', 'action', 'playAction', '--no-start'], studio.env);
+      const r = await runCli(['schema', 'action', 'componentAction', '--no-start'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         name: string;
@@ -678,8 +672,8 @@ describe('seeflow CLI new subcommands', () => {
         schemas: Record<string, unknown>;
       };
       expect(parsed.name).toBe('action');
-      expect(parsed.subname).toBe('playAction');
-      expect(Object.keys(parsed.schemas)).toEqual(['playAction']);
+      expect(parsed.subname).toBe('componentAction');
+      expect(Object.keys(parsed.schemas)).toEqual(['componentAction']);
     } finally {
       studio.stop();
     }
@@ -995,143 +989,6 @@ describe('seeflow CLI new subcommands', () => {
       const entries = studio.registry.list().filter((e) => e.projectSlug === projectSlug);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.flowSlug).toBe('main');
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-});
-
-describe('seeflow emit', () => {
-  const registerFlow = (studio: ReturnType<typeof startTestStudio>) => {
-    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-emit-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-    writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
-    return studio.registry.upsert({
-      name: 'Emit Test',
-      repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
-      projectSlug: 'p',
-      flowSlug: 'main',
-      isDefault: true,
-    });
-  };
-
-  it('broadcasts node:done for status=done and exits 0', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const entry = registerFlow(studio);
-      const captured: Array<{ type: string; payload: unknown }> = [];
-      studio.events?.subscribe(entry.id, (e) =>
-        captured.push({ type: e.type, payload: e.payload }),
-      );
-
-      const r = await runCli(['emit', entry.id, 'api-checkout', 'done', '--no-start'], studio.env);
-      expect(r.code).toBe(0);
-      expect(JSON.parse(r.stdout)).toEqual({ ok: true });
-      expect(captured).toHaveLength(1);
-      expect(captured[0]?.type).toBe('node:done');
-      expect((captured[0]?.payload as { nodeId: string }).nodeId).toBe('api-checkout');
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-
-  it('propagates --run-id and merges --payload into the event', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const entry = registerFlow(studio);
-      const captured: Array<{ type: string; payload: unknown }> = [];
-      studio.events?.subscribe(entry.id, (e) =>
-        captured.push({ type: e.type, payload: e.payload }),
-      );
-
-      const r = await runCli(
-        [
-          'emit',
-          entry.id,
-          'api-checkout',
-          'running',
-          '--no-start',
-          '--run-id',
-          'run-42',
-          '--payload',
-          '{"latencyMs":12}',
-        ],
-        studio.env,
-      );
-      expect(r.code).toBe(0);
-      expect(captured).toHaveLength(1);
-      expect(captured[0]?.type).toBe('node:running');
-      const payload = captured[0]?.payload as {
-        nodeId: string;
-        runId: string;
-        latencyMs: number;
-      };
-      expect(payload.runId).toBe('run-42');
-      expect(payload.latencyMs).toBe(12);
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-
-  it('exits non-zero with an error when status is not running|done|error', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const entry = registerFlow(studio);
-      const r = await runCli(['emit', entry.id, 'api-checkout', 'bogus', '--no-start'], studio.env);
-      expect(r.code).not.toBe(0);
-      expect(r.stderr).toContain('Invalid status');
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-
-  it('exits non-zero with an error when --payload is not valid JSON', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const entry = registerFlow(studio);
-      const r = await runCli(
-        ['emit', entry.id, 'api-checkout', 'done', '--no-start', '--payload', '{not-json'],
-        studio.env,
-      );
-      expect(r.code).not.toBe(0);
-      expect(r.stderr).toContain('--payload must be valid JSON');
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-
-  it('surfaces studio 404 when flowId is unknown', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const r = await runCli(
-        ['emit', 'does-not-exist', 'api-checkout', 'done', '--no-start'],
-        studio.env,
-      );
-      expect(r.code).not.toBe(0);
-      expect(r.stderr).toContain('404');
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-
-  it('--studio-url targets the URL directly and skips the daemon resolver', async () => {
-    const studio = startTestStudio({ withEvents: true });
-    try {
-      const entry = registerFlow(studio);
-      const captured: Array<{ type: string }> = [];
-      studio.events?.subscribe(entry.id, (e) => captured.push({ type: e.type }));
-
-      // Strip SEEFLOW_STUDIO_URL from the env so the flag is the only way the
-      // CLI can find the studio. --studio-url should bypass the auto-start
-      // path entirely.
-      const r = await runCli(
-        ['emit', entry.id, 'api-checkout', 'error', '--studio-url', studio.url],
-        { SEEFLOW_WORKSPACE: studio.env.SEEFLOW_WORKSPACE },
-      );
-      expect(r.code).toBe(0);
-      expect(captured).toHaveLength(1);
-      expect(captured[0]?.type).toBe('node:error');
     } finally {
       studio.stop();
     }

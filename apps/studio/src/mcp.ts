@@ -293,16 +293,15 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       'call with `name` + `subname` for just one named schema within that ' +
       "category (e.g. name='node', subname='component' → just the component " +
       "node variant; name='node', subname='linkflow' → just the linkflow " +
-      "node variant; name='action', subname='playAction' → just the playAction " +
-      'shape). Use this to learn what a node, connector, action, component ' +
-      'spec, or flow envelope looks like before authoring writes. Categories: ' +
-      '`flow`, `node` (16 flat variants — rectangle/ellipse/sticky/text/' +
+      "node variant; name='action', subname='componentAction' → just the " +
+      'componentAction shape). Use this to learn what a node, connector, action, ' +
+      'component spec, or flow envelope looks like before authoring writes. ' +
+      'Categories: `flow`, `node` (16 flat variants — rectangle/ellipse/sticky/text/' +
       'database/server/user/queue/cloud/diamond/hexagon/image/html/icon/component/' +
       'linkflow; the linkflow variant carries an optional `target: { project, flow }` ' +
       'slug pair that turns the node into a clickable cross-flow link), ' +
-      '`connector`, `action` (playAction/statusAction/statusReport/' +
-      "componentAction), `componentSpec` (sidecar shape for type:'component' " +
-      'nodes), `style`.',
+      '`connector`, `action` (componentAction), `componentSpec` (sidecar shape ' +
+      "for type:'component' nodes), `style`.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -316,9 +315,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
             'Optional named schema within the category (requires `name`). For ' +
             "name='node': rectangle, ellipse, sticky, text, database, server, " +
             'user, queue, cloud, diamond, hexagon, image, html, icon, component, ' +
-            "linkflow. For name='action': playAction, statusAction, statusReport, " +
-            "componentAction. For name='componentSpec': componentSpec, " +
-            'componentSpecElement.',
+            "linkflow. For name='action': componentAction. For " +
+            "name='componentSpec': componentSpec, componentSpecElement.",
         },
       },
       additionalProperties: false,
@@ -779,7 +777,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   {
     name: 'seeflow_patch_node',
     description:
-      "Update fields on an existing node (position, name, description, detail, icon, colors, border, font, dimensions, autoSize, plus type:'icon'-only color/strokeWidth/alt, type:'linkflow'-only target, and capabilities playAction/statusAction/stateSource). `type` can flip a node between any of the 15 visual variants (rectangle/ellipse/sticky/text/database/server/user/queue/cloud/diamond/hexagon/image/html/icon/linkflow); the post-merge schema reparse gates required fields on the new type (image.data.path, icon.data.icon). Setting detail (every node) or html (type:'html') writes the content to <project>/nodes/<id>/{detail.md|view.html}; the file:// ref on the node persists. Empty-string detail empties the file but keeps the ref. Setting target (type:'linkflow') with `{ project, flow }` links the node to another flow; passing `target: null` clears the link back to the unlinked state.",
+      "Update fields on an existing node (position, name, description, detail, icon, colors, border, font, dimensions, autoSize, plus type:'icon'-only color/strokeWidth/alt, type:'linkflow'-only target). `type` can flip a node between any of the 15 visual variants (rectangle/ellipse/sticky/text/database/server/user/queue/cloud/diamond/hexagon/image/html/icon/linkflow); the post-merge schema reparse gates required fields on the new type (image.data.path, icon.data.icon). Setting detail (every node) or html (type:'html') writes the content to <project>/nodes/<id>/{detail.md|view.html}; the file:// ref on the node persists. Empty-string detail empties the file but keeps the ref. Setting target (type:'linkflow') with `{ project, flow }` links the node to another flow; passing `target: null` clears the link back to the unlinked state.",
     inputSchema: inputSchemaFromZod(PatchNodeInputSchema),
     handler: async (args) => {
       const parsed = PatchNodeInputSchema.safeParse(args);

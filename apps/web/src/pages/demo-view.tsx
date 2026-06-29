@@ -8,9 +8,6 @@ import {
   type LinkflowPickerTarget,
 } from '@/components/linkflow-picker-dialog';
 import { pushLink, reset as resetFlow } from '@/hooks/use-navigate-flow';
-import type { NodeEventLog } from '@/hooks/use-node-events';
-import type { NodeRuns } from '@/hooks/use-node-runs';
-import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
 import { useProjectFlows } from '@/hooks/use-project-flows';
@@ -161,15 +158,6 @@ export interface DemoViewProps {
   demos: FlowSummary[];
   detail: FlowDetail | null;
   loading: boolean;
-  runs: NodeRuns;
-  nodeEvents: NodeEventLog;
-  /**
-   * US-006: latest StatusReport per node, driven by `node:status` SSE events.
-   * Empty when no statusAction has reported yet. US-007 will consume this in
-   * the node renderers (play-node / state-node) and the sidebar; for now the
-   * prop just plumbs the data down so the wiring is in place.
-   */
-  statusByNode: NodeStatuses;
   /**
    * Monotonic counter bumped by App on every genuine `flow:reload` (watcher
    * file-change). Drives the undo-history stale-clear so it keys off real
@@ -177,7 +165,6 @@ export interface DemoViewProps {
    * SSE reconnect refetch must NOT wipe a populated undo stack.
    */
   externalReloadSignal: number;
-  onPlayNode: (nodeId: string) => void;
   /** US-031: refresh the global demos list. Called after flow CRUD so the
    *  navigation lands on a page that resolves through `demos.find(...)`. */
   refreshFlows: () => Promise<void> | void;
@@ -204,11 +191,7 @@ export function DemoView({
   demos,
   detail,
   loading,
-  runs,
-  nodeEvents,
-  statusByNode,
   externalReloadSignal,
-  onPlayNode,
   refreshFlows,
   applyDetail,
   canvasRef,
@@ -434,9 +417,9 @@ export function DemoView({
       if (!isCloud) return base;
       // Cloud is the collaborative canvas: no host execution, no local
       // filesystem. Dropping these optional adapter methods hides the
-      // Play / Open-in-editor / Reveal-in-Finder affordances in the canvas
+      // Open-in-editor / Reveal-in-Finder affordances in the canvas
       // (their backend endpoints are 409-guarded in cloud anyway).
-      const { playAction, openFile, revealFile, ...rest } = base;
+      const { openFile, revealFile, ...rest } = base;
       return rest;
     },
     [project, flow, isCloud],
@@ -2982,14 +2965,6 @@ export function DemoView({
     );
   }
 
-  // US-007: latest StatusReport for the currently selected node, forwarded into
-  // <SeeflowCanvas>'s built-in sidebar. Sliced down to the single first-
-  // selected node (multi-select keeps the first id as the inspector target).
-  // Undefined when there's no node selection or the node has no entry in the
-  // status map (no statusAction defined, or the script hasn't emitted yet).
-  const sidebarNodeId = selectedIds[0];
-  const sidebarStatusReport = sidebarNodeId ? statusByNode[sidebarNodeId] : undefined;
-
   return (
     <div className="relative h-full w-full">
       {detail && !detail.valid ? (
@@ -3105,9 +3080,6 @@ export function DemoView({
           // Post-US-008, file routes are addressed by project slug — so we
           // pass the URL slug here, not the registry entry id (`flowId`).
           projectId={project}
-          // US-031: flowSlug drives the component-runtime's script-action URL
-          // composition (`/api/projects/:project/flows/:flow/nodes/.../actions/...`).
-          flowSlug={flow}
           // Cloud only: image assets live behind the token-gated file route, and
           // a native <img> GET can't carry the bearer header — so resolve the
           // src through apiFetch into a blob URL. Local stays on the direct URL.
@@ -3123,11 +3095,8 @@ export function DemoView({
           selectedConnectorIds={selectedConnectorIds}
           onSelectionChange={onSelectionChange}
           runtime={{
-            runs,
-            statuses: statusByNode,
             pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides },
           }}
-          onPlayNode={onPlayNode}
           onNodePositionChange={onNodePositionChange}
           onNodePositionsChange={onNodePositionsChange}
           onNodeResize={onNodeResize}
@@ -3186,7 +3155,6 @@ export function DemoView({
           pendingEditNodeId={pendingEditNodeId}
           canvasMode={canvasMode}
           onCanvasModeChange={setCanvasMode}
-          statusReport={sidebarStatusReport}
           onNameChange={onNodeNameChange}
           onDescriptionChange={onNodeDescriptionChange}
           onDetailChange={onNodeDetailChange}

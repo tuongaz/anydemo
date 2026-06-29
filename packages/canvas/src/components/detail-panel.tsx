@@ -21,8 +21,7 @@ import {
   setStoredDetailPanelWidth,
   startResizeGesture,
 } from '../lib/detail-panel-width.ts';
-import { StatusBadge } from '../nodes/status-badge.tsx';
-import type { Connector, FlowNode, StatusReport } from '../types.ts';
+import type { Connector, FlowNode } from '../types.ts';
 import { Button } from '../ui/button.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
 import { IconRenderer } from './icon-renderer.tsx';
@@ -67,13 +66,6 @@ export interface DetailPanelProps {
    */
   onReplaceImage?: (nodeId: string, file: File) => void;
   /**
-   * US-007: latest StatusReport for the selected node, when one exists in the
-   * hook's `statusByNode` map. Renders the Status section above the editable
-   * fields. Undefined → section is hidden so a node with no statusAction looks
-   * identical to before.
-   */
-  statusReport?: StatusReport & { ts: number };
-  /**
    * Controlled visibility. Parent (SeeflowCanvas) keeps DetailPanel mounted
    * while the sidebar feature is enabled and toggles `open` to drive a CSS
    * `width` transition on the outer aside (0 ↔ stored width). Mounting and
@@ -97,7 +89,6 @@ export function DetailPanel({
   onDetailChange,
   onIconChange,
   onReplaceImage,
-  statusReport,
   open = true,
   onClose,
 }: DetailPanelProps) {
@@ -284,7 +275,6 @@ export function DetailPanel({
             </div>
 
             <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
-              {statusReport ? <StatusSection report={statusReport} /> : null}
               <EditableField
                 nodeId={inspectableNode.id}
                 value={description}
@@ -732,99 +722,6 @@ export function HtmlNodeSection({
         </div>
       ) : null}
     </div>
-  );
-}
-
-/**
- * Format `ts` (ms epoch) as a coarse "Ns ago" / "Nm ago" / "Nh ago" string
- * relative to `now`. We don't need second-level precision — the section is a
- * heartbeat indicator, not a clock — so we floor each unit and clamp the
- * "just now" window to ≤1s to avoid showing "0s ago".
- */
-export function formatRelativeTime(ts: number, now: number): string {
-  const diffMs = Math.max(0, now - ts);
-  if (diffMs < 1000) return 'just now';
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-/**
- * Stringify a `data` value for display in the key/value table. Strings are
- * rendered as-is; everything else (numbers, booleans, arrays, nested objects)
- * goes through JSON.stringify so the user sees the structural value. `null`
- * and `undefined` get an explicit textual stand-in.
- */
-function formatStatusValue(value: unknown): string {
-  if (value === null) return 'null';
-  if (value === undefined) return 'undefined';
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-export function StatusSection({
-  report,
-  // Test seam: callers in tests can pin `now` so the relative-time string is
-  // deterministic. Production renders ignore this and read Date.now() at the
-  // call site so a re-render after an SSE tick recomputes the "Ns ago" label.
-  now = Date.now(),
-}: {
-  report: StatusReport & { ts: number };
-  now?: number;
-}) {
-  const entries = report.data ? Object.entries(report.data) : [];
-  return (
-    <section
-      className="sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs"
-      data-testid="detail-panel-status"
-      data-state={report.state}
-    >
-      <div className="sf:flex sf:items-center sf:justify-between sf:gap-2">
-        <StatusBadge
-          state={report.state}
-          summary={report.summary}
-          data-testid="detail-panel-status-badge"
-        />
-        <span
-          className="sf:shrink-0 sf:text-[10px] sf:text-muted-foreground"
-          data-testid="detail-panel-status-relative-time"
-        >
-          {`Last updated: ${formatRelativeTime(report.ts, now)}`}
-        </span>
-      </div>
-      {report.detail ? (
-        <div
-          data-testid="detail-panel-status-detail"
-          className="sf:whitespace-pre-wrap sf:wrap-break-word sf:rounded sf:bg-muted/40 sf:px-2 sf:py-1 sf:text-[11px] sf:text-foreground"
-        >
-          {report.detail}
-        </div>
-      ) : null}
-      {entries.length > 0 ? (
-        <dl
-          data-testid="detail-panel-status-data"
-          className="sf:grid sf:grid-cols-[auto_1fr] sf:gap-x-3 sf:gap-y-1 sf:text-[11px]"
-        >
-          {entries.map(([key, value]) => (
-            <div key={key} className="contents" data-testid="detail-panel-status-data-row">
-              <dt className="sf:truncate sf:font-medium sf:text-muted-foreground">{key}</dt>
-              <dd className="sf:break-all sf:font-mono sf:text-foreground">
-                {formatStatusValue(value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-    </section>
   );
 }
 

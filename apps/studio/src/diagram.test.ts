@@ -38,8 +38,8 @@ const rectsOverlap = (a: OutNode, b: OutNode): boolean => {
 };
 
 // Both old playNode + stateNode helpers collapsed to type:'rectangle' under
-// the flat schema. The layout tests in this file don't depend on playAction
-// presence, so a single rectangle helper covers every call site.
+// the flat schema. The layout tests in this file don't depend on node
+// capabilities, so a single rectangle helper covers every call site.
 // playRectangle + stateRectangle are aliases retained for sites where the
 // distinction documents intent (a node that "would be" the trigger vs. a
 // downstream observer).
@@ -47,30 +47,12 @@ const rectangle = (id: string, x = 0, y = 0) => ({
   id,
   type: 'rectangle',
   position: { x, y },
-  data: { label: id, stateSource: { kind: 'request' as const } },
+  data: { label: id },
 });
 
-const playRectangle = (id: string, x = 0, y = 0) => ({
-  id,
-  type: 'rectangle',
-  position: { x, y },
-  data: {
-    label: id,
-    stateSource: { kind: 'request' as const },
-    playAction: {
-      kind: 'script' as const,
-      interpreter: 'bun',
-      scriptPath: `scripts/${id}.ts`,
-    },
-  },
-});
+const playRectangle = rectangle;
 
-const stateRectangle = (id: string, x = 0, y = 0) => ({
-  id,
-  type: 'rectangle',
-  position: { x, y },
-  data: { label: id, stateSource: { kind: 'request' as const } },
-});
+const stateRectangle = rectangle;
 
 const connector = (source: string, target: string) => ({
   id: `${source}-${target}`,

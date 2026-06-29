@@ -54,8 +54,8 @@ describe('createSseParser', () => {
 
   it('handles CRLF frame boundaries', () => {
     const { events, parser } = collect();
-    parser.feed('event: node:done\r\ndata: x\r\n\r\n');
-    expect(events[0]?.type).toBe('node:done');
+    parser.feed('event: flow:reload\r\ndata: x\r\n\r\n');
+    expect(events[0]?.type).toBe('flow:reload');
     expect(events[0]?.event.data).toBe('x');
   });
 

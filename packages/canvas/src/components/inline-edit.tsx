@@ -24,8 +24,7 @@ export interface InlineEditProps {
   commitMode?: 'enter-commits' | 'blur-only';
   /**
    * Empty value is rejected: revert to the previous value with a shake animation
-   * and exit without firing onCommit. Used for fields that the schema mandates
-   * (e.g. PlayNode/StateNode label).
+   * and exit without firing onCommit. Used for fields that the schema mandates.
    */
   required?: boolean;
   /** data-field attribute for tests; pairs with data-testid='inline-edit-input'. */

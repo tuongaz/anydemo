@@ -1,5 +1,5 @@
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { type Page, test as base } from '@playwright/test';
 import { type StudioHandle, spawnStudio } from '../../integration/support/studio-harness.ts';
 import { splitFlow } from '../../src/merge.ts';
@@ -38,7 +38,6 @@ export async function setStudioTheme(page: Page, theme: StudioTheme): Promise<vo
 
 const STUDIO_DIR = resolve(import.meta.dir, '../..');
 const FIXTURE_FLOW_PATH = join(STUDIO_DIR, 'integration/fixtures/kitchen-sink.flow.json');
-const FIXTURE_NOOP_PATH = join(STUDIO_DIR, 'integration/fixtures/scripts/noop.ts');
 
 export interface RegisteredFlow {
   id: string;
@@ -101,16 +100,6 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
 
   writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flow, null, 2)}\n`);
   writeFileSync(join(repoPath, 'style.json'), `${JSON.stringify(style, null, 2)}\n`);
-
-  // The rectangle node's playAction.scriptPath is relative to
-  // `<repoPath>/nodes/<id>/`. resolveScript realpaths the target, so the
-  // script file MUST exist before any /play call. The fixture pins the
-  // playable rectangle id to `n1` — under the flat schema, rectangle is
-  // the sole renderer that draws capability chrome, and playAction lives
-  // as an optional data field rather than encoded in the type tag.
-  const noopDest = join(repoPath, 'nodes', 'n1', 'scripts', 'noop.ts');
-  mkdirSync(dirname(noopDest), { recursive: true });
-  copyFileSync(FIXTURE_NOOP_PATH, noopDest);
 
   const res = await fetch(`${studio.baseURL}/api/flows/register`, {
     method: 'POST',

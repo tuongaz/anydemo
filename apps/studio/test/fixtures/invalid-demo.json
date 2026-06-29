@@ -9,15 +9,7 @@
         "y": 100
       },
       "data": {
-        "name": "POST /checkout",
-        "stateSource": {
-          "kind": "request"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "scriptPath": "scripts/play.ts"
-        }
+        "name": "POST /checkout"
       }
     }
   ],

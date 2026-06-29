@@ -14,11 +14,11 @@ run should be able to skip a lot of grep work by reading it.
 
 ## Lifecycle
 
-There are exactly **two disk writes per `/seeflow` run**, both silent
-(no user-facing narration). Everything else is read-only or in-memory
-staging. Writing outside these two points is the failure mode this file
-exists to prevent — premature rows for flows that may never register,
-or duplicate entries when a run aborts mid-flight.
+There is exactly **one disk write per `/seeflow` run**, silent (no
+user-facing narration). Everything else is read-only or in-memory
+staging. Writing earlier is the failure mode this file exists to
+prevent — premature rows for flows that may never register, or
+duplicate entries when a run aborts mid-flight.
 
 - **Read** at the start of every `/seeflow` run (`phases/p0-preflight.md`).
 - **Pass** the contents into both `seeflow-code-analyzer` and
@@ -29,18 +29,14 @@ or duplicate entries when a run aborts mid-flight.
   is the heavy contributor — every fact it learns about boot, setup,
   ports, env vars, fixtures, gotchas, and tech adaptations MUST land in
   the staged buffer. **Do not write to disk yet.**
-- **Save #1 — Silent, Phase 3 step 7** (after `flows:layout`, before the
-  canvas review). First disk hit. Merge the staged `learnUpdates` into
+- **Save — Silent, Phase 3 step 7** (after `flows:layout`, before the
+  canvas review). The disk hit. Merge the staged `learnUpdates` into
   the file AND upsert the "Flows already created" row by
   `<projectSlug>/<flowSlug>` with today's date + a one-line purpose.
   The studio has already registered the flow by this point, so the row
-  reflects a real entity.
-- **Save #2 — Silent, at the final-flow announcement** (Phase 6
-  `ok:true` exit, Phase 3 "Layout approved + static" exit, or the
-  document-branch static exit). Re-upsert the same row (idempotent by
-  `<projectSlug>/<flowSlug>`) and append anything Phases 5–6 surfaced —
-  a new gotcha, an emulator quirk, a working seed command, a
-  tech-adaptation override.
+  reflects a real entity. If the user review applies layout edits,
+  re-run this write afterward (idempotent by `<projectSlug>/<flowSlug>`)
+  so any new fact the edits surfaced lands too.
 
 The file always lives at `<host>/.seeflow/LEARN.md` — one shared
 file per host repo, **never** inside a per-project or per-flow folder
@@ -99,14 +95,15 @@ seeds data. Examples:
 - Factory module: `tests/factories/orders.ts`
 - Seed command: `bun run seed`
 - File-drop watchers: `<path>` (watches for *.json)
-- Sample payloads to reuse for play scripts:
+- Sample payloads that document how data enters the system:
   - `POST /orders` body — `tests/fixtures/orders/create-min.json`
   - Webhook envelope — `tests/fixtures/webhooks/payment-succeeded.json`
 
 ## Data entry paths
 
-For each major resource the system owns, what is the recommended way to
-get data into it? (See `core-rules.md` Rule 2.)
+For each major resource the system owns, what is the natural way data
+enters it? Captures how the system actually feeds itself, which sharpens
+each resource node's `detail.md`. (See `core-rules.md` Rule 3.)
 
 | Resource | Preferred entry | Don't |
 |---|---|---|
@@ -116,8 +113,8 @@ get data into it? (See `core-rules.md` Rule 2.)
 
 ## Known endpoints
 
-Short list, only those a flow is likely to play. Don't dump the whole
-OpenAPI surface.
+Short list, only those a flow is likely to surface as nodes. Don't dump
+the whole OpenAPI surface.
 
 | Method | Path | Body shape | Auth |
 |---|---|---|---|
@@ -268,20 +265,19 @@ applies the merging rules above.
   `references/tech/README.md`. One entry per detected tech. No
   `evidence` field — the matching signal is implicit in the ref.
 - **`techAdaptations`** *(object, keyed by `techId`)* — project-specific
-  overrides the orchestrator forwards to play/status/node-planner so
-  they prefer project conventions over the ref's general templates.
-  Every child field is optional; emit only what you actually found:
+  overrides the orchestrator forwards to the node-planner so it prefers
+  project conventions over the ref's general templates when modelling
+  nodes and writing node detail. Every child field is optional; emit
+  only what you actually found:
   - `helpers` *(string[])* — file paths or symbol references to
-    existing publisher/consumer/uploader/repository helpers the play
-    or status script should reuse.
+    existing publisher/consumer/uploader/repository helpers, useful
+    context for the node's `detail.md`.
   - `emulator` *(string)* — one-line how-to: which compose service or
     env var wires up local mode for this tech.
   - `conventions` *(string[])* — naming patterns, required attributes,
-    validation rules that scripts must comply with.
-  - `fixtures` *(string[])* — paths to realistic payloads the scripts
-    should copy from instead of inventing.
+    validation rules the project enforces for this tech.
+  - `fixtures` *(string[])* — paths to realistic payloads that document
+    the tech's envelope shape.
   - `gotchas` *(string[])* — tech-specific quirks discovered this run.
   Omit a `techId` entirely if no adaptation was found — empty entries
-  are noise. **Save #2 updates this section** whenever a play or status
-  script (in Phase 5 or 6) discovers a new project-specific fact about
-  a detected tech.
+  are noise.

@@ -26,11 +26,6 @@ export type {
   NodeSemanticBase,
   NodeType,
   NodeVisual,
-  ScriptAction,
-  StateSource,
-  StatusAction,
-  StatusReport,
-  StatusReportState,
 } from '@seeflow/canvas';
 
 export interface FlowSummary {
@@ -130,13 +125,6 @@ export const fetchFlowDetail = async (project: string, flow: string): Promise<Fl
   if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
   return (await res.json()) as FlowDetail;
 };
-
-export interface PlayResult {
-  runId: string;
-  status?: number;
-  body?: unknown;
-  error?: string;
-}
 
 export interface CreateProjectBody {
   /** Optional: when omitted the studio scaffolds under ~/.seeflow/projects/<slug>. */
@@ -373,26 +361,3 @@ export const revealProjectFile = async (
   projectId: string,
   path: string,
 ): Promise<FileActionResult> => requestFileAction(projectId, 'reveal', path);
-
-export const playFlowNode = async (
-  project: string,
-  flow: string,
-  nodeId: string,
-): Promise<PlayResult> => {
-  const url = `${flowApiBase(project, flow)}/play/${encodeURIComponent(nodeId)}`;
-  const res = await apiFetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(errorBody?.error ?? `POST ${url} → ${res.status}`);
-  }
-  return (await res.json()) as PlayResult;
-};

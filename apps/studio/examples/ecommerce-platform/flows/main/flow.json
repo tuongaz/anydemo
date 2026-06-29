@@ -16,16 +16,7 @@
       "data": {
         "name": "API Gateway",
         "description": "Auth, rate-limiting, routing.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "request"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "args": ["run"],
-          "scriptPath": "scripts/play.ts"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -34,10 +25,7 @@
       "data": {
         "name": "Auth Service",
         "description": "JWT issuance + OAuth2 / OIDC.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "request"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -46,10 +34,7 @@
       "data": {
         "name": "Product Catalog",
         "description": "SKUs, variants, pricing, full-text search.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "request"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -58,16 +43,7 @@
       "data": {
         "name": "Cart Service",
         "description": "Add/remove items, apply coupons, checkout.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "request"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "args": ["run"],
-          "scriptPath": "scripts/play.ts"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -76,16 +52,7 @@
       "data": {
         "name": "Order Service",
         "description": "pending → confirmed → shipped → delivered.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "event"
-        },
-        "playAction": {
-          "kind": "script",
-          "interpreter": "bun",
-          "args": ["run"],
-          "scriptPath": "scripts/play.ts"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -94,10 +61,7 @@
       "data": {
         "name": "Payment Service",
         "description": "Stripe + PayPal gateway integration.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "event"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
@@ -106,10 +70,7 @@
       "data": {
         "name": "Notification Service",
         "description": "Email + SMS + push via AWS SES / SNS.",
-        "detail": "file://detail.md",
-        "stateSource": {
-          "kind": "event"
-        }
+        "detail": "file://detail.md"
       }
     },
     {
