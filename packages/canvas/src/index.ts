@@ -51,6 +51,9 @@ export type {
   NodeType,
   NodeVisual,
   SetComponentAction,
+  TableColumn,
+  TableNodeData,
+  TableRow,
 } from './types.ts';
 
 // ----------------------------------------------------------------------------
@@ -208,6 +211,7 @@ export {
   buildNewImageData,
   buildNewLineData,
   buildNewShapeData,
+  buildNewTableData,
   NEW_GROUP_NAME,
   NEW_LINE_STROKE_WIDTH,
   NEW_NODE_BORDER_WIDTH,
@@ -218,6 +222,7 @@ export type {
   ImageDataDefaults,
   LineDataDefaults,
   ShapeDataDefaults,
+  TableDataDefaults,
 } from './lib/node-defaults.ts';
 
 export { scaleNodesWithinRect } from './lib/scale-nodes.ts';

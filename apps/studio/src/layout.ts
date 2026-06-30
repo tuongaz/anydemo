@@ -88,6 +88,9 @@ const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: numb
   // Mirrors GROUP_DEFAULT_SIZE in @seeflow/canvas group-node.tsx. Group nodes
   // are containers; this default only applies when one lacks explicit dims.
   group: { width: 320, height: 220 },
+  // Tables derive their footprint from columns/rows; this fallback mirrors the
+  // canvas's default 3×3 grid (3·140 × 3·40) for the rare table with no cells.
+  table: { width: 420, height: 120 },
 };
 
 // Sticky / text variants are floating annotations. They never participate in

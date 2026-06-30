@@ -205,6 +205,9 @@ export const NodeTypeSchema = z.enum([
   // `data.childIds` (membership) and is deliberately kept out of
   // GEOMETRIC_NODE_TYPES so it routes through its own GroupNodeData variant.
   'group',
+  // A `table` is a Miro-style visual grid — its own structural data
+  // (columns/rows/cells) routes through the TableNodeData variant.
+  'table',
 ]);
 
 // --- Component node spec/action schemas --------------------------------------
@@ -372,6 +375,36 @@ const ResolvedGroupNodeData = z.object({
   childIds: z.array(z.string()).default([]),
 });
 
+// Table node — a Miro-style visual grid of plain-text cells. Each column/row
+// carries a stable `id` AND its own pixel size, so structure + sizing are
+// intrinsic and self-contained in flow.json (no width side-table keyed by id;
+// insert/delete/resize never split one logical edit across flow.json +
+// style.json). `cells` is sparse, keyed `${rowId}:${colId}`; empty cells are
+// omitted. The node footprint is derived (Σ widths × Σ heights), never stored.
+export const TableColumnSchema = z.object({
+  id: z.string().min(1),
+  width: z.number().positive(),
+});
+export const TableRowSchema = z.object({
+  id: z.string().min(1),
+  height: z.number().positive(),
+});
+
+// Table-specific structural fields shared by the resolved + on-disk shapes.
+const TableDataShape = {
+  columns: z.array(TableColumnSchema).min(1),
+  rows: z.array(TableRowSchema).min(1),
+  cells: z.record(z.string(), z.string()).default({}),
+  headerRow: z.boolean().optional(),
+};
+
+const ResolvedTableNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  ...TableDataShape,
+});
+
 const NodeBaseShape = {
   id: z.string().min(1),
   position: PositionSchema,
@@ -426,6 +459,11 @@ const NodeSchema = z.discriminatedUnion('type', [
     ...NodeBaseShape,
     type: z.literal('group'),
     data: ResolvedGroupNodeData,
+  }),
+  z.object({
+    ...NodeBaseShape,
+    type: z.literal('table'),
+    data: ResolvedTableNodeData,
   }),
 ]);
 
@@ -730,6 +768,19 @@ const FlowGroupNodeData = z
   })
   .strict();
 
+// Table node, on-disk shape. Structure + per-column/row sizing are SEMANTIC and
+// intrinsic (the whole table is self-contained), so they persist to flow.json —
+// NOT style.json. `.strict()` rejects any stray visual key that should have
+// routed to style.json (border/font/colors ride the shared visual base and are
+// split out by splitFlow's NODE_STYLE_KEYS, exactly like every other node).
+const FlowTableNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    ...TableDataShape,
+  })
+  .strict();
+
 const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
@@ -844,6 +895,14 @@ export const FlowGroupNodeSchema = z
   })
   .strict();
 
+export const FlowTableNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('table'),
+    data: FlowTableNodeData,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowRectangleNodeSchema,
   FlowEllipseNodeSchema,
@@ -867,6 +926,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowFreehandNodeSchema,
   FlowLineNodeSchema,
   FlowGroupNodeSchema,
+  FlowTableNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {

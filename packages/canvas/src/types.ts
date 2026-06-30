@@ -102,7 +102,8 @@ export type NodeType =
   | 'linkflow'
   | 'freehand'
   | 'line'
-  | 'group';
+  | 'group'
+  | 'table';
 
 /**
  * Set of node types creatable via the canvas toolbar's draw-mode (click /
@@ -111,7 +112,7 @@ export type NodeType =
  * `image`/`html`/`icon`/`component` are NOT drawable — they each need an
  * upload, picker, or dedicated authoring flow.
  */
-export type DrawableNodeType = GeometricNodeType | 'linkflow' | 'line';
+export type DrawableNodeType = GeometricNodeType | 'linkflow' | 'line' | 'table';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
@@ -294,6 +295,45 @@ export interface GroupNodeData extends NodeSemanticBase, NodeVisual, NodeCapabil
   childIds: string[];
 }
 
+/**
+ * A single column in a `type:'table'` node. `id` is stable (survives
+ * insert/delete of other columns); `width` is the column's own pixel width so
+ * sizing co-locates with structure (the whole table is self-contained in
+ * flow.json — no separate width side-table keyed by column id).
+ */
+export interface TableColumn {
+  id: string;
+  width: number;
+}
+
+/** A single row in a `type:'table'` node. `id` is stable; `height` is its own pixel height. */
+export interface TableRow {
+  id: string;
+  height: number;
+}
+
+/**
+ * `type:'table'` node data — a Miro-style visual grid of plain-text cells.
+ * Structure + sizing are intrinsic and self-contained:
+ *   - `columns` / `rows` carry stable ids AND their own width/height, so
+ *     insert/delete/resize never churn array indices or split one logical edit
+ *     across flow.json + style.json.
+ *   - `cells` is sparse, keyed `${rowId}:${colId}` → text; empty cells are
+ *     omitted entirely.
+ * The overall node footprint is DERIVED (Σ widths × Σ heights, see
+ * `deriveTableSize`), never stored. Generic styling (border, font, colors) still
+ * rides the shared `NodeVisual` fields and routes to style.json like every other
+ * node. Cell text is the content; there is no per-cell formatting in v1.
+ */
+export interface TableNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  columns: TableColumn[];
+  rows: TableRow[];
+  /** Cell text keyed by `${rowId}:${colId}`. Empty cells are omitted (sparse). */
+  cells: Record<string, string>;
+  /** When true, the first row renders as a header (muted fill + semibold text). */
+  headerRow?: boolean;
+}
+
 interface NodeBase {
   id: string;
   position: { x: number; y: number };
@@ -308,7 +348,8 @@ export type FlowNode =
   | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData })
   | (NodeBase & { type: 'freehand'; data: FreehandNodeData })
   | (NodeBase & { type: 'line'; data: LineNodeData })
-  | (NodeBase & { type: 'group'; data: GroupNodeData });
+  | (NodeBase & { type: 'group'; data: GroupNodeData })
+  | (NodeBase & { type: 'table'; data: TableNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.

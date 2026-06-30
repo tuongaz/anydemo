@@ -28,29 +28,34 @@ menu.
 ## Data model
 
 New node type `table`, discriminated by the top-level `type` field like every
-other node. Follows the existing **semantic (flow.json) vs visual (style.json)**
-split used by geometric nodes (which externalize `width`/`height`).
+other node.
 
-**Semantic (flow.json)** — structure & content:
+**Refinement during implementation (vs. this brainstorm):** `merge.ts` routes any
+node-`data` key not in its visual set to flow.json, so the table's structure
+**and** its per-column/row sizing live **self-contained in flow.json** — and each
+column/row carries *its own* width/height rather than a separate side-table keyed
+by id. This avoids splitting one logical edit (add/delete/resize a column) across
+flow.json + style.json, since the widths are structurally coupled to the column
+ids. Only generic styling (border/font/colors) still routes to style.json.
+
+**Semantic + sizing (flow.json)** — the whole grid, self-contained:
 
 ```ts
 {
-  columns: Array<{ id: string }>,    // order = array order
-  rows:    Array<{ id: string }>,    // order = array order
+  columns: Array<{ id: string; width: number }>,   // order = array order
+  rows:    Array<{ id: string; height: number }>,  // order = array order
   cells:   Record<string, string>,   // key `${rowId}:${colId}` -> text; empty omitted
   headerRow?: boolean,               // first row rendered as a header
 }
 ```
 
-**Visual (style.json, resolved into the node)** — sizing & styling:
+**Visual (style.json, resolved into the node)** — generic styling only:
 
 ```ts
 {
-  colWidths:  Record<string, number>,  // by column id
-  rowHeights: Record<string, number>,  // by row id
   borderColor?, borderSize?, borderStyle?,
   fontSize?, fontFamily?, textAlign?,
-  headerBg?: ColorToken, cornerRadius?, shadow?,
+  backgroundColor?: ColorToken, cornerRadius?, shadow?,
 }
 ```
 
@@ -59,16 +64,18 @@ split used by geometric nodes (which externalize `width`/`height`).
 - **Stable ids over a 2D `string[][]`** — inserting a column in the middle,
   deleting a row, or resizing must not churn array indices. Ids keep each cell's
   text attached to the right place across structural edits.
+- **Width/height embedded in each column/row** — sizing co-locates with the id
+  it sizes; one structural edit is one flow.json write, no cross-file coupling.
 - **Sparse `cells` map** — empty cells are simply absent; no padding.
-- **Derived size** — `width = Σ colWidths + borders`, `height = Σ rowHeights +
-  borders`. No separate `width`/`height` field to keep in sync.
-- **flow.json/style.json symmetry** — structure is semantic, sizing/styling is
-  visual, matching the resolver pattern so the on-disk/in-memory schemas stay
-  symmetric.
+- **Derived size** — `width = Σ column widths`, `height = Σ row heights`. No
+  separate `width`/`height` field to keep in sync.
+- **`headerBg` deferred** — the header row renders a muted fill + semibold text
+  derived from `headerRow: true`; no separate colour field in v1.
 
-**Defaults on create:** 3 columns × 3 rows, ~120px wide × ~40px tall cells,
-`headerRow: true`. A drag-create distributes the dragged width/height across the
-seed columns/rows; a plain click uses the defaults.
+**Defaults on create:** 3 columns × 3 rows, 140px wide × 40px tall cells,
+`headerRow: true`. A table is sized by its own columns/rows, so the toolbar
+drag/tap drops a default 3×3 grid at the cursor (the dragged box isn't mapped to
+cell sizes in v1).
 
 ## Rendering & interactions
 

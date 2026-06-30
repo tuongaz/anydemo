@@ -16,6 +16,7 @@ import {
   Square,
   Sticker,
   StickyNote,
+  Table,
   Triangle,
   Type,
   User,
@@ -137,6 +138,9 @@ const SECONDARY_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
   { shape: 'sticky', label: 'Sticky note', commandId: 'tool.sticky', Icon: StickyNote },
   { shape: 'text', label: 'Text', commandId: 'tool.text', Icon: Type },
   { shape: 'linkflow', label: 'Link node', commandId: 'tool.linkflow', Icon: Link2 },
+  // Table — a Miro-style visual grid. Drag-create drops a default 3×3 grid;
+  // rows/columns are added, removed, and resized on the node itself.
+  { shape: 'table', label: 'Table', commandId: 'tool.table', Icon: Table },
 ];
 
 // Illustrative shapes live behind a single "Shape" toolbar trigger that

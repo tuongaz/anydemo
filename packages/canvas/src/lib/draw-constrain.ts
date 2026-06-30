@@ -45,7 +45,8 @@ export const PERFECT_SHAPE_ASPECT: Partial<Record<GeometricNodeType, number>> = 
 export function perfectShapeAspect(shape: DrawableNodeType | null | undefined): number {
   // `line` has no box aspect (its Shift/straight constraint is handled by the
   // line draw-commit), so it falls through to the square default like linkflow.
-  if (shape == null || shape === 'linkflow' || shape === 'line') return 1;
+  // `table` is a free rectangle with no "perfect" form either.
+  if (shape == null || shape === 'linkflow' || shape === 'line' || shape === 'table') return 1;
   return PERFECT_SHAPE_ASPECT[shape] ?? 1;
 }
 

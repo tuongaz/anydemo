@@ -117,6 +117,7 @@ import { LineNode } from '../nodes/line-node.tsx';
 import { LINKFLOW_DEFAULT_SIZE, LINKFLOW_MIN_SIZE, LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
+import { TABLE_DEFAULT_SIZE, TableNode, type TablePatch } from '../nodes/table-node.tsx';
 import type { ResizeAlignmentHooks } from '../nodes/use-resize-gesture.ts';
 import type {
   CanvasMode,
@@ -569,6 +570,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   onNodeNameChange?: (nodeId: string, name: string) => void;
   /** Persist a new node description (PATCH /nodes/:id { description }). */
   onNodeDescriptionChange?: (nodeId: string, description: string) => void;
+  /**
+   * Persist a `type:'table'` structural edit — a whole-data patch
+   * (columns/rows/cells/headerRow) produced by the table-ops transforms after
+   * a cell edit, border-drag resize, or add/remove row/column. The host commits
+   * via `adapter.updateNode(nodeId, patch)` (one undo entry). Threaded into
+   * every table node's runtime data as `onTableDataChange`; absent (view/mini)
+   * → the table renders fully static.
+   */
+  onNodeTableDataChange?: (nodeId: string, patch: TablePatch) => void;
   /** Persist a new image-node caption (PATCH /nodes/:id { data.caption }). */
   onNodeCaptionChange?: (nodeId: string, caption: string) => void;
   /** Persist a new connector label (PATCH /connectors/:id { label }). */
@@ -650,6 +660,18 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * is bound to {@link onCreateShapeNode}) but a commit no-ops.
    */
   onCreateLinkflowNode?: (
+    position: { x: number; y: number },
+    dims: { width: number; height: number },
+  ) => void;
+  /**
+   * Commit a new `type:'table'` node from the toolbar's Table tile. `position`
+   * is the drop point in flow coords; `dims` is the default footprint of the
+   * seeded 3×3 grid (the table is sized by its columns/rows, not a free drag).
+   * The host owns id allocation, the {@link buildNewTableData} default data,
+   * optimistic override, and createNode persistence. Absent → the Table tile
+   * commits nothing on pointer-up.
+   */
+  onCreateTableNode?: (
     position: { x: number; y: number },
     dims: { width: number; height: number },
   ) => void;
@@ -1538,6 +1560,11 @@ const nodeTypes = {
   // `group` also opts the wrapper into xyflow's `.react-flow__node-group` class
   // (see index.css carve-outs that keep its low zIndex stable on selection).
   group: GroupNode,
+  // Miro-style visual grid. Structure (columns/rows/cells) lives in the node
+  // data; the renderer drives inline cell edit, border-drag resize, and
+  // add/remove via the pure transforms in `lib/table-ops.ts` — every gesture
+  // commits a whole-`data` patch through `data.onTableDataChange` (edit mode).
+  table: TableNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 
@@ -2223,12 +2250,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onUngroup,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onNodeTableDataChange,
     onNodeCaptionChange,
     onConnectorLabelChange,
     onCreateShapeNode,
     onCreateIconNode,
     onCreateFreehandNode,
     onCreateLinkflowNode,
+    onCreateTableNode,
     onCreateLineNode,
     onUpdateLineEndpoints,
     onCreateImageFromFile,
@@ -3098,7 +3127,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // Done before the screenToFlowPosition projection so the committed node
       // paints exactly where the ghost previewed it.
       const squared =
-        constrain && shape !== 'linkflow' && shape !== 'line'
+        constrain && shape !== 'linkflow' && shape !== 'line' && shape !== 'table'
           ? perfectDragBox(start, release, perfectShapeAspect(shape))
           : release;
       const minX = Math.min(start.x, squared.x);
@@ -3137,6 +3166,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           ? LINKFLOW_DEFAULT_SIZE.height
           : Math.max(dragFlowHeight, LINKFLOW_MIN_SIZE.height);
         onCreateLinkflowNode?.(flowMin, { width, height });
+        return;
+      }
+      // Table commit: a table is sized by its columns/rows (a seeded 3×3 grid),
+      // not a free drag — so any draw gesture (tap or drag) drops a default-size
+      // table at the gesture's top-left. The host builds the 3×3 data via
+      // buildNewTableData; TABLE_DEFAULT_SIZE is the matching footprint.
+      if (shape === 'table') {
+        onCreateTableNode?.(flowMin, TABLE_DEFAULT_SIZE);
         return;
       }
       // Line commit: a decorative line is defined by its two directional
@@ -3189,6 +3226,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       onCreateIconNode,
       onCreateFreehandNode,
       onCreateLinkflowNode,
+      onCreateTableNode,
       onCreateLineNode,
     ],
   );
@@ -3700,6 +3738,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             }
             return undefined;
           })(),
+          // type:'table'-only: every structural edit (cell text, resize,
+          // add/remove row/col) commits a whole-data patch through this. Gated
+          // on edit mode so view/mini tables render fully static.
+          onTableDataChange:
+            isEditMode && merged.type === 'table' ? onNodeTableDataChange : undefined,
           onCaptionChange: (() => {
             // Image nodes render an optional caption below the image; wire the
             // canvas-side inline edit so a dblclick on the image lands a caption
@@ -3808,6 +3851,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     nodeOverrides,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onNodeTableDataChange,
     onNodeCaptionChange,
     onIconChange,
     onRetryImageUpload,
@@ -4984,7 +5028,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const constrain =
       drawShiftRef.current || Date.now() - drawShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
     const end =
-      constrain && drawShape !== 'linkflow' && drawShape !== 'line'
+      constrain && drawShape !== 'linkflow' && drawShape !== 'line' && drawShape !== 'table'
         ? perfectDragBox(drawStart, drawCurrent, perfectShapeAspect(drawShape))
         : drawCurrent;
     const minX = Math.min(drawStart.x, end.x);
@@ -5017,7 +5061,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // A line ghost is a thin segment, not a filled box — it paints its own preview
   // below and opts out of the geometric shape-chrome helpers (like linkflow).
   const isLineGhost = drawShape === 'line';
-  const isNonGeometricGhost = isLinkflowGhost || isLineGhost;
+  // A table ghost is a plain dashed box (the committed table is a 3×3 grid sized
+  // by its own columns/rows), so it opts out of the geometric shape-chrome too.
+  const isTableGhost = drawShape === 'table';
+  const isNonGeometricGhost = isLinkflowGhost || isLineGhost || isTableGhost;
   const ghostShapeClass = drawShape && !isNonGeometricGhost ? shapeChromeClass(drawShape) : '';
   const ghostShapeStyle =
     drawShape && !isNonGeometricGhost
@@ -6509,8 +6556,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                         // "create-and-connect-from-source" semantics don't
                         // compose with the linkflow's pick-a-target step. The
                         // toolbar tile remains the path for creating linkflow
-                        // nodes.
-                        if (shape === 'linkflow' || shape === 'line') return null;
+                        // nodes. Line + table are likewise not connect-from-source
+                        // targets, so they're dropped here too.
+                        if (shape === 'linkflow' || shape === 'line' || shape === 'table')
+                          return null;
                         return (
                           <button
                             key={shape}

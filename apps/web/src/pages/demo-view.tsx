@@ -46,10 +46,12 @@ import {
   SHAPE_DEFAULT_SIZE,
   SeeflowCanvas,
   type SeeflowCanvasHandle,
+  type TablePatch,
   applyNudge,
   buildNewGroupData,
   buildNewLineData,
   buildNewShapeData,
+  buildNewTableData,
   computeGroupBox,
   createRestAdapter,
   downscaleImageFile,
@@ -1299,6 +1301,24 @@ export function DemoView({
     [flowId, adapter, setNodeOverride],
   );
 
+  // type:'table' structural edit (cell text, resize, add/remove row/column).
+  // The canvas hands a whole-data patch (columns/rows/cells/headerRow) produced
+  // by the table-ops transforms; we commit it as a single updateNode PATCH (one
+  // undo entry via the history-wrapped adapter) with an optimistic override so
+  // the grid repaints before the SSE echo lands. Mirrors `onNodeNameChange`.
+  const onNodeTableDataChange = useCallback(
+    (nodeId: string, patch: TablePatch) => {
+      if (!flowId || !adapter) return;
+      setNodeOverride(nodeId, { data: patch } as Partial<FlowNode>);
+      setEditError(null);
+      adapter.updateNode(nodeId, patch).catch((err) => {
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode table data failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride],
+  );
+
   const onNodeDetailChange = useCallback(
     (nodeId: string, next: string) => {
       if (!flowId || !adapter) return;
@@ -1430,6 +1450,28 @@ export function DemoView({
         dropNodeOverride(id);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('createNode (linkflow) failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
+  );
+
+  // Toolbar Table drop. Mirrors `onCreateShapeNode`: client-side id + optimistic
+  // override. A table is sized by its own columns/rows, so the dragged `dims`
+  // are ignored — `buildNewTableData` seeds a default 3×3 grid (last-used border
+  // style overlaid). The structural fields persist to flow.json self-contained.
+  const onCreateTableNode = useCallback(
+    (position: Position, _dims: { width: number; height: number }) => {
+      if (!flowId || !adapter) return;
+      setEditError(null);
+      const id = `node-${shortId()}`;
+      const data = buildNewTableData(getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node);
+      const payload = { id, type: 'table' as const, position, data };
+      const optimistic: FlowNode = { id, type: 'table', position, data } as unknown as FlowNode;
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createNode (table) failed', err);
       });
     },
     [flowId, adapter, setNodeOverride, dropNodeOverride],
@@ -3108,12 +3150,14 @@ export function DemoView({
           onUngroup={flowId ? onUngroup : undefined}
           onNodeNameChange={onNodeNameChange}
           onNodeDescriptionChange={onNodeDescriptionChange}
+          onNodeTableDataChange={onNodeTableDataChange}
           onNodeCaptionChange={onNodeCaptionChange}
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
           onCreateIconNode={flowId ? onCreateIconNode : undefined}
           onCreateFreehandNode={flowId ? onCreateFreehandNode : undefined}
           onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
+          onCreateTableNode={flowId ? onCreateTableNode : undefined}
           onCreateLineNode={flowId ? onCreateLineNode : undefined}
           onUpdateLineEndpoints={flowId ? onUpdateLineEndpoints : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}

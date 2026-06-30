@@ -79,6 +79,7 @@ export type CommandId =
   | 'tool.document'
   | 'tool.linkflow'
   | 'tool.line'
+  | 'tool.table'
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.copy'
@@ -254,6 +255,14 @@ export const COMMANDS: readonly CommandDef[] = [
     id: 'tool.line',
     label: 'Line',
     description: 'Draw a straight line',
+    category: 'Tools',
+  },
+  // Table lives in the secondary primary group; like linkflow/line it doesn't
+  // claim a bare single-letter shortcut (the pool is exhausted).
+  {
+    id: 'tool.table',
+    label: 'Table',
+    description: 'Add a table',
     category: 'Tools',
   },
   {

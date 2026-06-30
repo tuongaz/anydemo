@@ -6,7 +6,9 @@ import {
   buildNewGroupData,
   buildNewImageData,
   buildNewShapeData,
+  buildNewTableData,
 } from './node-defaults.ts';
+import { TABLE_DEFAULT_COLS, TABLE_DEFAULT_ROWS } from './table-ops.ts';
 
 describe('buildNewShapeData', () => {
   it('rectangle gets borderSize=1 and fontSize=12 (flat schema: no data.shape)', () => {
@@ -238,5 +240,29 @@ describe('buildNewGroupData', () => {
     const b = buildNewGroupData(['y'], { width: 100, height: 100 });
     expect(a.childIds).toEqual(['x']);
     expect(b.childIds).toEqual(['y']);
+  });
+});
+
+describe('buildNewTableData', () => {
+  it('seeds a default grid of unique column/row ids with no cells', () => {
+    const data = buildNewTableData();
+    expect(data.columns).toHaveLength(TABLE_DEFAULT_COLS);
+    expect(data.rows).toHaveLength(TABLE_DEFAULT_ROWS);
+    expect(data.cells).toEqual({});
+    expect(data.headerRow).toBe(true);
+    const colIds = data.columns.map((c) => c.id);
+    const rowIds = data.rows.map((r) => r.id);
+    expect(new Set(colIds).size).toBe(colIds.length); // unique
+    expect(new Set(rowIds).size).toBe(rowIds.length);
+    // column/row ids never collide (distinct prefixes keep cell keys unambiguous)
+    expect(colIds.some((id) => rowIds.includes(id))).toBe(false);
+  });
+
+  it('overlays last-used border style but never seeds a derived width/height', () => {
+    const data = buildNewTableData({ borderColor: 'blue' });
+    expect(data.borderColor).toBe('blue');
+    // size is derived from columns/rows (deriveTableSize), never stored
+    expect('width' in data).toBe(false);
+    expect('height' in data).toBe(false);
   });
 });

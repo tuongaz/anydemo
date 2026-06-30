@@ -423,6 +423,7 @@ describe('COMMANDS registry (US-002)', () => {
     'tool.document',
     'tool.linkflow',
     'tool.line',
+    'tool.table',
     'edit.undo',
     'edit.redo',
     'edit.copy',

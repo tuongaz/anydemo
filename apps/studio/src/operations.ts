@@ -50,6 +50,8 @@ import {
   type SeeflowManifest,
   SourceHandleIdSchema,
   StyleSchema,
+  TableColumnSchema,
+  TableRowSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
 import { shortId } from './short-id.ts';
@@ -190,6 +192,15 @@ export const NodePatchBodySchema = z
       .array(z.tuple([z.number(), z.number()]))
       .length(2)
       .optional(),
+    // type:'table'-only: the whole grid structure, patched together by the
+    // table-ops transforms. columns/rows carry id + their own size; cells is the
+    // sparse `${rowId}:${colId}` → text map; headerRow toggles the header row.
+    // All land in data.* and the post-merge ResolvedFlowSchema reparse gates
+    // them to type:'table'. Not nullable — a table is always patched as a whole.
+    columns: z.array(TableColumnSchema).min(1).optional(),
+    rows: z.array(TableRowSchema).min(1).optional(),
+    cells: z.record(z.string(), z.string()).optional(),
+    headerRow: z.boolean().optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -226,6 +237,10 @@ const NODE_DATA_PATCH_KEYS = [
   'target',
   'childIds',
   'points',
+  'columns',
+  'rows',
+  'cells',
+  'headerRow',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
@@ -282,6 +297,20 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   // the universal semantic keys. Visual keys (background/border/cornerRadius)
   // are NODE_VISUAL_KEYS routed to style.json, preserved across a retype.
   group: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'childIds']),
+  // Table nodes carry their whole structure (columns/rows/cells + headerRow) in
+  // flow.json — sizing co-locates with structure (no width side-table). Generic
+  // border/font/colors are NODE_VISUAL_KEYS routed to style.json.
+  table: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'handlerModule',
+    'columns',
+    'rows',
+    'cells',
+    'headerRow',
+  ]),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here

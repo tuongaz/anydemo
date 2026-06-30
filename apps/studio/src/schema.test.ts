@@ -2879,3 +2879,103 @@ describe('group node type', () => {
     }
   });
 });
+
+// Table node — a Miro-style visual grid. Structure (columns/rows ids + their
+// own width/height, sparse cells, headerRow) is intrinsic and self-contained
+// in flow.json; generic styling still routes to style.json like every node.
+describe('table node', () => {
+  const tableNode = {
+    id: 't1',
+    type: 'table' as const,
+    position: { x: 0, y: 0 },
+    data: {
+      columns: [
+        { id: 'c1', width: 140 },
+        { id: 'c2', width: 200 },
+      ],
+      rows: [
+        { id: 'r1', height: 40 },
+        { id: 'r2', height: 40 },
+      ],
+      cells: { 'r1:c1': 'Name', 'r2:c2': '42' },
+      headerRow: true,
+    },
+  };
+
+  it('parses through ResolvedFlowSchema', () => {
+    const result = ResolvedFlowSchema.safeParse({
+      version: 2,
+      name: 'tbl',
+      nodes: [tableNode],
+      connectors: [],
+    });
+    if (!result.success) {
+      throw new Error(`expected table to parse: ${JSON.stringify(result.error.issues)}`);
+    }
+    expect(result.data.nodes[0]?.type).toBe('table');
+  });
+
+  it('parses through the on-disk FlowSchema', () => {
+    const onDisk = { id: 't1', type: 'table' as const, data: tableNode.data };
+    const result = FlowSchema.safeParse({
+      version: 2,
+      name: 'tbl',
+      nodes: [onDisk],
+      connectors: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a table with zero columns', () => {
+    const result = FlowSchema.safeParse({
+      version: 2,
+      name: 'tbl',
+      nodes: [{ id: 't1', type: 'table', data: { ...tableNode.data, columns: [] } }],
+      connectors: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('routes table structure to flow.json and styling to style.json', () => {
+    const resolved = {
+      version: 2,
+      name: 'tbl',
+      nodes: [
+        {
+          ...tableNode,
+          data: { ...tableNode.data, borderColor: 'blue', fontSize: 14 },
+        },
+      ],
+      connectors: [],
+    };
+    const { flow, style } = splitFlow(resolved);
+    const flowNode = (flow.nodes as Array<Record<string, unknown>>)[0];
+    const flowData = flowNode?.data as Record<string, unknown>;
+    // structure + sizing stay in flow.json (self-contained)
+    expect(flowData.columns).toHaveLength(2);
+    expect(flowData.rows).toHaveLength(2);
+    expect(flowData.cells).toEqual({ 'r1:c1': 'Name', 'r2:c2': '42' });
+    expect(flowData.headerRow).toBe(true);
+    // generic styling routes to style.json
+    const styleEntry = (style.nodes as Record<string, Record<string, unknown>>).t1;
+    if (!styleEntry) throw new Error('expected a style entry for the table node');
+    expect(styleEntry).toMatchObject({ borderColor: 'blue', fontSize: 14 });
+    expect('columns' in styleEntry).toBe(false);
+
+    // round-trips back through the on-disk schemas + merge
+    const flowReparse = FlowSchema.safeParse(flow);
+    const styleReparse = StyleSchema.safeParse(style);
+    expect(flowReparse.success).toBe(true);
+    expect(styleReparse.success).toBe(true);
+    if (flowReparse.success && styleReparse.success) {
+      const merged = mergeFlowAndStyle(flowReparse.data, styleReparse.data);
+      const mergedTable = merged.nodes.find((n) => n.id === 't1');
+      expect(mergedTable?.type).toBe('table');
+      if (mergedTable?.type === 'table') {
+        expect(mergedTable.data.columns).toHaveLength(2);
+        expect(mergedTable.data.cells['r1:c1']).toBe('Name');
+        expect(mergedTable.data.borderColor).toBe('blue');
+      }
+    }
+  });
+});

@@ -24,6 +24,7 @@
  */
 import type { NodeStylePatch } from '../components/style-strip.tsx';
 import type { GeometricNodeType } from '../types.ts';
+import { TABLE_DEFAULT_COLS, TABLE_DEFAULT_ROWS, createTableData } from './table-ops.ts';
 
 /** Default border thickness for new nodes. */
 export const NEW_NODE_BORDER_WIDTH = 1;
@@ -197,5 +198,56 @@ export function buildNewGroupData(
     width: dims.width,
     height: dims.height,
     borderSize: NEW_NODE_BORDER_WIDTH,
+  };
+}
+
+// Style fields a new table carries over from the last-used bucket. fontSize is
+// intentionally excluded — tables read better at the renderer's compact cell
+// size than at the (larger) shape label default.
+const TABLE_FIELDS = [
+  'borderColor',
+  'borderSize',
+  'borderStyle',
+  'fontFamily',
+  'cornerRadius',
+  'shadow',
+] as const;
+
+export interface TableDataDefaults {
+  // Index signature so the result satisfies `NodeCreateInput.data`
+  // (`Record<string, unknown>`) without a per-call-site cast.
+  [key: string]: unknown;
+  columns: { id: string; width: number }[];
+  rows: { id: string; height: number }[];
+  cells: Record<string, string>;
+  headerRow: boolean;
+  borderSize: number;
+}
+
+/**
+ * Build the `data` object for a freshly-dropped table node — a 3×3 grid of
+ * empty cells with a header row. Unlike the shape/image builders this takes no
+ * `dims`: a table is sized by its own columns/rows (`deriveTableSize`), so the
+ * footprint is derived, never seeded. Column/row ids are minted with distinct
+ * `c`/`r` prefixes so cell keys (`${rowId}:${colId}`) stay unambiguous. The
+ * optional `lastUsed` overlay carries the user's most recent border style.
+ */
+export function buildNewTableData(lastUsed?: Partial<NodeStylePatch>): TableDataDefaults {
+  const colIds = Array.from(
+    { length: TABLE_DEFAULT_COLS },
+    () => `c${crypto.randomUUID().slice(0, 8)}`,
+  );
+  const rowIds = Array.from(
+    { length: TABLE_DEFAULT_ROWS },
+    () => `r${crypto.randomUUID().slice(0, 8)}`,
+  );
+  const data = createTableData(colIds, rowIds, { headerRow: true });
+  return {
+    columns: data.columns,
+    rows: data.rows,
+    cells: data.cells,
+    headerRow: data.headerRow ?? true,
+    borderSize: NEW_NODE_BORDER_WIDTH,
+    ...pick(lastUsed, TABLE_FIELDS),
   };
 }

@@ -102,6 +102,14 @@ export interface NodePatch {
    * group's membership sends `null` rather than a dropped `undefined`.
    */
   childIds?: string[] | null;
+  /** type:'table'-only: column descriptors (id + width). Lands at data.columns. */
+  columns?: { id: string; width: number }[];
+  /** type:'table'-only: row descriptors (id + height). Lands at data.rows. */
+  rows?: { id: string; height: number }[];
+  /** type:'table'-only: sparse cell text keyed `${rowId}:${colId}`. Lands at data.cells. */
+  cells?: Record<string, string>;
+  /** type:'table'-only: render the first row as a header. Lands at data.headerRow. */
+  headerRow?: boolean;
 }
 
 export type ReorderOp =

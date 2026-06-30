@@ -51,6 +51,12 @@ const NODE_DATA_FLOW_KEYS = new Set([
   'html',
   // type:'group'-only: membership is semantic, so it persists to flow.json.
   'childIds',
+  // type:'table'-only: structure + per-column/row sizing are intrinsic to the
+  // table, so the whole grid stays self-contained in flow.json (NOT style.json).
+  'columns',
+  'rows',
+  'cells',
+  'headerRow',
 ]);
 
 const NODE_STYLE_KEYS = new Set([

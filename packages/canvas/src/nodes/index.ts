@@ -25,5 +25,7 @@ export { RectangleNode } from './rectangle-node.tsx';
 export type { RectangleNodeData, RectangleNodeType } from './rectangle-node.tsx';
 export { ResizeControls } from './resize-controls.tsx';
 export type { ResizeControlsProps } from './resize-controls.tsx';
+export { TABLE_DEFAULT_SIZE, TableNode } from './table-node.tsx';
+export type { TableNodeRuntimeData, TableNodeType, TablePatch } from './table-node.tsx';
 export * from './shapes/index.ts';
 export { useResizeGesture } from './use-resize-gesture.ts';

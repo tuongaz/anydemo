@@ -101,6 +101,8 @@ describe('US-010: component node types', () => {
           return 'line';
         case 'group':
           return 'group';
+        case 'table':
+          return 'table';
         default: {
           const _exhaustive: never = n;
           return _exhaustive;
@@ -123,6 +125,18 @@ describe('US-010: component node types', () => {
       data: { childIds: ['c1'] },
     };
     expect(describe(groupNode)).toBe('group');
+
+    const tableNode: FlowNode = {
+      id: 't1',
+      type: 'table',
+      position: { x: 0, y: 0 },
+      data: {
+        columns: [{ id: 'c1', width: 140 }],
+        rows: [{ id: 'r1', height: 40 }],
+        cells: {},
+      },
+    };
+    expect(describe(tableNode)).toBe('table');
   });
 });
 
