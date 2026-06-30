@@ -136,20 +136,28 @@ describe('TableNode', () => {
     expect(classTokens(colDivider as ReactElementLike)).toContain('nodrag');
   });
 
-  it('renders only internal column/row dividers (n-1), not one on the outer edge', () => {
+  it('renders a resize divider for every column/row, including the outer edge', () => {
     const tree = callTableNode({ ...baseData(), onTableDataChange: noop });
-    // 2 columns → 1 internal divider; 2 rows → 1 internal divider.
-    expect(byTestId(tree, 'table-col-resize')).toHaveLength(1);
-    expect(byTestId(tree, 'table-col-resize')[0]?.props['data-col']).toBe('c1');
-    expect(byTestId(tree, 'table-row-resize')).toHaveLength(1);
-    expect(byTestId(tree, 'table-row-resize')[0]?.props['data-row']).toBe('r1');
+    // 2 columns → 2 dividers; the 2nd sits on the table's outer right edge and
+    // resizes the last column (the one whose right border IS that edge). Same for
+    // rows on the bottom edge.
+    expect(byTestId(tree, 'table-col-resize').map((d) => d.props['data-col'])).toEqual([
+      'c1',
+      'c2',
+    ]);
+    expect(byTestId(tree, 'table-row-resize').map((d) => d.props['data-row'])).toEqual([
+      'r1',
+      'r2',
+    ]);
   });
 
-  it('exposes whole-table resize handles when selected (origin-preserving set)', () => {
+  it('exposes the whole-table proportional resize handle (bottom-right corner only)', () => {
     const tree = callTableNode({ ...baseData(), onTableDataChange: noop }, { selected: true });
     const handles = byTestId(tree, 'table-resize');
+    // The flat right/bottom edges now resize a single column/row, so the only
+    // proportional-scale affordance left is the bottom-right corner.
     const positions = handles.map((h) => h.props['data-position']).sort();
-    expect(positions).toEqual(['bottom', 'bottom-right', 'right']);
+    expect(positions).toEqual(['bottom-right']);
   });
 
   it('add-column rail commits an appended column', () => {
@@ -244,6 +252,72 @@ describe('TableNode', () => {
     expect(calls[0]?.rows.map((r) => r.id).slice(1)).toEqual(['r1', 'r2']);
   });
 
+  it('appended column inherits the last column width; prepended inherits the first', () => {
+    const varied = {
+      columns: [
+        { id: 'c1', width: 90 },
+        { id: 'c2', width: 210 },
+      ],
+      rows: [{ id: 'r1', height: 40 }],
+      cells: {},
+    };
+    const appended: TablePatch[] = [];
+    const t1 = callTableNode(
+      { ...varied, onTableDataChange: (_id: string, p: TablePatch) => appended.push(p) },
+      { selected: true },
+    );
+    const appendBtn = byTestId(t1, 'table-add-column')[0];
+    (appendBtn?.props.onClick as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: noop,
+    });
+    const appCols = appended[0]?.columns ?? [];
+    expect(appCols[appCols.length - 1]?.width).toBe(210); // matches the last column, not DEFAULT
+
+    const prepended: TablePatch[] = [];
+    const t2 = callTableNode(
+      { ...varied, onTableDataChange: (_id: string, p: TablePatch) => prepended.push(p) },
+      { selected: true },
+    );
+    const prependBtn = byTestId(t2, 'table-add-column-before')[0];
+    (prependBtn?.props.onClick as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: noop,
+    });
+    expect(prepended[0]?.columns[0]?.width).toBe(90); // matches the first column
+  });
+
+  it('appended row inherits the last row height; prepended inherits the first', () => {
+    const varied = {
+      columns: [{ id: 'c1', width: 140 }],
+      rows: [
+        { id: 'r1', height: 30 },
+        { id: 'r2', height: 72 },
+      ],
+      cells: {},
+    };
+    const appended: TablePatch[] = [];
+    const t1 = callTableNode(
+      { ...varied, onTableDataChange: (_id: string, p: TablePatch) => appended.push(p) },
+      { selected: true },
+    );
+    const appendBtn = byTestId(t1, 'table-add-row')[0];
+    (appendBtn?.props.onClick as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: noop,
+    });
+    const appRows = appended[0]?.rows ?? [];
+    expect(appRows[appRows.length - 1]?.height).toBe(72); // matches the last row, not DEFAULT
+
+    const prepended: TablePatch[] = [];
+    const t2 = callTableNode(
+      { ...varied, onTableDataChange: (_id: string, p: TablePatch) => prepended.push(p) },
+      { selected: true },
+    );
+    const prependBtn = byTestId(t2, 'table-add-row-before')[0];
+    (prependBtn?.props.onClick as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: noop,
+    });
+    expect(prepended[0]?.rows[0]?.height).toBe(30); // matches the first row
+  });
+
   it('absolutely positions every add/remove control (so left/top apply)', () => {
     const tree = callTableNode({ ...baseData(), onTableDataChange: noop }, { selected: true });
     for (const testId of [
@@ -300,8 +374,9 @@ describe('TableNode', () => {
     expect(byTestId(unselected, 'table-add-row')).toHaveLength(0);
     expect(byTestId(unselected, 'table-delete-column')).toHaveLength(0);
     expect(byTestId(unselected, 'table-toggle-header')).toHaveLength(0);
-    // Dividers remain available in edit mode (resize the boundary, no chrome).
-    expect(byTestId(unselected, 'table-col-resize')).toHaveLength(1);
+    // Dividers remain available in edit mode (resize the boundary, no chrome) —
+    // one per column including the outer right edge.
+    expect(byTestId(unselected, 'table-col-resize')).toHaveLength(2);
 
     const selected = callTableNode({ ...baseData(), onTableDataChange: noop }, { selected: true });
     expect(byTestId(selected, 'table-add-column')).toHaveLength(1);

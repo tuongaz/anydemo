@@ -383,6 +383,15 @@ layer(base);
 .seeflow-canvas-root .react-flow__node [data-testid="play-button"]:not(:disabled) * {
   cursor: pointer;
 }
+/* Table column/row border-drag strips resize a single column/row, so they show
+   the resize cursor on hover. The attribute selector (0,3,0) outranks the blanket
+   `.react-flow__node *` default-cursor rule (0,2,0) above. */
+.seeflow-canvas-root .react-flow__node [data-testid="table-col-resize"] {
+  cursor: col-resize;
+}
+.seeflow-canvas-root .react-flow__node [data-testid="table-row-resize"] {
+  cursor: row-resize;
+}
 
 /* Pane cursor */
 .seeflow-canvas-root .react-flow .react-flow__pane.selection {

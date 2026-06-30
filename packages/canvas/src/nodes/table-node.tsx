@@ -101,27 +101,28 @@ interface DividerState {
   startSize: number;
 }
 
-// Whole-table resize affordances — only the origin-preserving edges/corner so a
-// drag never shifts the node's x/y (the table footprint is derived from its
-// columns/rows; there is no persisted position to move). Mirrors the visible
-// selection-rect handle styling from `resize-controls.tsx`.
-const RESIZE_RIGHT_STYLE: CSSProperties = { width: 8, borderColor: 'transparent' };
-const RESIZE_BOTTOM_STYLE: CSSProperties = { height: 8, borderColor: 'transparent' };
+// Whole-table proportional resize now lives ONLY on the bottom-right corner —
+// the flat right / bottom edges are handed to per-column / per-row border drags
+// (each outer edge resizes the single column / row whose outer side IS that
+// edge; see the divider blocks below). The corner keeps the origin-preserving
+// proportional scale, so a drag never shifts the node's x/y (the footprint is
+// derived from columns/rows; there is no persisted position to move). `zIndex`
+// lifts the ~10px corner box ABOVE the right/bottom edge dividers so it stays
+// grabbable where they overlap. Mirrors the selection-rect handle styling from
+// `resize-controls.tsx`.
 const RESIZE_CORNER_STYLE: CSSProperties = {
   width: 'calc(10px / var(--rf-zoom, 1))',
   height: 'calc(10px / var(--rf-zoom, 1))',
   background: 'hsl(var(--background))',
   border: 'calc(1px / var(--rf-zoom, 1)) solid hsl(var(--primary) / 0.6)',
   borderRadius: 'calc(2px / var(--rf-zoom, 1))',
-  zIndex: 1,
+  zIndex: 25,
 };
 const TABLE_RESIZE_HANDLES: Array<{
   position: ControlPosition;
   variant: ResizeControlVariant;
   style: CSSProperties;
 }> = [
-  { position: 'right', variant: ResizeControlVariant.Line, style: RESIZE_RIGHT_STYLE },
-  { position: 'bottom', variant: ResizeControlVariant.Line, style: RESIZE_BOTTOM_STYLE },
   { position: 'bottom-right', variant: ResizeControlVariant.Handle, style: RESIZE_CORNER_STYLE },
 ];
 
@@ -339,15 +340,18 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
         )}
       </div>
 
-      {/* Internal column dividers (n-1). Dragging boundary i resizes column i.
-          The outer right edge is reserved for the whole-table resize handle. */}
+      {/* Column border drags — ONE per column (n), including the last column
+          whose right border IS the table's outer right edge. Dragging column i's
+          border resizes column i. No explicit z (auto) so these paint above the
+          cells but BELOW the late-DOM source handles + the corner scale handle —
+          starting a connection from the right-edge midpoint still wins. */}
       {editable
-        ? columns.slice(0, -1).map((col, i) => (
+        ? columns.map((col, i) => (
             <div
               key={`colh-${col.id}`}
               data-testid="table-col-resize"
               data-col={col.id}
-              className="nodrag sf:absolute sf:top-0 sf:z-10 sf:h-full sf:w-[7px] sf:cursor-col-resize"
+              className="nodrag sf:absolute sf:top-0 sf:h-full sf:w-[7px]"
               style={{ left: (colOffsets[i] ?? 0) - 3 }}
               onPointerDown={(e) =>
                 onDividerDown(e, {
@@ -363,14 +367,16 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
           ))
         : null}
 
-      {/* Internal row dividers (n-1). */}
+      {/* Row border drags — ONE per row (n), including the last row whose bottom
+          border IS the table's outer bottom edge. Dragging row i's border resizes
+          row i. Same z rationale as the column dividers above. */}
       {editable
-        ? rows.slice(0, -1).map((row, i) => (
+        ? rows.map((row, i) => (
             <div
               key={`rowh-${row.id}`}
               data-testid="table-row-resize"
               data-row={row.id}
-              className="nodrag sf:absolute sf:left-0 sf:z-10 sf:h-[7px] sf:w-full sf:cursor-row-resize"
+              className="nodrag sf:absolute sf:left-0 sf:h-[7px] sf:w-full"
               style={{ top: (rowOffsets[i] ?? 0) - 3 }}
               onPointerDown={(e) =>
                 onDividerDown(e, {
@@ -386,7 +392,7 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
           ))
         : null}
 
-      {/* Whole-table resize — origin-preserving edges + corner, shown on select. */}
+      {/* Whole-table proportional resize — bottom-right corner only, shown on select. */}
       {editable && selected
         ? TABLE_RESIZE_HANDLES.map(({ position, variant, style }) => (
             <NodeResizeControl
@@ -423,28 +429,39 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
               testid: 'table-add-row-before',
               title: 'Add new row to top',
               Icon: ArrowUp,
-              op: () => insertRow(data, 0, newRowId()),
+              op: () => insertRow(data, 0, newRowId(), data.rows[0]?.height ?? DEFAULT_ROW_HEIGHT),
               style: { left: CORNER_OFFSET - ADD_HALF, top: -ADD_HALF },
             },
             {
               testid: 'table-add-column-before',
               title: 'Add new col to left',
               Icon: ArrowLeft,
-              op: () => insertColumn(data, 0, newColId()),
+              op: () =>
+                insertColumn(data, 0, newColId(), data.columns[0]?.width ?? DEFAULT_COL_WIDTH),
               style: { left: -ADD_HALF, top: CORNER_OFFSET - ADD_HALF },
             },
             {
               testid: 'table-add-column',
               title: 'Add new col to right',
               Icon: ArrowRight,
-              op: () => addColumn(data, newColId()),
+              op: () =>
+                addColumn(
+                  data,
+                  newColId(),
+                  data.columns[data.columns.length - 1]?.width ?? DEFAULT_COL_WIDTH,
+                ),
               style: { left: totalW - ADD_HALF, top: totalH - CORNER_OFFSET - ADD_HALF },
             },
             {
               testid: 'table-add-row',
               title: 'Add new row to bottom',
               Icon: ArrowDown,
-              op: () => addRow(data, newRowId()),
+              op: () =>
+                addRow(
+                  data,
+                  newRowId(),
+                  data.rows[data.rows.length - 1]?.height ?? DEFAULT_ROW_HEIGHT,
+                ),
               style: { left: totalW - CORNER_OFFSET - ADD_HALF, top: totalH - ADD_HALF },
             },
           ].map(({ testid, title, Icon, op, style }) => (
