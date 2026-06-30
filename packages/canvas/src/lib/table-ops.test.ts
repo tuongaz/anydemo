@@ -16,6 +16,7 @@ import {
   insertRow,
   resizeColumn,
   resizeRow,
+  scaleTableTo,
   setCell,
   toggleHeaderRow,
 } from './table-ops.ts';
@@ -178,6 +179,51 @@ describe('setCell', () => {
   test('ignores writes to non-existent rows or columns', () => {
     expect(setCell(fixture(), 'rZ', 'c1', 'x')).toEqual(fixture());
     expect(setCell(fixture(), 'r1', 'cZ', 'x')).toEqual(fixture());
+  });
+});
+
+describe('scaleTableTo', () => {
+  test('scales every column width and row height proportionally to the new box', () => {
+    // fixture: width 300 (100+200), height 80 (30+50). Double both.
+    const next = scaleTableTo(fixture(), 600, 160);
+    expect(next.columns).toEqual([
+      { id: 'c1', width: 200 },
+      { id: 'c2', width: 400 },
+    ]);
+    expect(next.rows).toEqual([
+      { id: 'r1', height: 60 },
+      { id: 'r2', height: 100 },
+    ]);
+  });
+
+  test('preserves cells, ids and headerRow', () => {
+    const next = scaleTableTo(fixture(), 600, 160);
+    expect(next.cells).toEqual(fixture().cells);
+    expect(next.headerRow).toBe(true);
+  });
+
+  test('clamps each column/row to its minimum when shrinking hard', () => {
+    const next = scaleTableTo(fixture(), 10, 10);
+    expect(next.columns.every((c) => c.width === MIN_COL_WIDTH)).toBe(true);
+    expect(next.rows.every((r) => r.height === MIN_ROW_HEIGHT)).toBe(true);
+  });
+
+  test('is a no-op (same sizes) when the box already matches the derived size', () => {
+    expect(scaleTableTo(fixture(), 300, 80)).toEqual(fixture());
+  });
+
+  test('returns the input unchanged for a non-positive target box', () => {
+    expect(scaleTableTo(fixture(), 0, 80)).toEqual(fixture());
+    expect(scaleTableTo(fixture(), 300, -5)).toEqual(fixture());
+  });
+
+  test('does not mutate the input', () => {
+    const input = fixture();
+    scaleTableTo(input, 600, 160);
+    expect(input.columns).toEqual([
+      { id: 'c1', width: 100 },
+      { id: 'c2', width: 200 },
+    ]);
   });
 });
 

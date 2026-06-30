@@ -152,6 +152,32 @@ export function resizeRow(data: TableNodeData, rowId: string, height: number): T
 }
 
 /**
+ * Scale the whole table to a new bounding box — the "resize the entire table"
+ * gesture (drag the table's edge/corner). Every column width and row height is
+ * multiplied by the box's scale factor on its axis, then floored at the per-cell
+ * minimum so borders stay grabbable. Ids, cells and the header flag are
+ * untouched. A non-positive target (or a degenerate zero-size source) is a no-op
+ * — there's no meaningful factor to apply.
+ */
+export function scaleTableTo(data: TableNodeData, width: number, height: number): TableNodeData {
+  if (width <= 0 || height <= 0) return data;
+  const startW = data.columns.reduce((sum, c) => sum + c.width, 0);
+  const startH = data.rows.reduce((sum, r) => sum + r.height, 0);
+  if (startW <= 0 || startH <= 0) return data;
+  const sx = width / startW;
+  const sy = height / startH;
+  const columns: TableColumn[] = data.columns.map((c) => ({
+    ...c,
+    width: Math.max(MIN_COL_WIDTH, Math.round(c.width * sx)),
+  }));
+  const rows: TableRow[] = data.rows.map((r) => ({
+    ...r,
+    height: Math.max(MIN_ROW_HEIGHT, Math.round(r.height * sy)),
+  }));
+  return { ...data, columns, rows };
+}
+
+/**
  * Write `text` into the (rowId, colId) cell. Empty text removes the key so the
  * map stays sparse. Writes to a non-existent row/column are ignored.
  */

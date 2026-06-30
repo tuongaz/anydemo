@@ -1,8 +1,18 @@
-import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
+import {
+  type ControlPosition,
+  Handle,
+  type Node,
+  type NodeProps,
+  NodeResizeControl,
+  type OnResizeStart,
+  Position,
+  ResizeControlVariant,
+} from '@xyflow/react';
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   memo,
+  useCallback,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +27,8 @@ import {
   MIN_ROW_HEIGHT,
   TABLE_DEFAULT_COLS,
   TABLE_DEFAULT_ROWS,
+  addColumn,
+  addRow,
   cellKey,
   deleteColumn,
   deleteRow,
@@ -24,10 +36,12 @@ import {
   insertRow,
   resizeColumn,
   resizeRow,
+  scaleTableTo,
   setCell,
   toggleHeaderRow,
 } from '../lib/table-ops.ts';
 import type { TableColumn, TableNodeData, TableRow } from '../types.ts';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 /** Derived footprint of the default 3×3 table — handed to the create callback. */
 export const TABLE_DEFAULT_SIZE = {
@@ -46,12 +60,14 @@ export interface TablePatch {
 /**
  * Runtime data attached to a table node by the canvas host. Extends the
  * persisted TableNodeData with the single commit callback the canvas injects in
- * edit mode (wired to `adapter.updateNode`). When `onTableDataChange` is absent
- * (view / mini) the table renders fully static — no edit, resize, or add/remove
- * affordances.
+ * edit mode (wired to `adapter.updateNode`) plus the shared `setResizing` gate.
+ * When `onTableDataChange` is absent (view / mini) the table renders fully
+ * static — no edit, resize, or add/remove affordances.
  */
 export type TableNodeRuntimeData = TableNodeData & {
   onTableDataChange?: (nodeId: string, patch: TablePatch) => void;
+  /** Shared resize gate injected by the canvas; freezes rfNodes during a drag. */
+  setResizing?: (on: boolean) => void;
 } & Record<string, unknown>;
 export type TableNodeType = Node<TableNodeRuntimeData, 'table'>;
 
@@ -77,19 +93,58 @@ const cumulative = (sizes: number[]): number[] => {
   return out;
 };
 
-interface ResizeState {
+interface DividerState {
   axis: 'col' | 'row';
   id: string;
   start: number;
   startSize: number;
 }
 
+// Whole-table resize affordances — only the origin-preserving edges/corner so a
+// drag never shifts the node's x/y (the table footprint is derived from its
+// columns/rows; there is no persisted position to move). Mirrors the visible
+// selection-rect handle styling from `resize-controls.tsx`.
+const RESIZE_RIGHT_STYLE: CSSProperties = { width: 8, borderColor: 'transparent' };
+const RESIZE_BOTTOM_STYLE: CSSProperties = { height: 8, borderColor: 'transparent' };
+const RESIZE_CORNER_STYLE: CSSProperties = {
+  width: 'calc(10px / var(--rf-zoom, 1))',
+  height: 'calc(10px / var(--rf-zoom, 1))',
+  background: 'hsl(var(--background))',
+  border: 'calc(1px / var(--rf-zoom, 1)) solid hsl(var(--primary) / 0.6)',
+  borderRadius: 'calc(2px / var(--rf-zoom, 1))',
+  zIndex: 1,
+};
+const TABLE_RESIZE_HANDLES: Array<{
+  position: ControlPosition;
+  variant: ResizeControlVariant;
+  style: CSSProperties;
+}> = [
+  { position: 'right', variant: ResizeControlVariant.Line, style: RESIZE_RIGHT_STYLE },
+  { position: 'bottom', variant: ResizeControlVariant.Line, style: RESIZE_BOTTOM_STYLE },
+  { position: 'bottom-right', variant: ResizeControlVariant.Handle, style: RESIZE_CORNER_STYLE },
+];
+
+// Add-button geometry. The four "+" buttons sit just OUTSIDE each edge, pushed
+// off the edge midpoint by ADD_CLEAR so they never hide behind the centred
+// connection handle (the "marquee circle"). ADD_SIZE matches the rendered
+// h-6/w-6 button so the left/top buttons clear the table by ADD_GAP too.
+const ADD_SIZE = 24;
+const ADD_GAP = 6;
+const ADD_CLEAR = 18;
+
 function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNodeType>) {
   const editable = !!data.onTableDataChange;
-  // Live draft while dragging a column/row border; committed on pointer-up.
+  // Live draft while dragging a column/row border OR scaling the whole table;
+  // committed on pointer-up.
   const [draft, setDraft] = useState<TableNodeData | null>(null);
   const [editing, setEditing] = useState<{ rowId: string; colId: string } | null>(null);
-  const resizeRef = useRef<ResizeState | null>(null);
+  const dividerRef = useRef<DividerState | null>(null);
+  // Always-current data for the reference-stable resize-start handler below.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  // Columns/rows frozen at whole-table-resize start so each tick scales from the
+  // original geometry (never from the previous tick's output — avoids compounding).
+  const startTableRef = useRef<{ columns: TableColumn[]; rows: TableRow[] } | null>(null);
 
   const view = draft ?? data;
   const { columns, rows, cells } = view;
@@ -102,11 +157,55 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
 
   const commit = (next: TableNodeData) => data.onTableDataChange?.(id, structural(next));
 
+  // --- Whole-table resize (drag the right / bottom edge or the corner) -------
+  const {
+    isResizing,
+    onResizeStart: gestureResizeStart,
+    onResizeEvent,
+    onResizeEnd: gestureResizeEnd,
+  } = useResizeGesture({
+    onResize: (dims) => {
+      const start = startTableRef.current;
+      if (!start) return;
+      setDraft(
+        scaleTableTo(
+          { ...dataRef.current, columns: start.columns, rows: start.rows },
+          dims.width,
+          dims.height,
+        ),
+      );
+    },
+    onResizeEnd: () => {
+      startTableRef.current = null;
+      setDraft((d) => {
+        if (d) commit(d);
+        return null;
+      });
+    },
+    setResizing: data.setResizing,
+    nodeId: id,
+  });
+  const onTableResizeStart = useCallback<OnResizeStart>(
+    (e, params) => {
+      const d = dataRef.current;
+      startTableRef.current = { columns: d.columns, rows: d.rows };
+      gestureResizeStart(e, params);
+    },
+    [gestureResizeStart],
+  );
+
   const fontStack = resolveFontStack(data.fontFamily);
+  const align = data.textAlign ?? 'center';
+  const justifyClass =
+    align === 'left'
+      ? 'sf:justify-start'
+      : align === 'right'
+        ? 'sf:justify-end'
+        : 'sf:justify-center';
   const baseTextStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...(fontStack ? { fontFamily: fontStack } : {}),
-    textAlign: data.textAlign ?? 'left',
+    textAlign: align,
   };
 
   const borderColorValue = colorTokenStyle(data.borderColor, 'node').borderColor ?? 'var(--border)';
@@ -126,32 +225,32 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
     gridTemplateRows: rows.map((r) => `${r.height}px`).join(' '),
   };
 
-  // --- Border-drag resize (pointer-captured on the divider) ------------------
-  const onResizeDown = (e: ReactPointerEvent<HTMLDivElement>, st: ResizeState) => {
+  // --- Column/row border-drag (resizes a single column/row) ------------------
+  const onDividerDown = (e: ReactPointerEvent<HTMLDivElement>, st: DividerState) => {
     if (!editable) return;
     e.stopPropagation();
     e.preventDefault();
-    resizeRef.current = st;
+    dividerRef.current = st;
+    data.setResizing?.(true);
     e.currentTarget.setPointerCapture(e.pointerId);
   };
-  const onResizeMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const st = resizeRef.current;
+  const onDividerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const st = dividerRef.current;
     if (!st) return;
     e.stopPropagation();
     if (st.axis === 'col') {
-      const w = st.startSize + (e.clientX - st.start);
-      setDraft(resizeColumn(data, st.id, w));
+      setDraft(resizeColumn(data, st.id, st.startSize + (e.clientX - st.start)));
     } else {
-      const h = st.startSize + (e.clientY - st.start);
-      setDraft(resizeRow(data, st.id, h));
+      setDraft(resizeRow(data, st.id, st.startSize + (e.clientY - st.start)));
     }
   };
-  const onResizeUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const st = resizeRef.current;
+  const onDividerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const st = dividerRef.current;
     if (!st) return;
     e.stopPropagation();
     e.currentTarget.releasePointerCapture(e.pointerId);
-    resizeRef.current = null;
+    dividerRef.current = null;
+    data.setResizing?.(false);
     setDraft((d) => {
       if (d) commit(d);
       return null;
@@ -159,6 +258,10 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
   };
 
   const handleClass = cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!');
+  // Add/remove chrome surfaces only while the table node is selected (edit mode).
+  const showChrome = editable && selected;
+  const ctlBtn =
+    'nodrag sf:absolute sf:z-20 sf:flex sf:h-4 sf:w-4 sf:items-center sf:justify-center sf:rounded sf:bg-muted sf:text-[11px] sf:leading-none sf:text-muted-foreground sf:shadow-sm';
 
   return (
     <div
@@ -166,6 +269,7 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
       style={{ width: totalW, height: totalH }}
       data-testid="table-node"
       data-node-type="table"
+      data-resizing={isResizing ? 'true' : undefined}
     >
       <Handle
         type="target"
@@ -193,8 +297,9 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
               <div
                 key={key}
                 className={cn(
-                  'sf:min-w-0 sf:overflow-hidden sf:border-r sf:border-b sf:px-2 sf:py-1 sf:text-[13px]',
-                  isHeader ? 'sf:bg-muted sf:font-semibold' : '',
+                  'sf:flex sf:min-w-0 sf:items-center sf:overflow-hidden sf:border-r sf:border-b sf:px-2 sf:py-1 sf:text-[13px]',
+                  justifyClass,
+                  isHeader ? 'sf:bg-muted sf:font-bold' : '',
                 )}
                 style={{ ...baseTextStyle, borderColor: borderColorValue }}
                 data-testid="table-cell"
@@ -226,190 +331,190 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
         )}
       </div>
 
-      {/* Column border-drag handles (one per column; the last grows the table). */}
+      {/* Internal column dividers (n-1). Dragging boundary i resizes column i.
+          The outer right edge is reserved for the whole-table resize handle. */}
       {editable
-        ? columns.map((col, i) => (
+        ? columns.slice(0, -1).map((col, i) => (
             <div
               key={`colh-${col.id}`}
               data-testid="table-col-resize"
               data-col={col.id}
-              className="sf:nodrag sf:absolute sf:top-0 sf:z-10 sf:h-full sf:w-[6px] sf:cursor-col-resize"
+              className="nodrag sf:absolute sf:top-0 sf:z-10 sf:h-full sf:w-[7px] sf:cursor-col-resize"
               style={{ left: (colOffsets[i] ?? 0) - 3 }}
               onPointerDown={(e) =>
-                onResizeDown(e, { axis: 'col', id: col.id, start: e.clientX, startSize: col.width })
+                onDividerDown(e, {
+                  axis: 'col',
+                  id: col.id,
+                  start: e.clientX,
+                  startSize: col.width,
+                })
               }
-              onPointerMove={onResizeMove}
-              onPointerUp={onResizeUp}
+              onPointerMove={onDividerMove}
+              onPointerUp={onDividerUp}
             />
           ))
         : null}
 
-      {/* Row border-drag handles. */}
+      {/* Internal row dividers (n-1). */}
       {editable
-        ? rows.map((row, i) => (
+        ? rows.slice(0, -1).map((row, i) => (
             <div
               key={`rowh-${row.id}`}
               data-testid="table-row-resize"
               data-row={row.id}
-              className="sf:nodrag sf:absolute sf:left-0 sf:z-10 sf:h-[6px] sf:w-full sf:cursor-row-resize"
+              className="nodrag sf:absolute sf:left-0 sf:z-10 sf:h-[7px] sf:w-full sf:cursor-row-resize"
               style={{ top: (rowOffsets[i] ?? 0) - 3 }}
               onPointerDown={(e) =>
-                onResizeDown(e, {
+                onDividerDown(e, {
                   axis: 'row',
                   id: row.id,
                   start: e.clientY,
                   startSize: row.height,
                 })
               }
-              onPointerMove={onResizeMove}
-              onPointerUp={onResizeUp}
+              onPointerMove={onDividerMove}
+              onPointerUp={onDividerUp}
             />
           ))
         : null}
 
-      {/* Add/remove affordances — edit mode only, surfaced on hover/selection. */}
-      {editable ? (
+      {/* Whole-table resize — origin-preserving edges + corner, shown on select. */}
+      {editable && selected
+        ? TABLE_RESIZE_HANDLES.map(({ position, variant, style }) => (
+            <NodeResizeControl
+              key={position}
+              position={position}
+              variant={variant}
+              minWidth={columns.length * MIN_COL_WIDTH}
+              minHeight={rows.length * MIN_ROW_HEIGHT}
+              style={style}
+              autoScale={variant === ResizeControlVariant.Line}
+              onResizeStart={onTableResizeStart}
+              onResize={onResizeEvent}
+              onResizeEnd={gestureResizeEnd}
+            >
+              <span data-testid="table-resize" data-position={position} />
+            </NodeResizeControl>
+          ))
+        : null}
+
+      {/* Add / remove chrome — hover- or selection-gated (edit mode only). */}
+      {showChrome ? (
         <>
-          {/* Append-column rail on the right edge. */}
-          <button
-            type="button"
-            data-testid="table-add-column"
-            title="Add column"
-            className={cn(
-              'sf:nodrag sf:absolute sf:top-0 sf:flex sf:h-full sf:w-[18px] sf:items-center sf:justify-center',
-              'sf:rounded-r sf:bg-muted sf:text-muted-foreground sf:opacity-0 sf:transition-opacity',
-              'sf:hover:bg-accent sf:hover:text-accent-foreground',
-              selected ? 'sf:opacity-60 sf:hover:opacity-100' : '',
-            )}
-            style={{ left: totalW }}
-            onClick={(e) => {
-              e.stopPropagation();
-              commit(insertColumn(data, data.columns.length, newColId()));
-            }}
-          >
-            +
-          </button>
-          {/* Append-row rail on the bottom edge. */}
-          <button
-            type="button"
-            data-testid="table-add-row"
-            title="Add row"
-            className={cn(
-              'sf:nodrag sf:absolute sf:left-0 sf:flex sf:h-[18px] sf:w-full sf:items-center sf:justify-center',
-              'sf:rounded-b sf:bg-muted sf:text-muted-foreground sf:opacity-0 sf:transition-opacity',
-              'sf:hover:bg-accent sf:hover:text-accent-foreground',
-              selected ? 'sf:opacity-60 sf:hover:opacity-100' : '',
-            )}
-            style={{ top: totalH }}
-            onClick={(e) => {
-              e.stopPropagation();
-              commit(insertRow(data, data.rows.length, newRowId()));
-            }}
-          >
-            +
-          </button>
-
-          {/* Per-column controls (insert-left / delete) shown above each column. */}
-          {selected
-            ? columns.map((col, i) => (
-                <div
-                  key={`colctl-${col.id}`}
-                  className="sf:absolute sf:flex sf:gap-0.5"
-                  style={{ left: (colOffsets[i] ?? 0) - col.width / 2 - 14, top: -20 }}
-                >
-                  <button
-                    type="button"
-                    data-testid="table-insert-column-before"
-                    data-col={col.id}
-                    title="Insert column before"
-                    className="sf:nodrag sf:h-4 sf:w-4 sf:rounded sf:bg-muted sf:text-[10px] sf:leading-none sf:text-muted-foreground sf:hover:bg-accent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      commit(insertColumn(data, i, newColId()));
-                    }}
-                  >
-                    +
-                  </button>
-                  {columns.length > 1 ? (
-                    <button
-                      type="button"
-                      data-testid="table-delete-column"
-                      data-col={col.id}
-                      title="Delete column"
-                      className="sf:nodrag sf:h-4 sf:w-4 sf:rounded sf:bg-muted sf:text-[10px] sf:leading-none sf:text-muted-foreground sf:hover:bg-destructive sf:hover:text-destructive-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        commit(deleteColumn(data, col.id));
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-              ))
-            : null}
-
-          {/* Per-row controls (insert-above / delete) shown left of each row. */}
-          {selected
-            ? rows.map((row, i) => (
-                <div
-                  key={`rowctl-${row.id}`}
-                  className="sf:absolute sf:flex sf:flex-col sf:gap-0.5"
-                  style={{ top: (rowOffsets[i] ?? 0) - row.height / 2 - 14, left: -20 }}
-                >
-                  <button
-                    type="button"
-                    data-testid="table-insert-row-before"
-                    data-row={row.id}
-                    title="Insert row above"
-                    className="sf:nodrag sf:h-4 sf:w-4 sf:rounded sf:bg-muted sf:text-[10px] sf:leading-none sf:text-muted-foreground sf:hover:bg-accent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      commit(insertRow(data, i, newRowId()));
-                    }}
-                  >
-                    +
-                  </button>
-                  {rows.length > 1 ? (
-                    <button
-                      type="button"
-                      data-testid="table-delete-row"
-                      data-row={row.id}
-                      title="Delete row"
-                      className="sf:nodrag sf:h-4 sf:w-4 sf:rounded sf:bg-muted sf:text-[10px] sf:leading-none sf:text-muted-foreground sf:hover:bg-destructive sf:hover:text-destructive-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        commit(deleteRow(data, row.id));
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-              ))
-            : null}
-
-          {/* Header-row toggle — top-left corner control. */}
-          {selected ? (
+          {/* A "+" on every side — prepend/append a row or column. Each is
+              offset from the edge midpoint (ADD_CLEAR) so the centred connection
+              handle never sits over it. */}
+          {[
+            {
+              testid: 'table-add-column',
+              title: 'Add column right',
+              op: () => addColumn(data, newColId()),
+              style: { left: totalW + ADD_GAP, top: totalH / 2 + ADD_CLEAR },
+            },
+            {
+              testid: 'table-add-column-before',
+              title: 'Add column left',
+              op: () => insertColumn(data, 0, newColId()),
+              style: { left: -ADD_GAP - ADD_SIZE, top: totalH / 2 + ADD_CLEAR },
+            },
+            {
+              testid: 'table-add-row',
+              title: 'Add row below',
+              op: () => addRow(data, newRowId()),
+              style: { left: totalW / 2 + ADD_CLEAR, top: totalH + ADD_GAP },
+            },
+            {
+              testid: 'table-add-row-before',
+              title: 'Add row above',
+              op: () => insertRow(data, 0, newRowId()),
+              style: { left: totalW / 2 + ADD_CLEAR, top: -ADD_GAP - ADD_SIZE },
+            },
+          ].map(({ testid, title, op, style }) => (
             <button
+              key={testid}
               type="button"
-              data-testid="table-toggle-header"
-              title="Toggle header row"
-              className={cn(
-                'sf:nodrag sf:absolute sf:h-4 sf:rounded sf:px-1 sf:text-[10px] sf:leading-none',
-                headerRow
-                  ? 'sf:bg-accent sf:text-accent-foreground'
-                  : 'sf:bg-muted sf:text-muted-foreground',
-              )}
-              style={{ left: -20, top: -20 }}
+              data-testid={testid}
+              title={title}
+              className="nodrag sf:absolute sf:z-20 sf:flex sf:h-6 sf:w-6 sf:items-center sf:justify-center sf:rounded-full sf:bg-accent sf:text-accent-foreground sf:shadow-sm sf:hover:opacity-90"
+              style={style}
               onClick={(e) => {
                 e.stopPropagation();
-                commit(toggleHeaderRow(data));
+                commit(op());
               }}
             >
-              H
+              +
             </button>
-          ) : null}
+          ))}
+
+          {/* Per-column delete — a single × centred above each column (>1 col). */}
+          {columns.length > 1
+            ? columns.map((col, i) => (
+                <button
+                  key={`coldel-${col.id}`}
+                  type="button"
+                  data-testid="table-delete-column"
+                  data-col={col.id}
+                  title="Delete column"
+                  className={cn(
+                    ctlBtn,
+                    'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
+                  )}
+                  style={{ left: (colOffsets[i] ?? 0) - col.width / 2 - 8, top: -22 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    commit(deleteColumn(data, col.id));
+                  }}
+                >
+                  ×
+                </button>
+              ))
+            : null}
+
+          {/* Per-row delete — a single × centred left of each row (>1 row). */}
+          {rows.length > 1
+            ? rows.map((row, i) => (
+                <button
+                  key={`rowdel-${row.id}`}
+                  type="button"
+                  data-testid="table-delete-row"
+                  data-row={row.id}
+                  title="Delete row"
+                  className={cn(
+                    ctlBtn,
+                    'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
+                  )}
+                  style={{ top: (rowOffsets[i] ?? 0) - row.height / 2 - 8, left: -22 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    commit(deleteRow(data, row.id));
+                  }}
+                >
+                  ×
+                </button>
+              ))
+            : null}
+
+          {/* Header-row toggle — a small pill on the right of the first row.
+              Active state styles bold + filled so it reads as a real toggle. */}
+          <button
+            type="button"
+            data-testid="table-toggle-header"
+            data-active={headerRow ? 'true' : 'false'}
+            title={headerRow ? 'Header row: on' : 'Header row: off'}
+            className={cn(
+              'nodrag sf:absolute sf:z-20 sf:flex sf:h-5 sf:items-center sf:gap-1 sf:rounded-full sf:px-1.5 sf:text-[10px] sf:font-semibold sf:leading-none sf:shadow-sm sf:transition-colors',
+              headerRow
+                ? 'sf:bg-accent sf:text-accent-foreground'
+                : 'sf:bg-muted sf:text-muted-foreground sf:hover:bg-accent/40',
+            )}
+            style={{ left: totalW + ADD_GAP, top: (rows[0]?.height ?? 0) / 2 - 10 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              commit(toggleHeaderRow(data));
+            }}
+          >
+            H
+          </button>
         </>
       ) : null}
 
