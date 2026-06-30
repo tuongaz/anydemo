@@ -10,10 +10,11 @@ ITERATIONS ?= 10
 DOCKER_IMAGE ?= tuongaz/seeflow
 DOCKER_TAG ?= dev
 BUMP ?= patch
+DRY_RUN ?= 0
 
 CLI := bun run apps/studio/src/cli.ts
 
-.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release deploy gh.deploy docker.build docker.run docker.buildx docker.push
+.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release release.local deploy gh.deploy docker.build docker.run docker.buildx docker.push
 
 SEEFLOW_SCHEMA_SRC := apps/studio/src/schema.ts
 SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
@@ -28,12 +29,14 @@ help: ## Show this target list
 	@echo "  ITERATIONS=<n>       iterations passed to 'make ralph' (default: 10)"
 	@echo "  DOCKER_IMAGE=<name>  image name for docker.* targets (default: tuongaz/seeflow)"
 	@echo "  DOCKER_TAG=<tag>     image tag for docker.* targets (default: dev)"
-	@echo "  BUMP=<level>         semver bump for 'make deploy' (patch, minor, major; default: patch)"
+	@echo "  BUMP=<level>         semver bump for 'make deploy' / 'make release.local' (patch, minor, major; default: patch)"
+	@echo "  DRY_RUN=1            'make release.local' runs the gate only (no bump/tag/publish)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev"
 	@echo "  make register DIR=examples/todo-demo-target"
 	@echo "  make docker.run DIR=examples/todo-demo-target"
+	@echo "  make release.local BUMP=minor"
 
 install: ## Install all workspace deps via bun
 	bun install
@@ -131,6 +134,9 @@ docker.buildx: ## Build multi-arch image (linux/amd64,linux/arm64) without pushi
 
 docker.push: ## Build and push multi-arch image to the registry
 	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) --push .
+
+release.local: ## Publish @tuongaz/seeflow to npm BY HAND when GitHub Actions is down (BUMP=patch|minor|major; DRY_RUN=1 to gate only)
+	BUMP=$(BUMP) DRY_RUN=$(DRY_RUN) bash apps/studio/scripts/release-local.sh
 
 deploy: gh.deploy ## Alias for gh.deploy
 
