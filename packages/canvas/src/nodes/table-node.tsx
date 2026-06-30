@@ -8,6 +8,7 @@ import {
   Position,
   ResizeControlVariant,
 } from '@xyflow/react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -124,13 +125,20 @@ const TABLE_RESIZE_HANDLES: Array<{
   { position: 'bottom-right', variant: ResizeControlVariant.Handle, style: RESIZE_CORNER_STYLE },
 ];
 
-// Add-button geometry. The four "+" buttons sit just OUTSIDE each edge, pushed
-// off the edge midpoint by ADD_CLEAR so they never hide behind the centred
-// connection handle (the "marquee circle"). ADD_SIZE matches the rendered
-// h-6/w-6 button so the left/top buttons clear the table by ADD_GAP too.
+// Add/remove-button geometry. Every control sits ON the table's own border —
+// centred on a corner or an edge midpoint — NOT out on the selection marquee
+// (the dashed `.selected::after` ring 8px outside the node). ADD_SIZE / DEL_SIZE
+// match the rendered button boxes (h-6/w-6 add, h-4/w-4 delete) so each control
+// can be centred on its border point by subtracting half its size.
 const ADD_SIZE = 24;
-const ADD_GAP = 6;
-const ADD_CLEAR = 18;
+const ADD_HALF = ADD_SIZE / 2;
+const DEL_SIZE = 16;
+const DEL_HALF = DEL_SIZE / 2;
+// How far each add button is tucked in from its corner, measured along its edge.
+// Big enough that the two buttons sharing the top-left corner (row-to-top on the
+// top edge, col-to-left on the left edge) don't overlap, small enough to still
+// read as "near the corner".
+const CORNER_OFFSET = 20;
 
 function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNodeType>) {
   const editable = !!data.onTableDataChange;
@@ -401,113 +409,145 @@ function TableNodeImpl({ id, data, selected, isConnectable }: NodeProps<TableNod
       {/* Add / remove chrome — hover- or selection-gated (edit mode only). */}
       {showChrome ? (
         <>
-          {/* A "+" on every side — prepend/append a row or column. Each is
-              offset from the edge midpoint (ADD_CLEAR) so the centred connection
-              handle never sits over it. */}
+          {/* The four "+" buttons sit ON the table border, tucked in from a
+              corner along the edge that matches their action (rows → horizontal
+              edge, columns → vertical edge):
+                - add row to TOP    → top edge,    just right of the top-left corner
+                - add col to LEFT   → left edge,   just below the top-left corner
+                - add col to RIGHT  → right edge,  just above the bottom-right corner
+                - add row to BOTTOM → bottom edge, just left of the bottom-right corner
+              z-30 keeps them above the per-column/row delete ×'s (z-20) where an
+              add button and an edge delete control sit close together. */}
           {[
             {
-              testid: 'table-add-column',
-              title: 'Add column right',
-              op: () => addColumn(data, newColId()),
-              style: { left: totalW + ADD_GAP, top: totalH / 2 + ADD_CLEAR },
+              testid: 'table-add-row-before',
+              title: 'Add new row to top',
+              Icon: ArrowUp,
+              op: () => insertRow(data, 0, newRowId()),
+              style: { left: CORNER_OFFSET - ADD_HALF, top: -ADD_HALF },
             },
             {
               testid: 'table-add-column-before',
-              title: 'Add column left',
+              title: 'Add new col to left',
+              Icon: ArrowLeft,
               op: () => insertColumn(data, 0, newColId()),
-              style: { left: -ADD_GAP - ADD_SIZE, top: totalH / 2 + ADD_CLEAR },
+              style: { left: -ADD_HALF, top: CORNER_OFFSET - ADD_HALF },
+            },
+            {
+              testid: 'table-add-column',
+              title: 'Add new col to right',
+              Icon: ArrowRight,
+              op: () => addColumn(data, newColId()),
+              style: { left: totalW - ADD_HALF, top: totalH - CORNER_OFFSET - ADD_HALF },
             },
             {
               testid: 'table-add-row',
-              title: 'Add row below',
+              title: 'Add new row to bottom',
+              Icon: ArrowDown,
               op: () => addRow(data, newRowId()),
-              style: { left: totalW / 2 + ADD_CLEAR, top: totalH + ADD_GAP },
+              style: { left: totalW - CORNER_OFFSET - ADD_HALF, top: totalH - ADD_HALF },
             },
-            {
-              testid: 'table-add-row-before',
-              title: 'Add row above',
-              op: () => insertRow(data, 0, newRowId()),
-              style: { left: totalW / 2 + ADD_CLEAR, top: -ADD_GAP - ADD_SIZE },
-            },
-          ].map(({ testid, title, op, style }) => (
+          ].map(({ testid, title, Icon, op, style }) => (
             <button
               key={testid}
               type="button"
               data-testid={testid}
               title={title}
-              className="nodrag sf:absolute sf:z-20 sf:flex sf:h-6 sf:w-6 sf:items-center sf:justify-center sf:rounded-full sf:bg-accent sf:text-accent-foreground sf:shadow-sm sf:hover:opacity-90"
+              aria-label={title}
+              className="nodrag sf:absolute sf:z-30 sf:flex sf:h-6 sf:w-6 sf:items-center sf:justify-center sf:rounded-full sf:bg-accent sf:text-accent-foreground sf:shadow-sm sf:hover:opacity-90"
               style={style}
               onClick={(e) => {
                 e.stopPropagation();
                 commit(op());
               }}
             >
-              +
+              <Icon className="sf:h-3.5 sf:w-3.5" aria-hidden />
             </button>
           ))}
 
-          {/* Per-column delete — a single × centred above each column (>1 col). */}
+          {/* Per-column delete — a single × on the TOP border, centred over each
+              column (>1 col). Sits on the border line itself, not the marquee. A
+              column whose centre lands under the "add row to top" button (near the
+              top-left corner) is nudged down into its header cell to stay clear. */}
           {columns.length > 1
-            ? columns.map((col, i) => (
-                <button
-                  key={`coldel-${col.id}`}
-                  type="button"
-                  data-testid="table-delete-column"
-                  data-col={col.id}
-                  title="Delete column"
-                  className={cn(
-                    ctlBtn,
-                    'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
-                  )}
-                  style={{ left: (colOffsets[i] ?? 0) - col.width / 2 - 8, top: -22 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    commit(deleteColumn(data, col.id));
-                  }}
-                >
-                  ×
-                </button>
-              ))
+            ? columns.map((col, i) => {
+                const cx = (colOffsets[i] ?? 0) - col.width / 2;
+                const underAddRow = Math.abs(cx - CORNER_OFFSET) < ADD_HALF + DEL_HALF + 2;
+                return (
+                  <button
+                    key={`coldel-${col.id}`}
+                    type="button"
+                    data-testid="table-delete-column"
+                    data-col={col.id}
+                    title="Delete this column"
+                    aria-label="Delete this column"
+                    className={cn(
+                      ctlBtn,
+                      'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
+                    )}
+                    style={{ left: cx - DEL_HALF, top: underAddRow ? ADD_HALF + 2 : -DEL_HALF }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(deleteColumn(data, col.id));
+                    }}
+                  >
+                    ×
+                  </button>
+                );
+              })
             : null}
 
-          {/* Per-row delete — a single × centred left of each row (>1 row). */}
+          {/* Per-row delete — a single × on the LEFT border, centred beside each
+              row (>1 row). A row whose centre lands under the "add col to left"
+              button (near the top-left corner) is nudged inward to stay clear. */}
           {rows.length > 1
-            ? rows.map((row, i) => (
-                <button
-                  key={`rowdel-${row.id}`}
-                  type="button"
-                  data-testid="table-delete-row"
-                  data-row={row.id}
-                  title="Delete row"
-                  className={cn(
-                    ctlBtn,
-                    'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
-                  )}
-                  style={{ top: (rowOffsets[i] ?? 0) - row.height / 2 - 8, left: -22 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    commit(deleteRow(data, row.id));
-                  }}
-                >
-                  ×
-                </button>
-              ))
+            ? rows.map((row, i) => {
+                const cy = (rowOffsets[i] ?? 0) - row.height / 2;
+                const underAddCol = Math.abs(cy - CORNER_OFFSET) < ADD_HALF + DEL_HALF + 2;
+                return (
+                  <button
+                    key={`rowdel-${row.id}`}
+                    type="button"
+                    data-testid="table-delete-row"
+                    data-row={row.id}
+                    title="Delete this row"
+                    aria-label="Delete this row"
+                    className={cn(
+                      ctlBtn,
+                      'sf:hover:bg-destructive sf:hover:text-destructive-foreground',
+                    )}
+                    style={{ top: cy - DEL_HALF, left: underAddCol ? ADD_HALF + 2 : -DEL_HALF }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      commit(deleteRow(data, row.id));
+                    }}
+                  >
+                    ×
+                  </button>
+                );
+              })
             : null}
 
-          {/* Header-row toggle — a small pill on the right of the first row.
-              Active state styles bold + filled so it reads as a real toggle. */}
+          {/* Header-row toggle — a small pill on the RIGHT border, centred on the
+              first row. Active state styles bold + filled so it reads as a real
+              toggle. */}
           <button
             type="button"
             data-testid="table-toggle-header"
             data-active={headerRow ? 'true' : 'false'}
-            title={headerRow ? 'Header row: on' : 'Header row: off'}
+            title={
+              headerRow
+                ? 'Header row: on (click to turn off)'
+                : 'Header row: off (click to turn on)'
+            }
+            aria-label="Toggle header row"
             className={cn(
-              'nodrag sf:absolute sf:z-20 sf:flex sf:h-5 sf:items-center sf:gap-1 sf:rounded-full sf:px-1.5 sf:text-[10px] sf:font-semibold sf:leading-none sf:shadow-sm sf:transition-colors',
+              'nodrag sf:absolute sf:z-30 sf:flex sf:h-5 sf:items-center sf:gap-1 sf:rounded-full sf:px-1.5 sf:text-[10px] sf:font-semibold sf:leading-none sf:shadow-sm sf:transition-colors',
               headerRow
                 ? 'sf:bg-accent sf:text-accent-foreground'
                 : 'sf:bg-muted sf:text-muted-foreground sf:hover:bg-accent/40',
             )}
-            style={{ left: totalW + ADD_GAP, top: (rows[0]?.height ?? 0) / 2 - 10 }}
+            style={{ left: totalW - 12, top: (rows[0]?.height ?? 0) / 2 - 10 }}
             onClick={(e) => {
               e.stopPropagation();
               commit(toggleHeaderRow(data));
