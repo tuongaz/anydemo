@@ -8,7 +8,12 @@ import {
   buildNewShapeData,
   buildNewTableData,
 } from './node-defaults.ts';
-import { TABLE_DEFAULT_COLS, TABLE_DEFAULT_ROWS } from './table-ops.ts';
+import {
+  DEFAULT_COL_WIDTH,
+  DEFAULT_ROW_HEIGHT,
+  TABLE_DEFAULT_COLS,
+  TABLE_DEFAULT_ROWS,
+} from './table-ops.ts';
 
 describe('buildNewShapeData', () => {
   it('rectangle gets borderSize=1 and fontSize=12 (flat schema: no data.shape)', () => {
@@ -264,5 +269,26 @@ describe('buildNewTableData', () => {
     // size is derived from columns/rows (deriveTableSize), never stored
     expect('width' in data).toBe(false);
     expect('height' in data).toBe(false);
+  });
+
+  it('keeps the default footprint when no drag target is given (click-create)', () => {
+    const data = buildNewTableData();
+    const totalW = data.columns.reduce((sum, c) => sum + c.width, 0);
+    const totalH = data.rows.reduce((sum, r) => sum + r.height, 0);
+    expect(totalW).toBe(TABLE_DEFAULT_COLS * DEFAULT_COL_WIDTH);
+    expect(totalH).toBe(TABLE_DEFAULT_ROWS * DEFAULT_ROW_HEIGHT);
+  });
+
+  it('scales the seeded grid to fill the drag target footprint (drag-create)', () => {
+    const data = buildNewTableData(undefined, { width: 600, height: 300 });
+    // Drag sizes the cells, it doesn't add rows/columns — still a 3×3 grid.
+    expect(data.columns).toHaveLength(TABLE_DEFAULT_COLS);
+    expect(data.rows).toHaveLength(TABLE_DEFAULT_ROWS);
+    const totalW = data.columns.reduce((sum, c) => sum + c.width, 0);
+    const totalH = data.rows.reduce((sum, r) => sum + r.height, 0);
+    // 420→600 and 120→300 divide evenly across 3 cols/rows, so the footprint
+    // lands exactly on the target (scaleTableTo rounds per cell).
+    expect(totalW).toBe(600);
+    expect(totalH).toBe(300);
   });
 });

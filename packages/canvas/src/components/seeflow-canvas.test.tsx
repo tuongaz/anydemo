@@ -1396,6 +1396,118 @@ describe('SeeflowCanvas', () => {
       expect(commit.size).toEqual({ width: 240, height: 132 });
     });
 
+    it('table drag commits via onCreateTableNode with the dragged size', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'table' },
+          onCreateTableNode: (pos, size) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'table';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      // 300×200 drag — both dims above MIN_DRAW_SIZE, so the table is sized to
+      // the literal drag rect (the host scales its 3×3 grid to fill it).
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(60, 40));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(360, 240));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(360, 240));
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateTableNode was not called');
+      expect(commit.pos).toEqual({ x: 60, y: 40 });
+      expect(commit.size).toEqual({ width: 300, height: 200 });
+    });
+
+    it('table tap (near-zero drag) falls back to TABLE_DEFAULT_SIZE 420x120', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'table' },
+          onCreateTableNode: (pos, size) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'table';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      // Identical down + up → 0×0 drag → near-zero branch → default footprint.
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(200, 150));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(200, 150));
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateTableNode was not called');
+      expect(commit.pos).toEqual({ x: 200, y: 150 });
+      expect(commit.size).toEqual({ width: 420, height: 120 });
+    });
+
     it('pen mode: pointerdown → move → up commits via onCreateFreehandNode with normalized points + box', () => {
       const refs: { current: unknown }[] = [];
       const captured: Array<{

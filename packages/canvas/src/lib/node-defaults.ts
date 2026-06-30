@@ -24,7 +24,12 @@
  */
 import type { NodeStylePatch } from '../components/style-strip.tsx';
 import type { GeometricNodeType } from '../types.ts';
-import { TABLE_DEFAULT_COLS, TABLE_DEFAULT_ROWS, createTableData } from './table-ops.ts';
+import {
+  TABLE_DEFAULT_COLS,
+  TABLE_DEFAULT_ROWS,
+  createTableData,
+  scaleTableTo,
+} from './table-ops.ts';
 
 /** Default border thickness for new nodes. */
 export const NEW_NODE_BORDER_WIDTH = 1;
@@ -226,13 +231,22 @@ export interface TableDataDefaults {
 
 /**
  * Build the `data` object for a freshly-dropped table node — a 3×3 grid of
- * empty cells with a header row. Unlike the shape/image builders this takes no
- * `dims`: a table is sized by its own columns/rows (`deriveTableSize`), so the
- * footprint is derived, never seeded. Column/row ids are minted with distinct
- * `c`/`r` prefixes so cell keys (`${rowId}:${colId}`) stay unambiguous. The
- * optional `lastUsed` overlay carries the user's most recent border style.
+ * empty cells with a header row. A table is sized by its own columns/rows
+ * (`deriveTableSize`), so the footprint is derived, never seeded. Column/row
+ * ids are minted with distinct `c`/`r` prefixes so cell keys (`${rowId}:${colId}`)
+ * stay unambiguous. The optional `lastUsed` overlay carries the user's most
+ * recent border style.
+ *
+ * `targetSize` (drag-to-create): when the toolbar table tool is committed with
+ * an intentional drag, the seeded 3×3 grid is scaled to fill the drawn box via
+ * `scaleTableTo` — the same math as dragging a placed table's resize handle, so
+ * create and resize stay consistent. A plain click omits it and keeps the
+ * default footprint.
  */
-export function buildNewTableData(lastUsed?: Partial<NodeStylePatch>): TableDataDefaults {
+export function buildNewTableData(
+  lastUsed?: Partial<NodeStylePatch>,
+  targetSize?: { width: number; height: number },
+): TableDataDefaults {
   const colIds = Array.from(
     { length: TABLE_DEFAULT_COLS },
     () => `c${crypto.randomUUID().slice(0, 8)}`,
@@ -241,7 +255,8 @@ export function buildNewTableData(lastUsed?: Partial<NodeStylePatch>): TableData
     { length: TABLE_DEFAULT_ROWS },
     () => `r${crypto.randomUUID().slice(0, 8)}`,
   );
-  const data = createTableData(colIds, rowIds, { headerRow: true });
+  const seeded = createTableData(colIds, rowIds, { headerRow: true });
+  const data = targetSize ? scaleTableTo(seeded, targetSize.width, targetSize.height) : seeded;
   return {
     columns: data.columns,
     rows: data.rows,

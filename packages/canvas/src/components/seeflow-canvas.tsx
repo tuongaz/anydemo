@@ -3168,12 +3168,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         onCreateLinkflowNode?.(flowMin, { width, height });
         return;
       }
-      // Table commit: a table is sized by its columns/rows (a seeded 3×3 grid),
-      // not a free drag — so any draw gesture (tap or drag) drops a default-size
-      // table at the gesture's top-left. The host builds the 3×3 data via
-      // buildNewTableData; TABLE_DEFAULT_SIZE is the matching footprint.
+      // Table commit: drag-to-create like every other node. The seeded 3×3 grid
+      // scales to fill the drag box (the host runs buildNewTableData with these
+      // dims → scaleTableTo, the same math as dragging a placed table's resize
+      // handle). Same MIN_DRAW_SIZE "intentional drag" threshold as shapes/icons:
+      // a near-zero tap falls back to TABLE_DEFAULT_SIZE so a single click still
+      // drops a usable default 3×3 table. The ghost already previews the literal
+      // drag rect (table opts out of the perfect-shape aspect lock above).
       if (shape === 'table') {
-        onCreateTableNode?.(flowMin, TABLE_DEFAULT_SIZE);
+        const tooSmall = dragScreenWidth < MIN_DRAW_SIZE || dragScreenHeight < MIN_DRAW_SIZE;
+        const width = tooSmall ? TABLE_DEFAULT_SIZE.width : dragFlowWidth;
+        const height = tooSmall ? TABLE_DEFAULT_SIZE.height : dragFlowHeight;
+        onCreateTableNode?.(flowMin, { width, height });
         return;
       }
       // Line commit: a decorative line is defined by its two directional
@@ -5061,8 +5067,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // A line ghost is a thin segment, not a filled box — it paints its own preview
   // below and opts out of the geometric shape-chrome helpers (like linkflow).
   const isLineGhost = drawShape === 'line';
-  // A table ghost is a plain dashed box (the committed table is a 3×3 grid sized
-  // by its own columns/rows), so it opts out of the geometric shape-chrome too.
+  // A table ghost is a dashed box with a 3×3 grid preview (the committed table is
+  // a 3×3 grid sized by its own columns/rows), so it opts out of the geometric
+  // shape-chrome too and paints its own grid in the overlay below.
   const isTableGhost = drawShape === 'table';
   const isNonGeometricGhost = isLinkflowGhost || isLineGhost || isTableGhost;
   const ghostShapeClass = drawShape && !isNonGeometricGhost ? shapeChromeClass(drawShape) : '';
@@ -6222,6 +6229,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     isLinkflowGhost
                       ? 'sf:flex sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground sf:text-sm'
                       : '',
+                    isTableGhost
+                      ? 'sf:flex sf:flex-col sf:overflow-hidden sf:rounded-sm sf:border sf:border-dashed sf:border-muted-foreground/50 sf:bg-muted/20'
+                      : '',
                     drawIcon ? 'sf:flex sf:items-center sf:justify-center' : '',
                   )}
                   style={{
@@ -6255,6 +6265,37 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                       <span>Link to a flow</span>
                     </span>
                   ) : null}
+                  {isTableGhost
+                    ? // Preview the seeded 3×3 grid the commit will create so the drag
+                      // reads as a table (not a blank box). Equal flex rows/cells with
+                      // dashed INTERNAL dividers only (top border on rows 2-3, left
+                      // border on cells 2-3) — the container draws the perimeter, so
+                      // there's no doubled edge. The grid stretches to the literal drag
+                      // rect; the commit scales the real columns/rows to match.
+                      [0, 1, 2].map((r) => (
+                        <div
+                          key={r}
+                          className={cn(
+                            'sf:flex sf:flex-1',
+                            r > 0
+                              ? 'sf:border-muted-foreground/40 sf:border-t sf:border-dashed'
+                              : '',
+                          )}
+                        >
+                          {[0, 1, 2].map((c) => (
+                            <div
+                              key={c}
+                              className={cn(
+                                'sf:flex-1',
+                                c > 0
+                                  ? 'sf:border-muted-foreground/40 sf:border-l sf:border-dashed'
+                                  : '',
+                              )}
+                            />
+                          ))}
+                        </div>
+                      ))
+                    : null}
                   {/* US-010: illustrative shapes have no wrapper chrome — the SVG owns
               the visuals. Render the per-shape SVG directly inside the ghost
               so the drag preview matches the committed visual byte-for-byte.

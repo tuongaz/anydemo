@@ -1456,15 +1456,16 @@ export function DemoView({
   );
 
   // Toolbar Table drop. Mirrors `onCreateShapeNode`: client-side id + optimistic
-  // override. A table is sized by its own columns/rows, so the dragged `dims`
-  // are ignored — `buildNewTableData` seeds a default 3×3 grid (last-used border
-  // style overlaid). The structural fields persist to flow.json self-contained.
+  // override. A table is sized by its own columns/rows, so `buildNewTableData`
+  // scales the seeded 3×3 grid to fill the dragged `dims` (a near-zero tap
+  // arrives as TABLE_DEFAULT_SIZE → the default footprint). Last-used border
+  // style is overlaid. The structural fields persist to flow.json self-contained.
   const onCreateTableNode = useCallback(
-    (position: Position, _dims: { width: number; height: number }) => {
+    (position: Position, dims: { width: number; height: number }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
       const id = `node-${shortId()}`;
-      const data = buildNewTableData(getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node);
+      const data = buildNewTableData(getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node, dims);
       const payload = { id, type: 'table' as const, position, data };
       const optimistic: FlowNode = { id, type: 'table', position, data } as unknown as FlowNode;
       setNodeOverride(id, optimistic as Partial<FlowNode>);
