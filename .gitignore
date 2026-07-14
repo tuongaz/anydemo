@@ -13,7 +13,10 @@ apps/studio/README.md
 apps/studio/src/vendored-canvas-catalog.ts
 apps/studio/schema.ts.publish-backup
 
-docs
+# docs/ is local-only (plans, ref) — except the canonical product docs below
+docs/*
+!docs/FEATURES.md
+!docs/adr/
 ralph/
 .claude/scheduled_tasks.lock
 .claude/skills/agent-browser
@@ -22,7 +25,6 @@ ralph/
 ,claude/settings.local.json
 .claude/skills/run-ralph
 .claude/worktrees/
-docs
 apps/cloud/cdk.out
 ralph/prd.json
 ralph/progress.txt
