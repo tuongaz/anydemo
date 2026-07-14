@@ -4,7 +4,7 @@
 
 **SeeFlow is the bridge between AI coding agents and the humans they work with — a shared canvas both sides read, write, and understand.**
 
-Agents speak JSON; humans speak pictures. A SeeFlow flow is both at once: a schema-validated JSON file an agent authors and reads, rendered as a diagram a human explores and edits. System and architecture understanding is the flagship use case.
+Your AI sees JSON; you see pictures. A SeeFlow flow is both at once: a schema-validated JSON file an agent authors and reads, rendered as a diagram a human explores and edits. System and architecture understanding is the flagship use case.
 
 ---
 
