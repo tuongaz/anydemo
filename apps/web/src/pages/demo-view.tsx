@@ -3068,7 +3068,6 @@ export function DemoView({
           // across flows.
           key={`${project}/${flow}`}
           ref={canvasRef}
-          mode="edit"
           adapter={adapter}
           history={history}
           // The FlowSwitcher rides inside the canvas's top-right Panel,

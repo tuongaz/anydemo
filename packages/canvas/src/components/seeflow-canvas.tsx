@@ -42,7 +42,6 @@ import {
   useState,
 } from 'react';
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
-import type { LayoutNodeInput } from '../adapter/types.ts';
 import {
   AlignmentOverlay,
   type UseAlignmentGuidesApi,
@@ -155,23 +154,11 @@ import { type ConnectorStylePatch, type NodeStylePatch, StyleStrip } from './sty
 import '@xyflow/react/dist/style.css';
 
 /**
- * US-027: canvas operating mode. `edit` is the studio default — every chrome
- * affordance renders and every mutation handler is live. `view` is the
- * embedder-facing read-only mode — chrome is suppressed, editing handlers
- * inert, but pan/zoom still work so the canvas
- * remains a useful presentation surface. `mini` is the static-preview mode
- * for thumbnails — every chrome affordance is off (incl. the bottom-left
- * Controls cluster), all input is inert (no pan, zoom, selection, or node
- * drag), and auto-fit defaults to ON so the flow frames itself.
- */
-export type SeeflowCanvasMode = 'edit' | 'view' | 'mini';
-
-/**
  * US-027: per-feature override flags. Each flag is optional; when unset the
- * effective value comes from the mode preset in {@link resolveFlags}. Use these
- * to surgically toggle a chrome affordance or interaction without flipping the
- * whole canvas into the other mode (e.g. a mostly-`view` canvas that still
- * lets the user pan but with the detail panel hidden).
+ * effective value comes from {@link EDIT_DEFAULTS} via {@link resolveFlags}.
+ * Use these to surgically toggle a chrome affordance or interaction without
+ * the host having to re-implement the canvas (e.g. an editable canvas that
+ * still hides the share menu or the detail panel).
  *
  * `storageKey` is a pass-through for future canvas-side persistence (e.g. a
  * future viewport memory). It is currently unused inside demo-canvas; the
@@ -183,23 +170,17 @@ export interface CanvasFeatureOverrides {
   showStyleStrip?: boolean;
   showDetailPanel?: boolean;
   showResizeHandles?: boolean;
-  /**
-   * Gates the bottom-left zoom/fit/tidy `<Controls>` cluster. Default ON for
-   * `edit` and `view`, OFF for `mini` (thumbnails want no chrome).
-   */
+  /** Gates the bottom-left zoom/fit/tidy `<Controls>` cluster. Default ON. */
   showControls?: boolean;
   /**
-   * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG). Default ON
-   * for `edit` and `view` (downloads are useful for both edit and read-only
-   * consumers), OFF for `mini` (thumbnails want no chrome). The menu's own
-   * internal rules still filter items by the presence of each callback.
+   * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG). Default
+   * ON. The menu's own internal rules still filter items by the presence of
+   * each callback.
    */
   showShareMenu?: boolean;
   /**
    * Gates React Flow's bottom-right `<MiniMap>` overview (the outline / high-
-   * level box). Default ON for `edit` and `view` — helps users orient
-   * themselves in large flows. Default OFF for `mini` since the canvas IS the
-   * thumbnail; nesting a minimap inside it would be redundant chrome.
+   * level box). Default ON — it helps users orient themselves in large flows.
    */
   showMiniMap?: boolean;
   enableKeyboard?: boolean;
@@ -209,30 +190,24 @@ export interface CanvasFeatureOverrides {
   enableZoom?: boolean;
   enablePan?: boolean;
   /**
-   * Gates `<ReactFlow>` `elementsSelectable` + `selectionOnDrag`. Default ON
-   * for `edit` and `view` (clicking and marquee-selecting a node opens the
-   * inspector / mirrors selection upward); OFF for `mini` so thumbnail
-   * clicks are inert.
+   * Gates `<ReactFlow>` `elementsSelectable` + `selectionOnDrag`. Default ON —
+   * clicking and marquee-selecting a node opens the inspector / mirrors
+   * selection upward.
    */
   enableSelection?: boolean;
-  /**
-   * Gates `<ReactFlow>` `nodesDraggable`. Default ON for `edit` and `view`
-   * (view-mode drag is local-state-only — no PATCH dispatched); OFF for
-   * `mini` so the thumbnail is fully static.
-   */
+  /** Gates `<ReactFlow>` `nodesDraggable`. Default ON. */
   enableNodeMove?: boolean;
   /**
    * Miro/Figma-style alignment guides + snap during node drag / resize. When
    * on, dragging (or resizing) a node renders colored guidelines as its
    * edges/centers align with other nodes and snaps into alignment within
-   * {@link alignmentSnapThreshold} screen pixels. Default ON for `edit`, OFF
-   * for `view` and `mini`. Holding Cmd/Ctrl suppresses both guides and snap
-   * for a single gesture.
+   * {@link alignmentSnapThreshold} screen pixels. Default ON. Holding
+   * Cmd/Ctrl suppresses both guides and snap for a single gesture.
    */
   enableAlignmentGuides?: boolean;
   /**
    * Snap threshold in *screen* pixels for {@link enableAlignmentGuides}. No
-   * mode preset — the alignment hook falls back to `6` when unset.
+   * default — the alignment hook falls back to `6` when unset.
    */
   alignmentSnapThreshold?: number;
   storageKey?: string;
@@ -241,7 +216,7 @@ export interface CanvasFeatureOverrides {
 /**
  * US-027: every flag resolved to a concrete boolean. The render body of
  * {@link SeeflowCanvas} reads exclusively from this shape so the gating logic is
- * a single hop away from the mode preset + the overrides.
+ * a single hop away from the defaults + the caller's overrides.
  */
 export interface ResolvedCanvasFlags {
   showToolbar: boolean;
@@ -264,6 +239,11 @@ export interface ResolvedCanvasFlags {
   alignmentSnapThreshold?: number;
 }
 
+/**
+ * US-027: the canvas's default feature set. Every flag is on — `<SeeflowCanvas>`
+ * is an editor. Hosts that want a narrower surface flip individual flags off
+ * via {@link CanvasFeatureOverrides}.
+ */
 const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showToolbar: true,
   showStyleStrip: true,
@@ -280,110 +260,46 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   enablePan: true,
   enableSelection: true,
   enableNodeMove: true,
-  // Alignment guides + snap are an editing affordance — on by default in edit.
+  // Alignment guides + snap are an editing affordance — on by default.
   enableAlignmentGuides: true,
 };
 
-const VIEW_DEFAULTS: ResolvedCanvasFlags = {
-  // View mode renders a slimmed-down toolbar with only the Select + Hand
-  // navigation tools — no shape-creation affordances. The actual shape-tool
-  // hiding happens via `showShapeTools` threaded into <CanvasToolbar> below;
-  // this flag just gates the toolbar's outer Panel.
-  showToolbar: true,
-  showStyleStrip: false,
-  showDetailPanel: false,
-  showResizeHandles: false,
-  // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
-  // fit-view buttons — they're navigation aids, not editing affordances.
-  showControls: true,
-  // View mode keeps ShareMenu so embedders can still download PDF/PNG.
-  showShareMenu: true,
-  // View mode keeps the MiniMap — it's a navigation aid that pairs with the
-  // pan/zoom that stays on in this mode.
-  showMiniMap: true,
-  enableKeyboard: false,
-  enableContextMenu: false,
-  enableDragDrop: false,
-  enableImageDrop: false,
-  // Pan/zoom remain on in view mode so embedders get a navigable canvas; the
-  // gestures don't mutate persisted state.
-  enableZoom: true,
-  enablePan: true,
-  // Selection + local-state drag remain on so view-mode embedders can still
-  // click a node to mirror selection up to the host (e.g. open their own
-  // inspector) and nudge nodes locally without persisting.
-  enableSelection: true,
-  enableNodeMove: true,
-  // View mode is read-only — no drag-snap affordances.
-  enableAlignmentGuides: false,
-};
-
 /**
- * Mini mode preset: every chrome affordance off, every input inert. The
- * canvas renders as a static, auto-fit preview suitable for thumbnails.
- * Consumers can still surgically override via `CanvasFeatureOverrides`
- * (e.g. `showControls: true` to keep the zoom cluster visible).
- */
-const MINI_DEFAULTS: ResolvedCanvasFlags = {
-  showToolbar: false,
-  showStyleStrip: false,
-  showDetailPanel: false,
-  showResizeHandles: false,
-  showControls: false,
-  showShareMenu: false,
-  // Mini mode IS the thumbnail — nesting a MiniMap inside would be redundant.
-  showMiniMap: false,
-  enableKeyboard: false,
-  enableContextMenu: false,
-  enableDragDrop: false,
-  enableImageDrop: false,
-  enableZoom: false,
-  enablePan: false,
-  enableSelection: false,
-  enableNodeMove: false,
-  // Thumbnails are static — no alignment guides.
-  enableAlignmentGuides: false,
-};
-
-/**
- * US-027: resolve the effective flag set from the canvas mode + caller
- * overrides. Pure so it's trivially unit-testable. The function does NOT
- * inspect any SeeflowCanvas prop other than `mode` + the override fields — keeping
- * the contract narrow lets demo-canvas pass exactly the slice it needs and
- * makes the helper safe to import standalone.
+ * US-027: resolve the effective flag set by layering the caller's overrides
+ * over {@link EDIT_DEFAULTS}. Pure so it's trivially unit-testable. The
+ * function does NOT inspect any SeeflowCanvas prop other than the override
+ * fields — keeping the contract narrow lets demo-canvas pass exactly the slice
+ * it needs and makes the helper safe to import standalone.
  */
 export function resolveFlags(
-  input: { mode: SeeflowCanvasMode } & Omit<CanvasFeatureOverrides, 'storageKey'>,
+  input: Omit<CanvasFeatureOverrides, 'storageKey'> = {},
 ): ResolvedCanvasFlags {
-  const defaults =
-    input.mode === 'edit' ? EDIT_DEFAULTS : input.mode === 'mini' ? MINI_DEFAULTS : VIEW_DEFAULTS;
   return {
-    showToolbar: input.showToolbar ?? defaults.showToolbar,
-    showStyleStrip: input.showStyleStrip ?? defaults.showStyleStrip,
-    showDetailPanel: input.showDetailPanel ?? defaults.showDetailPanel,
-    showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
-    showControls: input.showControls ?? defaults.showControls,
-    showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
-    showMiniMap: input.showMiniMap ?? defaults.showMiniMap,
-    enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
-    enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
-    enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
-    enableImageDrop: input.enableImageDrop ?? defaults.enableImageDrop,
-    enableZoom: input.enableZoom ?? defaults.enableZoom,
-    enablePan: input.enablePan ?? defaults.enablePan,
-    enableSelection: input.enableSelection ?? defaults.enableSelection,
-    enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove,
-    enableAlignmentGuides: input.enableAlignmentGuides ?? defaults.enableAlignmentGuides,
-    // No preset — pass through verbatim; the hook defaults to 6 when undefined.
+    showToolbar: input.showToolbar ?? EDIT_DEFAULTS.showToolbar,
+    showStyleStrip: input.showStyleStrip ?? EDIT_DEFAULTS.showStyleStrip,
+    showDetailPanel: input.showDetailPanel ?? EDIT_DEFAULTS.showDetailPanel,
+    showResizeHandles: input.showResizeHandles ?? EDIT_DEFAULTS.showResizeHandles,
+    showControls: input.showControls ?? EDIT_DEFAULTS.showControls,
+    showShareMenu: input.showShareMenu ?? EDIT_DEFAULTS.showShareMenu,
+    showMiniMap: input.showMiniMap ?? EDIT_DEFAULTS.showMiniMap,
+    enableKeyboard: input.enableKeyboard ?? EDIT_DEFAULTS.enableKeyboard,
+    enableContextMenu: input.enableContextMenu ?? EDIT_DEFAULTS.enableContextMenu,
+    enableDragDrop: input.enableDragDrop ?? EDIT_DEFAULTS.enableDragDrop,
+    enableImageDrop: input.enableImageDrop ?? EDIT_DEFAULTS.enableImageDrop,
+    enableZoom: input.enableZoom ?? EDIT_DEFAULTS.enableZoom,
+    enablePan: input.enablePan ?? EDIT_DEFAULTS.enablePan,
+    enableSelection: input.enableSelection ?? EDIT_DEFAULTS.enableSelection,
+    enableNodeMove: input.enableNodeMove ?? EDIT_DEFAULTS.enableNodeMove,
+    enableAlignmentGuides: input.enableAlignmentGuides ?? EDIT_DEFAULTS.enableAlignmentGuides,
+    // No default — pass through verbatim; the hook defaults to 6 when undefined.
     alignmentSnapThreshold: input.alignmentSnapThreshold,
   };
 }
 
 /**
- * US-027: every demo-canvas prop OTHER than the discriminator (`mode`) and
- * `adapter` (whose required-ness flips with mode). Extracted so the
- * discriminated union below can attach the mode-specific shape without
- * duplicating ~50 prop definitions.
+ * US-027: every demo-canvas prop OTHER than `adapter`. Extracted so the props
+ * type below can attach the adapter requirement without duplicating ~50 prop
+ * definitions.
  */
 interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
@@ -400,7 +316,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * center gap-1`) so external affordances (e.g. the studio's FlowSwitcher)
    * sit alongside the share/download cluster. Renders even when
    * `showShareMenu` is off — the host gets a stable mount point for floating
-   * chrome regardless of canvas mode.
+   * chrome.
    */
   topRightSlot?: React.ReactNode;
   /**
@@ -445,8 +361,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * Read-only runtime state — optimistic `pendingOverrides.{nodes,connectors}`
    * that haven't been reconciled by the server yet. Every field is optional;
-   * absent → the canvas renders without optimistic overrides, matching the
-   * view-mode default.
+   * absent → the canvas renders without optimistic overrides.
    */
   runtime?: CanvasRuntime;
   /** Fired once per drag-stop with the node's final position. */
@@ -547,8 +462,8 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * (columns/rows/cells/headerRow) produced by the table-ops transforms after
    * a cell edit, border-drag resize, or add/remove row/column. The host commits
    * via `adapter.updateNode(nodeId, patch)` (one undo entry). Threaded into
-   * every table node's runtime data as `onTableDataChange`; absent (view/mini)
-   * → the table renders fully static.
+   * every table node's runtime data as `onTableDataChange`; absent → the
+   * table renders fully static.
    */
   onNodeTableDataChange?: (nodeId: string, patch: TablePatch) => void;
   /** Persist a new image-node caption (PATCH /nodes/:id { data.caption }). */
@@ -903,8 +818,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * Canvas interaction mode, lifted to the parent so the page-level keyboard
    * handler (`resolveToolShortcut` in demo-view.tsx) and the command palette
-   * can drive tool switches without the canvas owning the state. Distinct from
-   * the chrome `mode` prop above (`edit`/`view`/`mini`) — this controls
+   * can drive tool switches without the canvas owning the state. Controls
    * Select/Hand/Draw tool state. Modes: `select` (neutral default;
    * click/marquee selects, pane-drag pans), `hand` (locks node interaction;
    * left-drag pans), `draw` (carries the armed shape).
@@ -912,10 +826,10 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   canvasMode: CanvasMode;
   onCanvasModeChange: (next: CanvasMode) => void;
   /**
-   * US-007: hide the built-in DetailPanel sidebar entirely. View-mode embeds
-   * and hosts that supply their own inspector set this to true. When false (or
-   * unset) the canvas renders {@link DetailPanel} as part of its own layout,
-   * driven by `selectedNodeIds[0]` / `selectedConnectorIds[0]`.
+   * US-007: hide the built-in DetailPanel sidebar entirely. Hosts that supply
+   * their own inspector set this to true. When false (or unset) the canvas
+   * renders {@link DetailPanel} as part of its own layout, driven by
+   * `selectedNodeIds[0]` / `selectedConnectorIds[0]`.
    */
   disableSidebar?: boolean;
   /**
@@ -1029,16 +943,11 @@ export interface SeeflowCanvasHandle {
 }
 
 /**
- * US-027: discriminated union — edit mode requires `adapter` (REST
- * `CanvasAdapter`). View and mini modes accept it as optional — a view-mode
- * embedder has no mutations to persist and a thumbnail dispatches nothing.
- * All arms share {@link SeeflowCanvasBaseProps}; the discriminator + the
- * adapter-shape presence are the only differences.
+ * The canvas is an editor: every mutation routes through the REST
+ * `CanvasAdapter`, so it is required. Everything else lives on
+ * {@link SeeflowCanvasBaseProps}.
  */
-export type SeeflowCanvasProps =
-  | (SeeflowCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter })
-  | (SeeflowCanvasBaseProps & { mode: 'view'; adapter?: CanvasAdapter })
-  | (SeeflowCanvasBaseProps & { mode: 'mini'; adapter?: CanvasAdapter });
+export type SeeflowCanvasProps = SeeflowCanvasBaseProps & { adapter: CanvasAdapter };
 
 // Below this threshold we treat the gesture as an accidental click / tiny
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
@@ -1505,7 +1414,7 @@ const nodeTypes = {
   // Miro-style visual grid. Structure (columns/rows/cells) lives in the node
   // data; the renderer drives inline cell edit, border-drag resize, and
   // add/remove via the pure transforms in `lib/table-ops.ts` — every gesture
-  // commits a whole-`data` patch through `data.onTableDataChange` (edit mode).
+  // commits a whole-`data` patch through `data.onTableDataChange`.
   table: TableNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
@@ -1522,8 +1431,8 @@ const DEFAULT_EDGE_OPTIONS = { zIndex: 0 };
 
 // Canvas grouping M2: last-resort size for the selection/group overlay union
 // rect when a node has neither a measured footprint nor a `data.width/height`
-// (design §12.1). Mirrors the layout fallback (`internalTidy`, 200×120) so a
-// rect always draws rather than collapsing/excluding the node.
+// (design §12.1). Mirrors the server layout fallback (200×120) so a rect
+// always draws rather than collapsing/excluding the node.
 const OVERLAY_FALLBACK_DIM = { width: 200, height: 120 } as const;
 
 // Same identity-stability rationale as DEFAULT_EDGE_OPTIONS: an inline
@@ -2159,7 +2068,6 @@ export function handleClipboardShortcut(deps: ClipboardShortcutDeps): boolean {
 
 function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowCanvasHandle>) {
   const {
-    mode,
     // US-007: `adapter` is forwarded to the built-in DetailPanel so its
     // type:'html' file-action buttons (Open in editor / Reveal in OS file
     // manager) route through `adapter.openFile` / `adapter.revealFile`. Every
@@ -2268,16 +2176,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     enableAlignmentGuides,
     alignmentSnapThreshold,
   } = props;
-  // US-027: collapse mode + feature overrides into the concrete flag set every
-  // gate below reads from. `isEditMode` is the discriminator-derived boolean
-  // used for behaviors that aren't purely chrome (node drag persistence,
-  // connector mutations, edges deletable, etc.) — they always follow the mode
-  // and aren't individually overridable since they encode the read/write
-  // semantics of the canvas.
+  // US-027: collapse the feature overrides into the concrete flag set every
+  // gate below reads from.
   const flags = useMemo(
     () =>
       resolveFlags({
-        mode,
         showToolbar,
         showStyleStrip,
         showDetailPanel,
@@ -2297,7 +2200,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         alignmentSnapThreshold,
       }),
     [
-      mode,
       showToolbar,
       showStyleStrip,
       showDetailPanel,
@@ -2317,7 +2219,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       alignmentSnapThreshold,
     ],
   );
-  const isEditMode = mode === 'edit';
   // US-027: mirror `flags` into a ref so empty-deps useCallback bodies (like
   // `onWrapperContextMenuCapture` below) can read the live value without
   // having to be redeclared every render.
@@ -2329,16 +2230,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // undefined) into a stable pair of booleans every downstream effect reads.
   // Memoized on the raw prop reference so callers passing the same value
   // (or its object form) don't re-trigger the effects below on every render.
-  //
-  // Mini mode treats `autoFitView` as `true` by default — thumbnails need
-  // self-framing without callers having to remember the flag. Explicit
-  // `autoFitView={false}` (or an object) still wins; the default only fills
-  // in `undefined`.
-  const effectiveAutoFitView = autoFitView ?? (mode === 'mini' ? true : undefined);
-  const resolvedAutoFitView = useMemo(
-    () => resolveAutoFitView(effectiveAutoFitView),
-    [effectiveAutoFitView],
-  );
+  const resolvedAutoFitView = useMemo(() => resolveAutoFitView(autoFitView), [autoFitView]);
   // Destructure the bundled `runtime` prop into the local names the override
   // read sites use.
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
@@ -2709,9 +2601,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // (Marquee cancellation was removed in US-022 — the marquee gesture is no
   //  longer wired; primary-mouse drag on empty canvas is a no-op.)
   useEffect(() => {
-    // US-027: in view mode the canvas is read-only — no draw/connection/
-    // selection gestures can be in flight, and there's no edit chrome whose
-    // ESC chain we'd need to drive. Skip wiring the listener entirely.
+    // US-027: hosts can switch the ESC chain off wholesale via
+    // `enableKeyboard={false}`.
     if (!flags.enableKeyboard) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -2814,9 +2705,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // multi-id signature for keyboard copy), so undo plumbing + single-undo-step
   // + edge filtering come for free from the parent's existing implementation.
   useEffect(() => {
-    // US-027: keyboard chord wiring is gated together with the ESC chain. In
-    // view mode the canvas surfaces nothing for the user to copy and nothing
-    // to paste into.
+    // US-027: keyboard chord wiring is gated together with the ESC chain.
     if (!flags.enableKeyboard) return;
     const onKey = (e: KeyboardEvent) => {
       handleClipboardShortcut({
@@ -2835,8 +2724,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // Canvas grouping M4: ⌘G / ⌘⇧G keyboard chords. Mirrors the clipboard shim —
   // a pure resolver (`resolveGroupChord`) gates the chord, then the pure oracle
   // (`planGroupShortcutAction`) maps the live selection to create / ungroup / a
-  // reasoned no-op. Gated on `flags.enableKeyboard` (off in view/mini). The
-  // chord deliberately ignores ⌘D (Duplicate, design §5.4). A no-op result
+  // reasoned no-op. Gated on `flags.enableKeyboard`. The chord deliberately
+  // ignores ⌘D (Duplicate, design §5.4). A no-op result
   // still preventDefault()s only when we acted, so ⌘G over a non-groupable
   // selection falls through harmlessly.
   useEffect(() => {
@@ -3214,16 +3103,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // re-allocating every render (same pattern as the other drag refs).
   const nodesRef = useRef<FlowNode[]>(nodes);
   nodesRef.current = nodes;
-  // View-mode drag override: in view mode, commitDraggedNodes skips the
-  // parent dispatch (no adapter PATCH), so a moved node's new position lives
-  // only in `rfNodes`. Any sourceNodes rebuild (selection change, SSE tick,
-  // etc.) would then re-sync rfNodes back to the server position and snap
-  // the node home. Stash the final drag position here and merge it into
-  // `sourceNodes` so view-mode moves stick for the canvas's lifetime.
-  // Edit mode never writes to this ref (commitDraggedNodes guards on
-  // `!isEditMode`) and the merge in `sourceNodes` also gates on
-  // `!isEditMode`, so edit-mode rendering is byte-identical to before.
-  const viewModePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   // US-009: flush a deferred external-change fit once any in-flight node
   // drag / resize finishes. Idempotent: a second call after the first
   // consume is a no-op (pendingFitRef is back to false). Re-checks the
@@ -3568,10 +3447,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     ? (selectedNodes ?? [])
     : (selectedNodes ?? []).filter((n) => n.type !== 'group');
 
-  // Line endpoint-edit delegates injected into every line node's data (edit
-  // mode only). `lineGetZoom` lets the renderer convert its pointer's screen
-  // delta to flow units; `lineEndpointCommit` takes the dragged endpoints (in
-  // the node's current box-local flow coords), looks up the node's live
+  // Line endpoint-edit delegates injected into every line node's data (gated
+  // on the host prop). `lineGetZoom` lets the renderer convert its pointer's
+  // screen delta to flow units; `lineEndpointCommit` takes the dragged
+  // endpoints (in the node's current box-local flow coords), looks up the live
   // position, recomputes the bounding box / normalized points / top-left, and
   // hands the result to the host for persistence.
   const lineGetZoom = useCallback(() => rfInstanceRef.current?.getViewport().zoom ?? 1, []);
@@ -3596,16 +3475,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
   const sourceNodes = useMemo<Node[]>(() => {
     const buildNode = (merged: FlowNode): Node => {
-      // View-mode local drag override: see viewModePositionsRef declaration.
-      // Gated on !isEditMode so edit-mode renders byte-identical to before;
-      // the ref is never written in edit mode but the guard is also load-
-      // bearing if mode flips mid-life (an entry from a previous view-mode
-      // session must not leak into edit-mode rendering).
-      const viewOverridePos = !isEditMode ? viewModePositionsRef.current.get(merged.id) : undefined;
       const node: Node = {
         id: merged.id,
         type: merged.type,
-        position: viewOverridePos ?? merged.position,
+        position: merged.position,
         data: {
           ...merged.data,
           // US-004: file-backed renderers (type:'image', type:'html') read
@@ -3614,10 +3487,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
-          // type:'component'-only: hover "View fullscreen" affordance. On for
-          // edit + view (where a person is looking at the canvas), off for mini
-          // thumbnails (every input/chrome path is disabled by design there).
-          enableFullscreen: merged.type === 'component' ? mode !== 'mini' : undefined,
+          // type:'component'-only: hover "View fullscreen" affordance.
+          enableFullscreen: merged.type === 'component' ? true : undefined,
           // US-008: type:'image' placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every image node picks it up uniformly; non-image types ignore it.
@@ -3626,18 +3497,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           onResizeEnd: onNodeResizeEnd,
           setResizing,
           // US-005: alignment-guide resize integration. Only injected when the
-          // feature is enabled (edit mode); view/mini get undefined so the
-          // resize gesture stays byte-identical to legacy there. The renderer
-          // forwards it to useResizeGesture as `alignment`.
+          // feature is enabled; otherwise the resize gesture runs without
+          // snapping. The renderer forwards it to useResizeGesture as
+          // `alignment`.
           resizeAlignment: flags.enableAlignmentGuides ? resizeAlignment : undefined,
-          // type:'line'-only: endpoint-drag editor delegates. Gated on edit mode
-          // + host prop so view/mini lines stay non-editable. Stable refs keep
-          // the line node memo intact.
-          getLineZoom: merged.type === 'line' && isEditMode ? lineGetZoom : undefined,
+          // type:'line'-only: endpoint-drag editor delegates. Gated on the host
+          // prop being wired. Stable refs keep the line node memo intact.
+          getLineZoom: merged.type === 'line' ? lineGetZoom : undefined,
           onLineEndpointDragEnd:
-            merged.type === 'line' && isEditMode && onUpdateLineEndpoints
-              ? lineEndpointCommit
-              : undefined,
+            merged.type === 'line' && onUpdateLineEndpoints ? lineEndpointCommit : undefined,
           // type:'html' + type:'component': routed through to the renderer's
           // fit-to-content button. Gated on type so other node variants don't
           // pick up an unused callback in their runtime data.
@@ -3648,9 +3516,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 ? onComponentNodeFitToContent
                 : undefined,
           onNameChange: (() => {
-            // US-027: view mode → inline name edit is suppressed (the node's
-            // dblclick-to-edit path gates on this callback being wired).
-            if (!isEditMode) return undefined;
             // Ellipse drops the Name concept entirely — its centered label
             // renders `description`, and the detail panel hides the Name
             // field. Suppressing the callback also makes
@@ -3660,8 +3525,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             return onNodeNameChange;
           })(),
           onDescriptionChange: (() => {
-            // US-027: same read-only gate as onNameChange above.
-            if (!isEditMode) return undefined;
             // Rectangle, ellipse, and sticky render a description body — wire
             // the canvas-side inline edit so dblclick on the body lands an
             // edit. Text + the illustrative-shape tags (database/server/
@@ -3678,20 +3541,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             return undefined;
           })(),
           // type:'table'-only: every structural edit (cell text, resize,
-          // add/remove row/col) commits a whole-data patch through this. Gated
-          // on edit mode so view/mini tables render fully static.
-          onTableDataChange:
-            isEditMode && merged.type === 'table' ? onNodeTableDataChange : undefined,
+          // add/remove row/col) commits a whole-data patch through this.
+          onTableDataChange: merged.type === 'table' ? onNodeTableDataChange : undefined,
           onCaptionChange: (() => {
             // Image nodes render an optional caption below the image; wire the
             // canvas-side inline edit so a dblclick on the image lands a caption
-            // edit. Same edit-mode gate as the other inline-edit callbacks.
-            if (!isEditMode) return undefined;
+            // edit.
             if (merged.type === 'image') return onNodeCaptionChange;
             return undefined;
           })(),
           onIconChange: (() => {
-            // Same edit-mode + node-type gate as the inline-edit callbacks.
+            // Same node-type gate as the inline-edit callbacks.
             // type:'rectangle', type:'component', and type:'linkflow' render a
             // header icon trigger next to the title — every other node type
             // either suppresses the icon affordance (geometric illustrative
@@ -3699,7 +3559,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // header) or owns the icon presentation differently (type:'icon',
             // type:'image'). type:'group' is chrome-less (no header/title), so it
             // carries no icon affordance.
-            if (!isEditMode) return undefined;
             if (
               merged.type !== 'rectangle' &&
               merged.type !== 'component' &&
@@ -3746,8 +3605,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // `connectable: false` on unselected nodes makes their Handles ignore
       // connection-start gestures (xyflow's per-node `connectable` overrides
       // the global `nodesConnectable`). Selected nodes leave the field
-      // undefined so the global gate (read-only mode, drawShape) still
-      // applies. Reconnect drops onto unselected nodes are unaffected —
+      // undefined so the global gate (drawShape) still applies. Reconnect
+      // drops onto unselected nodes are unaffected —
       // xyflow's reconnect path snaps via the always-present `.source`/
       // `.target` DOM classes, not the Handle's `isConnectable` prop.
       if (!selectedNodeIdSet.has(merged.id)) node.connectable = false;
@@ -3794,8 +3653,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onIconChange,
     onRetryImageUpload,
     pendingEditNodeId,
-    isEditMode,
-    mode,
   ]);
 
   // React Flow needs internal node state + onNodesChange to render drag
@@ -4155,9 +4012,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // capture-phase listener on the wrapper lets us pre-empt the native menu
   // and open Radix BEFORE xyflow gets the event.
   const onWrapperContextMenuCapture = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
-    // US-027: view mode disables every context-menu pathway. Skip so the
-    // browser's native right-click menu surfaces normally if the embedder
-    // wants it.
+    // US-027: `enableContextMenu={false}` disables every context-menu
+    // pathway. Skip so the browser's native right-click menu surfaces
+    // normally if the host wants it.
     if (!flagsRef.current.enableContextMenu) return;
     // Only intervene when there's a multi-selection. Single-node and pane
     // right-clicks still flow through xyflow's onNodeContextMenu /
@@ -4198,7 +4055,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const hasFiles = types.includes('Files');
       const hasHtmlBlock = types.includes(HTML_BLOCK_DND_TYPE);
       // US-027: gate image drops on enableImageDrop, html-block drops on
-      // enableDragDrop. Either flag can be flipped off independently of mode
+      // enableDragDrop. Either flag can be flipped off independently
       // for a partially-read-only canvas.
       const acceptImage = hasFiles && !!onCreateImageFromFile && flags.enableImageDrop;
       const acceptHtmlBlock = hasHtmlBlock && !!onCreateHtmlNode && flags.enableDragDrop;
@@ -4316,10 +4173,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         ...next,
         data: {
           ...next.data,
-          // US-027: view mode → suppress the inline label-edit handler so the
-          // connector label renders read-only (EditableEdge gates on whether
-          // this prop is wired).
-          onLabelChange: isEditMode ? onConnectorLabelChange : undefined,
+          onLabelChange: onConnectorLabelChange,
           reconnectable: enableReconnect,
           // Selection feedback for ANY selected connector (single OR multi).
           // Drives the non-interactive endpoint dots in EditableEdge; unlike
@@ -4384,7 +4238,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     registerEditHandle,
     getEditingConnectorId,
     setEditingConnectorId,
-    isEditMode,
   ]);
 
   // Mirror rfEdges into a ref so onEdgesChange (declared earlier) reads the
@@ -4392,75 +4245,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   useEffect(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
-
-  // Local-only Tidy fallback for non-edit modes. View-mode embedders don't
-  // own an adapter and typically don't wire `onTidy`, so the Controls cluster
-  // would otherwise render the button disabled. When an adapter IS supplied
-  // (view-mode with a server-backed embedder), delegate to its computeLayout;
-  // otherwise the button stays disabled — the canvas can't do layered layout
-  // without server help since elkjs would balloon the bundle. Move is
-  // visual-only, not persisted (same philosophy as view-mode drags in US-027).
-  // Anchors the laid-out cluster to its current top-left so the canvas
-  // doesn't teleport on click, mirroring the host's onTidy convention.
-  const adapterMaybe = (adapter ?? null) as CanvasAdapter | null;
-  const internalTidy = useMemo(() => {
-    if (!adapterMaybe?.computeLayout) return undefined;
-    return async () => {
-      const inst = rfInstanceRef.current;
-      const current = rfNodesRef.current;
-      if (current.length < 2) return;
-      const layoutNodes: LayoutNodeInput[] = current.map((n) => {
-        const measured = inst?.getInternalNode(n.id)?.measured;
-        const dataAny = n.data as { width?: number; height?: number };
-        const width = measured?.width ?? dataAny.width ?? 200;
-        const height = measured?.height ?? dataAny.height ?? 120;
-        return { id: n.id, type: n.type as LayoutNodeInput['type'], width, height };
-      });
-      const livePositions = new Map<string, { x: number; y: number }>();
-      for (const n of current) livePositions.set(n.id, n.position);
-      const layoutEdges = rfEdgesRef.current.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-      }));
-      const compute = adapterMaybe.computeLayout;
-      if (!compute) return;
-      const result = await compute(layoutNodes, layoutEdges);
-      const next = new Map<string, { x: number; y: number }>();
-      for (const [id, entry] of Object.entries(result.nodes)) next.set(id, entry.position);
-
-      let prevMinX = Number.POSITIVE_INFINITY;
-      let prevMinY = Number.POSITIVE_INFINITY;
-      let nextMinX = Number.POSITIVE_INFINITY;
-      let nextMinY = Number.POSITIVE_INFINITY;
-      for (const ln of layoutNodes) {
-        const prev = livePositions.get(ln.id);
-        if (!prev) continue;
-        if (prev.x < prevMinX) prevMinX = prev.x;
-        if (prev.y < prevMinY) prevMinY = prev.y;
-        const np = next.get(ln.id);
-        if (!np) continue;
-        if (np.x < nextMinX) nextMinX = np.x;
-        if (np.y < nextMinY) nextMinY = np.y;
-      }
-      const offsetX =
-        Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
-      const offsetY =
-        Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
-
-      setRfNodes((prev) =>
-        prev.map((n) => {
-          const np = next.get(n.id);
-          if (!np) return n;
-          return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
-        }),
-      );
-    };
-  }, [adapterMaybe]);
-  // Non-edit modes (view) fall back to `internalTidy` when the host hasn't
-  // wired `onTidy`. Edit mode preserves the legacy `disabled={!onTidy}` shape
-  // ("no demo loaded" → disabled) so existing studio behavior is unchanged.
-  const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : undefined);
 
   // `connectSucceededRef` lets onConnectEnd skip the body-drop fallback when
   // onConnect already fired (precise handle drop). Same pattern as
@@ -4480,11 +4264,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // specific handle dot.
   const onConnect = useCallback(
     (conn: Connection) => {
-      // US-027: view mode → new connector creation is suppressed even when a
-      // caller mistakenly passes onCreateConnector. nodesConnectable is also
-      // gated below so the gesture can't start in the first place; this is the
-      // defensive second gate at commit time.
-      if (!isEditMode) return;
       if (!onCreateConnector) return;
       const { source, target } = conn;
       if (!source || !target) return;
@@ -4504,7 +4283,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const persistTarget = reversed ? source : target;
       onCreateConnector(persistSource, persistTarget);
     },
-    [onCreateConnector, isEditMode],
+    [onCreateConnector],
   );
 
   // US-004: text-shape nodes (data.shape === 'text') are pure annotations and
@@ -5337,21 +5116,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         const pos = live ? live.position : n.position;
         return { x: pos.x, y: pos.y };
       };
-      // US-027: view mode — React Flow's internal applyNodeChanges has already
-      // updated the local rfNodes during the drag, so the visual move stuck.
-      // We skip the parent dispatches that would have persisted via the
-      // adapter — no PATCH fires, no undo entry is pushed. We DO record the
-      // final position in `viewModePositionsRef` so the next sourceNodes
-      // rebuild (selection change, etc.) doesn't re-sync rfNodes back to the
-      // server position and snap the node home (the sourceNodes useMemo
-      // merges this ref before yielding the node list).
-      if (!isEditMode) {
-        const map = viewModePositionsRef.current;
-        for (const n of draggedNodes) {
-          map.set(n.id, committedPositionOf(n));
-        }
-        return;
-      }
       // Canvas grouping M5 (design §9.1): if a group was dragged, fan its
       // committed translation out to every member so the whole container moves
       // as one. The COMMIT delta is read from `rfNodesRef` (the rendered list),
@@ -5417,7 +5181,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         onNodePositionChange(moved.id, committedPositionOf(moved));
       }
     },
-    [onNodePositionChange, onNodePositionsChange, isEditMode],
+    [onNodePositionChange, onNodePositionsChange],
   );
 
   const onNodeDragStopCb = useCallback(
@@ -5542,14 +5306,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // group enters it; double-clicking any other node is a no-op here (its own
   // renderer owns dblclick-to-edit). The title-band's own dblclick-to-rename
   // (wired in M7) will stopPropagation so it never reaches this enter path.
-  // M9 (design §9.9): entering isolation is an EDIT-ONLY affordance (it makes
-  // members individually editable). Gate on `flags.showResizeHandles` — the one
-  // flag that is true ONLY in edit mode (and the same gate the group ＋/⊟ overlay
-  // uses) — so a group double-click in view/mini (where selection/pan stay on)
-  // does NOT enter isolation. A group still RENDERS read-only in those modes.
+  // M9 (design §9.9): entering isolation is an editing affordance (it makes
+  // members individually editable). Gate on `flags.showResizeHandles` — the
+  // same gate the group ＋/⊟ overlay uses — so a host that turns resize
+  // handles off doesn't get isolation either.
   const handleNodeDoubleClick = useCallback(
     (_e: ReactMouseEvent, node: Node) => {
-      if (!flags.showResizeHandles) return; // edit-only
+      if (!flags.showResizeHandles) return;
       if (node.type !== 'group') return;
       setActiveGroupId(node.id);
     },
@@ -5652,7 +5415,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // the picker falls back to the bundled lucide list either way. Appended at
   // the END of the body to preserve dispatcher-shim hook ordering (see the
   // useState-placement rule in packages/canvas/CLAUDE.md).
-  const iconsAdapter = adapter?.icons;
+  const iconsAdapter = adapter.icons;
   useEffect(() => {
     if (!iconsAdapter) return;
     let cancelled = false;
@@ -5675,7 +5438,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       <CanvasStudioProvider value={studioContextValue}>
         <div
           data-testid="seeflow-canvas"
-          data-mode={mode}
           data-canvas-mode={canvasMode.kind}
           data-can-undo={effectiveCanUndo ? 'true' : 'false'}
           data-can-redo={effectiveCanRedo ? 'true' : 'false'}
@@ -5741,37 +5503,23 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 edgeTypes={edgeTypes}
                 proOptions={PRO_OPTIONS}
                 fitView
-                minZoom={mode === 'mini' ? 0.05 : 0.5}
-                // US-027: nodes remain draggable in view mode so the canvas feels
-                // alive (local-state-only repositioning). commitDraggedNodes above
-                // gates the actual PATCH dispatch.
+                minZoom={0.5}
                 nodesDraggable={
-                  (isEditMode ? !!onNodePositionChange : true) &&
+                  !!onNodePositionChange &&
                   !(drawArmed || penMode) &&
                   !handMode &&
                   flags.enableNodeMove
                 }
-                // US-027: view mode → handles are never connectable. Both the global
-                // and per-node connectable flags are gated; combined with the onConnect
-                // early return this is a triple-gate against stray edge creation.
-                // Hand mode locks connection-drag too — any pane click pans instead.
-                nodesConnectable={
-                  isEditMode && !!onCreateConnector && !(drawArmed || penMode) && !handMode
-                }
-                // US-027: in view mode we disable keyboard-driven deletion entirely
-                // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
-                // flag — the per-edge `deletable` defaults to true and only the
-                // delete-key path opt-outs at the top level. Combined with the
-                // context-menu gate above, this leaves no UI path for the user to
-                // delete a node or connector in view mode.
-                deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
-                // US-027: zoom and pan are explicit so view-mode embedders that
-                // disable them via flag overrides get the expected behavior. The
-                // default for both is true to match the legacy edit-mode behavior.
+                // Hand mode locks connection-drag — any pane click pans instead.
+                nodesConnectable={!!onCreateConnector && !(drawArmed || penMode) && !handMode}
+                deleteKeyCode={['Backspace', 'Delete']}
+                // US-027: zoom and pan are explicit so hosts that disable them
+                // via flag overrides get the expected behavior. The default for
+                // both is true.
                 zoomOnScroll={flags.enableZoom}
                 zoomOnPinch={flags.enableZoom}
                 className={connecting ? 'seeflow-connecting' : undefined}
-                onConnect={isEditMode ? onConnect : undefined}
+                onConnect={onConnect}
                 // US-004: reject any connection where either endpoint is a text-shape
                 // node — pure annotations are never connectable. See the
                 // `isValidConnection` definition above for the full rationale.
@@ -5791,7 +5539,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   setConnectSource(params.nodeId ?? null);
                 }}
                 onConnectEnd={onConnectEndCb}
-                onReconnect={isEditMode && onReconnectConnector ? onReconnect : undefined}
+                onReconnect={onReconnectConnector ? onReconnect : undefined}
                 onReconnectStart={(_e, edge, handleType) => {
                   setConnecting(true);
                   reconnectSucceededRef.current = false;
@@ -5980,22 +5728,21 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 {/* US-004: alignment guides overlay. Mounted inside
                 <ViewportPortal> so its SVG lines render in world coordinates
                 and pan/zoom with the canvas (`vector-effect=non-scaling-stroke`
-                keeps the stroke 1 screen px). Gated on the resolved flag so
-                view/mini never mount an empty portal; the overlay itself
-                returns null while `guides` is empty. */}
+                keeps the stroke 1 screen px). Gated on the resolved flag so a
+                host that disables guides never mounts an empty portal; the
+                overlay itself returns null while `guides` is empty. */}
                 {flags.enableAlignmentGuides ? (
                   <ViewportPortal>
                     <AlignmentOverlay guides={alignment.guides} />
                   </ViewportPortal>
                 ) : null}
-                {mode !== 'mini' && <GlowOverlay />}
+                <GlowOverlay />
                 {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
             is hidden so we can render a Lucide-styled button that calls
             fitView with the documented options (padding 0.15, duration 300).
             Auto Align (Tidy) moved here from CanvasToolbar so all canvas-view
             actions live in the same place. Order: zoom-in, zoom-out (from
-            <Controls>), Fit View, Auto Align. Gated on flags.showControls so
-            mini-mode thumbnails render chrome-free. */}
+            <Controls>), Fit View, Auto Align. Gated on flags.showControls. */}
                 {flags.showControls ? (
                   <Controls showInteractive={false} showFitView={false}>
                     <ControlButton
@@ -6013,17 +5760,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                       data-testid="controls-tidy"
                       aria-label="Tidy layout (⌘⇧L)"
                       title="Tidy layout (⌘⇧L)"
-                      disabled={!effectiveTidy}
-                      onClick={() => effectiveTidy?.()}
+                      disabled={!onTidy}
+                      onClick={() => onTidy?.()}
                     >
                       <LayoutDashboard className="sf:h-3 sf:w-3" aria-hidden="true" />
                     </ControlButton>
                   </Controls>
                 ) : null}
                 {/* React Flow's bottom-right MiniMap (the outline / high-level
-            box). Gated on flags.showMiniMap so mini-mode thumbnails don't
-            render a minimap inside themselves. Position defaults to
-            bottom-right which doesn't collide with the bottom-left
+            box). Gated on flags.showMiniMap so a host can suppress it.
+            Position defaults to bottom-right, which doesn't collide with the
+            bottom-left
             <Controls> cluster. The Radix-style scoped class lets
             `src/styles/index.css` retheme it under `.seeflow-canvas-root`. */}
                 {flags.showMiniMap ? <MiniMap className="sf-canvas-minimap" /> : null}
@@ -6034,8 +5781,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             M3 wires `onMultiResize`: dragging a corner proportionally scales the
             selection from a frozen baseline and commits ONCE on pointer-up as a
             single batched undo entry (design §6). US-027: gated on
-            flags.showResizeHandles so view-mode embedders skip the overlay
-            machinery entirely. */}
+            flags.showResizeHandles so a host that disables resize skips the
+            overlay machinery entirely. */}
                 {flags.showResizeHandles ? (
                   <SelectionResizeOverlay
                     selectedNodes={liveSelectionOverlayNodes}
@@ -6068,12 +5815,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   same absolutely-positioned Panel column — no more overlap. */}
                       {topLeftSlot}
                       {flags.showToolbar ? (
-                        // View mode renders the toolbar with only Select + Hand
-                        // (no shape-creation affordances). Edit mode threads in the
-                        // shape-creation tiles + icon picker by also providing
-                        // onCreateShapeNode, which is the same prop that gates the
-                        // drag-create flow lower down. Mini mode has showToolbar
-                        // false in VIEW_DEFAULTS' sibling MINI_DEFAULTS — no toolbar.
                         <CanvasToolbar
                           mode={canvasMode}
                           onModeChange={onCanvasModeChange}
@@ -6081,11 +5822,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                           onOpenIconPicker={onOpenIconPicker}
                           onCloseIconPicker={onCloseIconPicker}
                           onPickIcon={onPickIcon}
-                          // Hide shape buttons + icon picker outside edit mode (or
-                          // when the host can't create shapes anyway). The Select +
-                          // Hand navigation tools always remain so view-mode embeds
-                          // get a Miro/Figma-style tool toggle.
-                          showShapeTools={isEditMode && !!onCreateShapeNode}
+                          // Hide shape buttons + icon picker when the host can't
+                          // create shapes anyway. The Select + Hand navigation
+                          // tools always remain.
+                          showShapeTools={!!onCreateShapeNode}
                           iconsAdapter={iconsAdapter}
                         />
                       ) : null}
@@ -6554,12 +6294,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 flowId={sidebarDemoId}
                 node={sidebarNode}
                 connector={null}
-                adapter={adapter ?? null}
+                adapter={adapter}
                 onNameChange={onNameChange}
                 onDescriptionChange={onDescriptionChange}
                 onDetailChange={onDetailChange}
                 onIconChange={onIconChange}
-                onReplaceImage={isEditMode ? onReplaceImage : undefined}
+                onReplaceImage={onReplaceImage}
                 open={sidebarOpen}
                 onClose={() => {
                   // Dismiss the sidebar (X button, Escape) AND clear selection

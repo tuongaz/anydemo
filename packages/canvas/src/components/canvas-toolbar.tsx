@@ -76,9 +76,8 @@ export interface CanvasToolbarProps {
   /**
    * When false, hide every shape-creation affordance (rectangle/ellipse/text/
    * sticky tiles, Shape picker, Insert icon) and render only the Select/Hand
-   * mode group. Used by view-mode embeds that still want the navigation tools
-   * without exposing draw-to-create. Defaults to true so existing edit-mode
-   * consumers keep the full toolbar.
+   * mode group. Used by hosts that want the navigation tools without exposing
+   * draw-to-create. Defaults to true so consumers keep the full toolbar.
    */
   showShapeTools?: boolean;
   /**

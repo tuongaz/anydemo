@@ -154,7 +154,7 @@ describe('LineNode — endpoint handles', () => {
     expect(findAll(tree, (el) => el.type === 'circle').length).toBe(0);
   });
 
-  it('renders no handles in view mode (no edit delegate)', () => {
+  it('renders no handles without an edit delegate', () => {
     const tree = callLineNode(DIAGONAL, { selected: true });
     expect(findAll(tree, (el) => el.type === 'circle').length).toBe(0);
   });

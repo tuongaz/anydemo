@@ -135,8 +135,8 @@ export function DetailPanel({
     (inspectableNode.type === 'rectangle' || inspectableNode.type === 'component');
   const showIconField = supportsIconField && typeof onIconChange === 'function';
   // currentIcon is decoupled from showIconField so the read-only fallback
-  // below can render the same icon the node body shows when the canvas is in
-  // view mode (no onIconChange callback wired).
+  // below can render the same icon the node body shows when the host wires no
+  // onIconChange callback.
   const currentIcon =
     supportsIconField && inspectableNode && 'icon' in inspectableNode.data
       ? ((inspectableNode.data as { icon?: string }).icon ?? null)

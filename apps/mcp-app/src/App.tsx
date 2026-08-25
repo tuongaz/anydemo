@@ -192,14 +192,11 @@ export function App() {
 
   const wrappedAdapter = adapter as CanvasAdapter;
 
-  // Both 'navigate' and 'create' mount in edit mode so the model can interact
-  // with the canvas (and so the built-in DetailPanel renders for node focus).
   return (
     <TooltipProvider delayDuration={150}>
       <div className="mcp-app-root">
         {showJustCreated ? <JustCreatedBanner /> : null}
         <SeeflowCanvas
-          mode="edit"
           adapter={wrappedAdapter}
           projectId={projectSlug ?? ''}
           nodes={load.nodes}

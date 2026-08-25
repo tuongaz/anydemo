@@ -347,7 +347,7 @@ describe('ComponentNode fit-to-content button', () => {
     expect(findFitButton(tree)).toBeNull();
   });
 
-  it('is hidden when onFitToContent is not wired (view/mini mode)', () => {
+  it('is hidden when onFitToContent is not wired', () => {
     const tree = callComponentNode(userSizedData, { selected: true } as Partial<NodeProps>);
     expect(findFitButton(tree)).toBeNull();
   });
@@ -397,7 +397,7 @@ describe('ComponentNode zoom (fullscreen) button', () => {
     expect(findZoomButton(callComponentNode())).toBeNull();
   });
 
-  it('is hidden when data.enableFullscreen is false (mini mode)', () => {
+  it('is hidden when data.enableFullscreen is false', () => {
     expect(findZoomButton(callComponentNode({ enableFullscreen: false }))).toBeNull();
   });
 

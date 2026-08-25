@@ -267,7 +267,7 @@ describe('GroupNode', () => {
       expect(byId.get('b')).toMatchObject({ type: 'source', position: Position.Bottom });
     });
 
-    it('forwards isConnectable to every handle (gated off in view/mini)', () => {
+    it('forwards isConnectable to every handle', () => {
       const on = handlesOf(
         callGroupNode({ childIds: [], width: 300, height: 200 }, {
           isConnectable: true,

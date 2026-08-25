@@ -119,7 +119,7 @@ describe('TableNode', () => {
     expect(tokens).toContain('sf:justify-center');
   });
 
-  it('renders fully static in view mode (no add/resize affordances)', () => {
+  it('renders fully static without an onTableDataChange delegate (no add/resize affordances)', () => {
     const tree = callTableNode(baseData()); // no onTableDataChange
     expect(byTestId(tree, 'table-cell')).toHaveLength(4);
     expect(byTestId(tree, 'table-add-column')).toHaveLength(0);

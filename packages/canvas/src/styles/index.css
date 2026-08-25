@@ -390,8 +390,7 @@ layer(base);
   outline-offset: 0;
 }
 
-.seeflow-canvas-root[data-mode="edit"]
-  .react-flow__node.selected:not(.react-flow__node-group)::after {
+.seeflow-canvas-root .react-flow__node.selected:not(.react-flow__node-group)::after {
   content: "";
   position: absolute;
   inset: calc(-8px / var(--rf-zoom, 1));
@@ -469,23 +468,23 @@ layer(base);
   padding: calc(8px / var(--rf-zoom, 1));
 }
 
-/* US-007 selected-node handle transforms (edit mode only). A normal node's
-   dashed `.selected::after` ring sits 8 SCREEN px outside the node edge (inset
+/* US-007 selected-node handle transforms. A normal node's dashed
+   `.selected::after` ring sits 8 SCREEN px outside the node edge (inset
    calc(-8px / zoom)), so each connect dot is pushed OUT by the SAME 8 screen px
    to straddle that ring (the ring line bisects the circle). Groups are EXCLUDED
    here (`:not(.react-flow__node-group)`) and handled separately below — their
    selection ring is the overlay marquee, which lives at a different offset and
    in FLOW units, so the same push would leave the dots floating inside it. */
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-top {
+.seeflow-canvas-root .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-top {
   transform: translate(-50%, -50%) translate(0, calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-bottom {
+.seeflow-canvas-root .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-bottom {
   transform: translate(-50%, 50%) translate(0, calc(8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-left {
+.seeflow-canvas-root .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-left {
   transform: translate(-50%, -50%) translate(calc(-8px / var(--rf-zoom, 1)), 0);
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-right {
+.seeflow-canvas-root .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-right {
   transform: translate(50%, -50%) translate(calc(8px / var(--rf-zoom, 1)), 0);
 }
 
@@ -500,48 +499,30 @@ layer(base);
    handle's centering transform INLINE (it would otherwise win over this rule),
    so `!important` lets ours apply — and is the seam if a future offset is ever
    needed. Do NOT add an outward px push here; that reintroduces the bug. */
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-top {
+.seeflow-canvas-root .react-flow__node-group.selected .react-flow__handle-top {
   transform: translate(-50%, -50%) !important;
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-bottom {
+.seeflow-canvas-root .react-flow__node-group.selected .react-flow__handle-bottom {
   transform: translate(-50%, 50%) !important;
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-left {
+.seeflow-canvas-root .react-flow__node-group.selected .react-flow__handle-left {
   transform: translate(-50%, -50%) !important;
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-right {
+.seeflow-canvas-root .react-flow__node-group.selected .react-flow__handle-right {
   transform: translate(50%, -50%) !important;
 }
 
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.left {
+.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.top.left {
   transform: translate(calc(-8px / var(--rf-zoom, 1)), calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.right {
+.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.top.right {
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.bottom.left {
+.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.bottom.left {
   transform: translate(calc(-8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.bottom.right {
+.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.bottom.right {
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
-}
-
-/* View + mini modes: keep the 4 connector handles invisible even when the
-   node is selected. We deliberately leave the `.selected::after` dashed
-   rectangle alone — view-mode users still want a visual selection
-   indicator; only the edit-only connect dots should disappear.
-
-   Wrapped in `@layer base` on purpose: the Handle componentry sets
-   `sf:opacity-100!` (Tailwind utility, in `@layer utilities`) when selected.
-   For `!important`, EARLIER cascade layers win — putting this override in
-   `base` (declared before `utilities`) lets `opacity:0!important` beat
-   `.sf\:opacity-100\!`. Unlayered `!important` would lose here. */
-@layer base {
-  .seeflow-canvas-root[data-mode="view"] .react-flow__node.selected .react-flow__handle,
-  .seeflow-canvas-root[data-mode="mini"] .react-flow__node.selected .react-flow__handle {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
 }
 
 /* React Flow Controls panel theming */

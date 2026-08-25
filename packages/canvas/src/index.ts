@@ -396,6 +396,5 @@ export type {
   ClipboardShortcutEventLike,
   ResolvedCanvasFlags,
   SeeflowCanvasHandle,
-  SeeflowCanvasMode,
   SeeflowCanvasProps,
 } from './components/seeflow-canvas.tsx';

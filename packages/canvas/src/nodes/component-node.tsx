@@ -35,8 +35,8 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
   /**
    * Runtime-only flag (NOT persisted to flow.json): when true, a hover-revealed
    * "View fullscreen" button is shown that opens the component in a large modal.
-   * The canvas injects this in buildNode as `mode !== 'mini'`, so it's on for
-   * edit + view and off for mini thumbnails.
+   * The canvas injects this in buildNode for every `type:'component'` node;
+   * other hosts may leave it unset to suppress the affordance.
    */
   enableFullscreen?: boolean;
 } & Record<string, unknown>;

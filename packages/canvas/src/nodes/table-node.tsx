@@ -60,10 +60,10 @@ export interface TablePatch {
 
 /**
  * Runtime data attached to a table node by the canvas host. Extends the
- * persisted TableNodeData with the single commit callback the canvas injects in
- * edit mode (wired to `adapter.updateNode`) plus the shared `setResizing` gate.
- * When `onTableDataChange` is absent (view / mini) the table renders fully
- * static — no edit, resize, or add/remove affordances.
+ * persisted TableNodeData with the single commit callback the canvas injects
+ * (wired to `adapter.updateNode`) plus the shared `setResizing` gate. When
+ * `onTableDataChange` is absent the table renders fully static — no edit,
+ * resize, or add/remove affordances.
  */
 export type TableNodeRuntimeData = TableNodeData & {
   onTableDataChange?: (nodeId: string, patch: TablePatch) => void;

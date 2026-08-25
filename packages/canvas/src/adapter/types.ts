@@ -219,7 +219,8 @@ export interface UploadImageResult {
  * produces these values stays in apps/web (`use-pending-overrides`); the canvas
  * treats this as an opaque data prop.
  *
- * Every field is optional so view-mode embedders can omit the whole prop.
+ * Every field is optional so a host with no in-flight edits can omit the
+ * whole prop.
  */
 export interface CanvasRuntime {
   /**
@@ -293,8 +294,8 @@ export interface IconLicenseInfo {
 }
 
 /**
- * Adapter contract for the icon-pack pipeline. Optional because view/mini
- * mode canvases never need it; edit mode adapters wire it to `/api/icons/*`.
+ * Adapter contract for the icon-pack pipeline. Optional — a host that ships
+ * no icon packs omits it; the studio adapter wires it to `/api/icons/*`.
  */
 export interface CanvasIconsAdapter {
   listPacks(): Promise<PackSummary[]>;

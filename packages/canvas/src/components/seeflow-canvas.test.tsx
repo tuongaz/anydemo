@@ -205,10 +205,6 @@ function callSeeflowCanvas(
       ? { pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides } }
       : undefined);
   const props = {
-    // US-027: tests default to mode='edit' so the legacy assertions (every
-    // chrome render + handler reachable) continue to hold. Per-test overrides
-    // can flip to mode='view' to assert the view-mode gating.
-    mode: 'edit',
     adapter: noopAdapter,
     nodes: [],
     connectors: [],
@@ -2767,21 +2763,6 @@ describe('SeeflowCanvas', () => {
       expect(btn?.props.disabled).toBe(false);
     });
 
-    it('view mode without an adapter: Auto Align is disabled (no local fallback engine)', () => {
-      // Tidy now delegates to the adapter's computeLayout (which routes to
-      // the studio's /api/layout endpoint). Bundling elkjs into the canvas
-      // would balloon the package; view-mode embedders without an adapter
-      // get a disabled button instead of a local-only fallback.
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        nodes: [makeShapeNode('a'), makeShapeNode('b')],
-      });
-      const btn = findByTestId(tree, 'controls-tidy');
-      expect(btn).not.toBeNull();
-      expect(btn?.props.disabled).toBe(true);
-    });
-
     it('clicking Auto Align fires the onTidy prop', () => {
       let tidyCalls = 0;
       const tree = callSeeflowCanvas({
@@ -3032,18 +3013,10 @@ describe('SeeflowCanvas', () => {
       return (rf.props.nodes as Node[]).find((n) => n.id === id);
     }
 
-    it('sets data.enableFullscreen = true for component nodes in edit + view modes', () => {
-      for (const mode of ['edit', 'view'] as const) {
-        const tree = callSeeflowCanvas({ mode, nodes: [makeComponentNode('c1')] });
-        const data = findRfNode(tree, 'c1')?.data as { enableFullscreen?: boolean };
-        expect(data.enableFullscreen).toBe(true);
-      }
-    });
-
-    it('sets data.enableFullscreen = false for component nodes in mini mode', () => {
-      const tree = callSeeflowCanvas({ mode: 'mini', nodes: [makeComponentNode('c1')] });
+    it('sets data.enableFullscreen = true for component nodes', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeComponentNode('c1')] });
       const data = findRfNode(tree, 'c1')?.data as { enableFullscreen?: boolean };
-      expect(data.enableFullscreen).toBe(false);
+      expect(data.enableFullscreen).toBe(true);
     });
 
     it('omits enableFullscreen on non-component nodes (gated by type)', () => {
@@ -3193,79 +3166,47 @@ describe('SeeflowCanvas', () => {
     });
   });
 
-  describe("US-027: mode='view' gates editing and chrome", () => {
-    // Sanity contract on the discriminated union — view mode swaps the
-    // mutation surface off without requiring an adapter. The hook-shim tests
-    // exercise the post-render React-element tree (no live DOM); each gate
-    // is verified by inspecting the ReactFlow root's resolved props.
-    it('ReactFlow root has nodesConnectable=false even when onCreateConnector is wired in view mode', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        nodes: [makeShapeNode('a'), makeShapeNode('b')],
-        selectedNodeIds: ['a'],
-        onCreateConnector: () => {
-          throw new Error('view-mode onCreateConnector must not be invoked');
-        },
-      });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
-      expect(rf.props.nodesConnectable).toBe(false);
+  describe('US-027: CanvasFeatureOverrides gate chrome + interaction', () => {
+    // The canvas is edit-only; a host narrows the surface by flipping
+    // individual `CanvasFeatureOverrides` flags off. The hook-shim tests
+    // exercise the post-render React-element tree (no live DOM); each gate is
+    // verified by inspecting the resolved props of the element it guards.
+    it('showToolbar={false} renders no toolbar at all, even when create handlers are wired', () => {
+      // The flag gates AHEAD of the per-handler capability checks — wiring
+      // onCreateShapeNode must not resurrect the toolbar.
+      const tree = callSeeflowCanvas({ showToolbar: false, onCreateShapeNode: () => {} });
+      const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
+      expect(toolbar).toBeNull();
     });
 
-    it('view mode renders a modes-only toolbar (Select + Hand, no shape tiles)', () => {
-      // View mode embedders get the Select/Hand navigation tools so users can
-      // toggle between marquee-select and pan-everywhere modes the same way
-      // they'd expect in Miro/Figma. The toolbar still renders, but
-      // showShapeTools=false hides the shape tiles + icon picker (asserted via
-      // the toolbar prop since the child render isn't expanded in this shim).
-      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
+    it('the toolbar hides its shape tiles when onCreateShapeNode is unwired', () => {
+      // The Select/Hand navigation tools always render; the shape-creation
+      // tiles + icon picker are gated on the host wiring the create handler
+      // (asserted via the toolbar prop since the child render isn't expanded
+      // in this shim).
+      const tree = callSeeflowCanvas({});
       const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
       expect(toolbar).not.toBeNull();
       expect(toolbar?.props.showShapeTools).toBe(false);
       expect(toolbar?.props.mode).toEqual({ kind: 'select' });
     });
 
-    it('mini mode renders no toolbar at all', () => {
-      const tree = callSeeflowCanvas({ mode: 'mini', adapter: undefined });
+    it('the toolbar shows its shape tiles once onCreateShapeNode is wired', () => {
+      const tree = callSeeflowCanvas({ onCreateShapeNode: () => {} });
       const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
-      expect(toolbar).toBeNull();
+      expect(toolbar?.props.showShapeTools).toBe(true);
     });
 
-    it('ReactFlow root disables deleteKeyCode in view mode', () => {
-      // xyflow has no global `edgesDeletable` flag; the only path to delete
-      // is the delete-key chord. Setting it null leaves the user with no
-      // delete pathway in view mode (the context menu is already gated above).
-      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
-      expect(rf.props.deleteKeyCode).toBeNull();
-    });
-
-    it('ReactFlow root wires deleteKeyCode in edit mode', () => {
+    it('ReactFlow root wires deleteKeyCode', () => {
       const tree = callSeeflowCanvas({});
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.deleteKeyCode).toEqual(['Backspace', 'Delete']);
     });
 
-    it('ReactFlow root suppresses onConnect in view mode', () => {
-      // The discriminated union allows callers to pass onCreateConnector even
-      // in view mode (typed as Partial<…>); the wiring still drops it.
+    it('enableContextMenu={false} suppresses onNodeContextMenu / onPaneContextMenu', () => {
       const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        onCreateConnector: () => {},
-      });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
-      expect(rf.props.onConnect).toBeUndefined();
-    });
-
-    it('ReactFlow root suppresses onNodeContextMenu / onPaneContextMenu in view mode', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
+        enableContextMenu: false,
         onDeleteNode: () => {},
         onPasteAt: () => {},
       });
@@ -3275,25 +3216,9 @@ describe('SeeflowCanvas', () => {
       expect(rf.props.onPaneContextMenu).toBeUndefined();
     });
 
-    it('CanvasToolbar in view mode shows only Select + Hand, even when onCreateShapeNode is wired', () => {
-      // The Select + Hand navigation tools always render in view mode (the
-      // toolbar is no longer hidden outright). The shape-creation affordances
-      // stay hidden regardless of whether the host wires onCreateShapeNode —
-      // view mode is read-only, so draw-to-create has no useful endpoint.
+    it('showStyleStrip={false} hides the StyleStrip even when style handlers are wired', () => {
       const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        onCreateShapeNode: () => {},
-      });
-      const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
-      expect(toolbar).not.toBeNull();
-      expect(toolbar?.props.showShapeTools).toBe(false);
-    });
-
-    it('StyleStrip is hidden in view mode even when style handlers are wired', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
+        showStyleStrip: false,
         onStyleNode: () => {},
         onStyleConnector: () => {},
       });
@@ -3301,18 +3226,71 @@ describe('SeeflowCanvas', () => {
       expect(strip).toBeNull();
     });
 
-    it('SelectionResizeOverlay is suppressed in view mode', () => {
-      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
+    it('showResizeHandles={false} suppresses the SelectionResizeOverlay', () => {
+      // Asserted against an OVERLAY-ELIGIBLE selection (2+ loose nodes) with
+      // onMultiResize wired, so the flag is provably what suppresses it rather
+      // than the overlay's own eligibility check.
+      const tree = callSeeflowCanvas({
+        showResizeHandles: false,
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        selectedNodeIds: ['a', 'b'],
+        onMultiResize: () => {},
+      });
       const overlay = findElement(tree, (el) => el.type === SelectionResizeOverlay);
       expect(overlay).toBeNull();
     });
 
-    it('connector edge.data.onLabelChange is undefined in view mode (label is read-only)', () => {
-      // Connector label inline-edit gates on the data callback being wired;
-      // dropping it in view mode flips the EditableEdge to read-only.
+    it('showControls={false} suppresses the bottom-left Controls cluster', () => {
+      const tree = callSeeflowCanvas({ showControls: false, nodes: [makeShapeNode('a')] });
+      const controls = findElement(tree, (el) => el.type === Controls);
+      expect(controls).toBeNull();
+    });
+
+    it('the interaction flags gate every ReactFlow input path', () => {
+      // Wiring the mutation handlers MUST NOT re-enable interactivity — the
+      // flag system gates ahead of the per-handler wiring.
       const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        enableNodeMove: false,
+        enableSelection: false,
+        enableZoom: false,
+        enablePan: false,
+        onNodePositionChange: () => {
+          throw new Error('onNodePositionChange must not be invoked');
+        },
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+      expect(rf.props.nodesDraggable).toBe(false);
+      expect(rf.props.elementsSelectable).toBe(false);
+      expect(rf.props.selectionOnDrag).toBe(false);
+      expect(rf.props.zoomOnScroll).toBe(false);
+      expect(rf.props.zoomOnPinch).toBe(false);
+      expect(rf.props.panOnDrag).toBe(false);
+    });
+
+    it('nodesConnectable follows the onCreateConnector prop', () => {
+      const unwired = findElement(
+        callSeeflowCanvas({ nodes: [makeShapeNode('a'), makeShapeNode('b')] }),
+        (el) => el.type === ReactFlow,
+      );
+      expect(unwired?.props.nodesConnectable).toBe(false);
+
+      const wired = findElement(
+        callSeeflowCanvas({
+          nodes: [makeShapeNode('a'), makeShapeNode('b')],
+          onCreateConnector: () => {},
+        }),
+        (el) => el.type === ReactFlow,
+      );
+      expect(wired?.props.nodesConnectable).toBe(true);
+    });
+
+    it('connector edge.data.onLabelChange carries the host handler', () => {
+      // Connector label inline-edit gates on the data callback being wired;
+      // the canvas threads the host's handler straight through.
+      const onConnectorLabelChange = () => {};
+      const tree = callSeeflowCanvas({
         connectors: [
           {
             id: 'c1',
@@ -3323,41 +3301,37 @@ describe('SeeflowCanvas', () => {
           } as Connector,
         ],
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
-        onConnectorLabelChange: () => {
-          throw new Error('view-mode onConnectorLabelChange must not be invoked');
-        },
+        onConnectorLabelChange,
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const edges = rf.props.edges as Array<{ id?: string; data?: { onLabelChange?: unknown } }>;
       const c1 = edges.find((e) => e.id === 'c1');
-      expect(c1?.data?.onLabelChange).toBeUndefined();
+      expect(c1?.data?.onLabelChange).toBe(onConnectorLabelChange);
     });
 
-    it('node.data.onNameChange and onDescriptionChange are undefined in view mode', () => {
+    it('node.data.onNameChange and onDescriptionChange carry the host handlers', () => {
       // Inline name/description edits gate on the data callbacks being wired
       // (the shape-node uses `onNameChange === undefined` as the read-only
       // signal that suppresses the dblclick-to-edit path).
+      const onNodeNameChange = () => {};
+      const onNodeDescriptionChange = () => {};
       const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
         nodes: [makeShapeNode('a')],
-        onNodeNameChange: () => {
-          throw new Error('view-mode onNodeNameChange must not be invoked');
-        },
-        onNodeDescriptionChange: () => {
-          throw new Error('view-mode onNodeDescriptionChange must not be invoked');
-        },
+        onNodeNameChange,
+        onNodeDescriptionChange,
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       const a = rfNodes.find((n) => n.id === 'a');
-      expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
-      expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBeUndefined();
+      expect((a?.data as { onNameChange?: unknown }).onNameChange).toBe(onNodeNameChange);
+      expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBe(
+        onNodeDescriptionChange,
+      );
     });
 
-    it('node.data.onIconChange is defined for linkflow nodes in edit mode (and undefined for text)', () => {
+    it('node.data.onIconChange is defined for linkflow nodes (and undefined for text)', () => {
       // The linkflow node renders a NodeHeader with an editable icon, so the
       // canvas must thread onIconChange into its runtime data — same gate as
       // rectangle/component. type:'text' has no header icon affordance, so it
@@ -3381,85 +3355,6 @@ describe('SeeflowCanvas', () => {
       const t = rfNodes.find((n) => n.id === 't');
       expect((lf?.data as { onIconChange?: unknown }).onIconChange).toBeDefined();
       expect((t?.data as { onIconChange?: unknown }).onIconChange).toBeUndefined();
-    });
-  });
-
-  describe("mode='mini' renders a static, chrome-free thumbnail", () => {
-    // Mini-mode contract: every chrome affordance suppressed (no Controls,
-    // toolbar, style-strip, detail panel, resize overlay) AND every input
-    // path inert on the ReactFlow root (nodesDraggable / elementsSelectable
-    // / selectionOnDrag / zoom / pan all false). Auto-fit-view defaults on
-    // so the flow self-frames inside whatever box the consumer hands us.
-
-    it('suppresses the bottom-left Controls cluster', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'mini',
-        adapter: undefined,
-        nodes: [makeShapeNode('a')],
-      });
-      const controls = findElement(tree, (el) => el.type === Controls);
-      expect(controls).toBeNull();
-    });
-
-    it('suppresses toolbar, style-strip, and resize overlay even when handlers are wired', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'mini',
-        adapter: undefined,
-        onCreateShapeNode: () => {},
-        onStyleNode: () => {},
-        onStyleConnector: () => {},
-      });
-      expect(findElement(tree, (el) => el.type === CanvasToolbar)).toBeNull();
-      expect(findElement(tree, (el) => el.type === StyleStrip)).toBeNull();
-      expect(findElement(tree, (el) => el.type === SelectionResizeOverlay)).toBeNull();
-    });
-
-    it('suppresses the DetailPanel sidebar', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'mini',
-        adapter: undefined,
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-      });
-      expect(findElement(tree, (el) => el.type === DetailPanel)).toBeNull();
-    });
-
-    it('makes every ReactFlow input path inert', () => {
-      const tree = callSeeflowCanvas({
-        mode: 'mini',
-        adapter: undefined,
-        nodes: [makeShapeNode('a'), makeShapeNode('b')],
-        // Wiring these MUST NOT re-enable interactivity in mini mode — the
-        // flag system gates ahead of the per-handler wiring.
-        onNodePositionChange: () => {
-          throw new Error('mini-mode onNodePositionChange must not be invoked');
-        },
-        onCreateConnector: () => {
-          throw new Error('mini-mode onCreateConnector must not be invoked');
-        },
-      });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
-      expect(rf.props.nodesDraggable).toBe(false);
-      expect(rf.props.nodesConnectable).toBe(false);
-      expect(rf.props.elementsSelectable).toBe(false);
-      expect(rf.props.selectionOnDrag).toBe(false);
-      expect(rf.props.zoomOnScroll).toBe(false);
-      expect(rf.props.zoomOnPinch).toBe(false);
-      expect(rf.props.panOnDrag).toBe(false);
-      expect(rf.props.deleteKeyCode).toBeNull();
-    });
-
-    it('lets a consumer flip individual flags back on (e.g. showControls)', () => {
-      // The flag system still composes — mini is the floor, not a wall.
-      const tree = callSeeflowCanvas({
-        mode: 'mini',
-        adapter: undefined,
-        showControls: true,
-      });
-      const controls = findElement(tree, (el) => el.type === Controls);
-      // Controls reappear once the override flips showControls back on.
-      expect(controls).not.toBeNull();
     });
   });
 
@@ -3618,34 +3513,16 @@ describe('SeeflowCanvas', () => {
       expect(findDetailPanel(tree)).toBeNull();
     });
 
-    it("mode='view' suppresses the DetailPanel via flags.showDetailPanel=false", () => {
+    it('showDetailPanel={false} suppresses the DetailPanel', () => {
       const tree = callSeeflowCanvas(
         {
-          mode: 'view',
-          adapter: undefined,
+          showDetailPanel: false,
           nodes: [makeShapeNode('a')],
           selectedNodeIds: ['a'],
         },
         { useStateOverrides: sidebarOpenOverrides },
       );
       expect(findDetailPanel(tree)).toBeNull();
-    });
-
-    it('showDetailPanel={true} override surfaces the panel even in view mode', () => {
-      // The CanvasFeatureOverrides escape hatch — a view-mode embedder that
-      // still wants the built-in sidebar can lift the gate without flipping
-      // the mode (would also opt back into adapter-driven mutations).
-      const tree = callSeeflowCanvas(
-        {
-          mode: 'view',
-          adapter: undefined,
-          nodes: [makeShapeNode('a')],
-          selectedNodeIds: ['a'],
-          showDetailPanel: true,
-        },
-        { useStateOverrides: sidebarOpenOverrides },
-      );
-      expect(findDetailPanel(tree)).not.toBeNull();
     });
 
     it('onClose clears the selection via onSelectionChange([], [])', () => {
@@ -3785,10 +3662,9 @@ describe('SeeflowCanvas', () => {
       expect(findInspectorToggle(tree)).toBeNull();
     });
 
-    it("mode='view' hides the InspectorToggle (flags.showDetailPanel=false)", () => {
+    it('showDetailPanel={false} hides the InspectorToggle (same gate as the panel)', () => {
       const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
+        showDetailPanel: false,
         nodes: [makeShapeNode('a')],
       });
       expect(findInspectorToggle(tree)).toBeNull();
@@ -4059,8 +3935,7 @@ describe('SeeflowCanvas', () => {
     });
 
     it('autoFitView default (undefined) → signal bump does NOT fit', () => {
-      // Symmetric to the AC's view-mode default; the signal is inert until
-      // the host opts in via autoFitView.
+      // The signal is inert until the host opts in via autoFitView.
       const { fitViewCalls, signalEffect } = setup({
         nodes: [makeShapeNode('a')],
         autoFitViewSignal: 0,
@@ -4129,11 +4004,11 @@ describe('US-008: resolveAutoFitView helper', () => {
 });
 
 describe('US-027: resolveFlags helper', () => {
-  // Pure helper test — covers the mode preset + the override layer. Behavior
+  // Pure helper test — covers the defaults + the override layer. Behavior
   // gates inside <SeeflowCanvas> consume the resolved flag set, so pinning
   // resolveFlags pins the gating contract end-to-end.
-  it("returns the edit preset when no overrides are passed (mode='edit')", () => {
-    expect(resolveFlags({ mode: 'edit' })).toEqual({
+  it('returns the defaults when no overrides are passed', () => {
+    expect(resolveFlags({})).toEqual({
       showToolbar: true,
       showStyleStrip: true,
       showDetailPanel: true,
@@ -4149,139 +4024,61 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: true,
       enableSelection: true,
       enableNodeMove: true,
-      // US-004: alignment guides default ON in edit mode.
+      // US-004: alignment guides default ON.
       enableAlignmentGuides: true,
-      // No preset for the snap threshold — passes through undefined.
+      // No default for the snap threshold — passes through undefined.
       alignmentSnapThreshold: undefined,
     });
   });
 
-  it("returns the view preset when no overrides are passed (mode='view')", () => {
-    // The view preset hides chrome + disables every editing path, but keeps
-    // pan/zoom (so the canvas is navigable), selection + local-state node drag,
-    // and the bottom-left Controls cluster (zoom-in/out/fit/tidy navigation
-    // aids).
-    expect(resolveFlags({ mode: 'view' })).toEqual({
-      // View mode renders a slimmed-down toolbar (Select + Hand only) so the
-      // outer flag stays on; SeeflowCanvas hides shape tiles via its
-      // showShapeTools={isEditMode} pass-through.
-      showToolbar: true,
-      showStyleStrip: false,
-      showDetailPanel: false,
-      showResizeHandles: false,
-      showControls: true,
-      showShareMenu: true,
-      showMiniMap: true,
-      enableKeyboard: false,
-      enableContextMenu: false,
-      enableDragDrop: false,
-      enableImageDrop: false,
-      enableZoom: true,
-      enablePan: true,
-      enableSelection: true,
-      enableNodeMove: true,
-      // US-004: view mode is read-only — alignment guides off.
-      enableAlignmentGuides: false,
-      alignmentSnapThreshold: undefined,
-    });
+  it('returns the same defaults when called with no argument at all', () => {
+    expect(resolveFlags()).toEqual(resolveFlags({}));
   });
 
-  it("returns the mini preset when no overrides are passed (mode='mini')", () => {
-    // The mini preset turns every chrome affordance off (incl. the Controls
-    // cluster) AND every input path inert (no pan/zoom, no selection, no
-    // node drag, no keyboard, no context menu). Consumers flip individual
-    // flags back on via override if they want a richer preview.
-    expect(resolveFlags({ mode: 'mini' })).toEqual({
-      showToolbar: false,
-      showStyleStrip: false,
-      showDetailPanel: false,
-      showResizeHandles: false,
-      showControls: false,
-      showShareMenu: false,
-      // Mini IS the thumbnail — the high-level outline is suppressed so the
-      // canvas doesn't nest a minimap inside itself.
-      showMiniMap: false,
-      enableKeyboard: false,
-      enableContextMenu: false,
-      enableDragDrop: false,
-      enableImageDrop: false,
-      enableZoom: false,
-      enablePan: false,
-      enableSelection: false,
-      enableNodeMove: false,
-      // US-004: mini thumbnails are static — alignment guides off.
-      enableAlignmentGuides: false,
-      alignmentSnapThreshold: undefined,
-    });
-  });
-
-  it('lets a mini-mode consumer flip individual flags back on', () => {
-    // A thumbnail that wants pan-to-explore is still expressible via
-    // overrides; the mini preset is just the default floor.
-    const resolved = resolveFlags({
-      mode: 'mini',
-      enablePan: true,
-    });
-    expect(resolved.enablePan).toBe(true);
-    // Other mini defaults stay off.
-    expect(resolved.showControls).toBe(false);
-    expect(resolved.enableSelection).toBe(false);
-    expect(resolved.enableNodeMove).toBe(false);
-  });
-
-  it('lets a per-feature override turn an edit-mode flag off', () => {
-    // Edit mode + hide the toolbar (e.g. a presentation slice that wants
-    // every editing keyboard shortcut + persistence on, but no on-canvas
-    // shape picker chrome).
-    const resolved = resolveFlags({ mode: 'edit', showToolbar: false });
+  it('lets a per-feature override turn a flag off', () => {
+    // E.g. a presentation slice that wants every editing keyboard shortcut +
+    // persistence on, but no on-canvas shape picker chrome.
+    const resolved = resolveFlags({ showToolbar: false });
     expect(resolved.showToolbar).toBe(false);
-    // Other defaults stay edit-on.
+    // Other defaults stay on.
     expect(resolved.showStyleStrip).toBe(true);
     expect(resolved.enableContextMenu).toBe(true);
   });
 
-  it('lets a per-feature override turn a view-mode flag on', () => {
-    // View mode + opt-in to keyboard shortcuts (off by default) — e.g. a
-    // kiosk where panning + zoom + ESC clear should still work.
+  it('composes several overrides at once, leaving the rest at their defaults', () => {
     const resolved = resolveFlags({
-      mode: 'view',
-      enableKeyboard: true,
+      showStyleStrip: false,
+      enableContextMenu: false,
+      enableKeyboard: false,
     });
-    expect(resolved.enableKeyboard).toBe(true);
-    // Other view defaults stay view-off (the toolbar is now visible in view
-    // mode, but only as the Select + Hand navigation pair — see the
-    // showShapeTools gate in SeeflowCanvas).
     expect(resolved.showStyleStrip).toBe(false);
     expect(resolved.enableContextMenu).toBe(false);
+    expect(resolved.enableKeyboard).toBe(false);
+    expect(resolved.showToolbar).toBe(true);
+    expect(resolved.enablePan).toBe(true);
   });
 
-  it('treats undefined override as "use preset" (does not coerce to false)', () => {
+  it('treats undefined override as "use the default" (does not coerce to false)', () => {
     // Regression net: a future refactor must not accidentally drop the `??`
     // and use `||` or `Boolean(input.flag)` — those would treat undefined as
-    // false in edit mode, regressing the toolbar away.
-    const resolved = resolveFlags({ mode: 'edit', showToolbar: undefined });
+    // false, regressing the toolbar away.
+    const resolved = resolveFlags({ showToolbar: undefined });
     expect(resolved.showToolbar).toBe(true);
   });
 
-  it('respects explicit false even in edit mode (override wins over preset)', () => {
-    expect(resolveFlags({ mode: 'edit', enablePan: false }).enablePan).toBe(false);
+  it('respects explicit false (override wins over the default)', () => {
+    expect(resolveFlags({ enablePan: false }).enablePan).toBe(false);
   });
 
-  it('respects explicit true even in view mode (override wins over preset)', () => {
-    expect(resolveFlags({ mode: 'view', showToolbar: true }).showToolbar).toBe(true);
+  it('defaults showMiniMap ON and accepts an override', () => {
+    // The high-level outline box is a navigation aid for large canvases.
+    expect(resolveFlags({}).showMiniMap).toBe(true);
+    expect(resolveFlags({ showMiniMap: false }).showMiniMap).toBe(false);
   });
 
-  it('defaults showMiniMap ON for edit + view, OFF for mini, and accepts overrides', () => {
-    // The high-level outline box is a navigation aid for full / read-only
-    // canvases. Mini mode IS the thumbnail, so the default is OFF there to
-    // avoid nesting a minimap inside another minimap.
-    expect(resolveFlags({ mode: 'edit' }).showMiniMap).toBe(true);
-    expect(resolveFlags({ mode: 'view' }).showMiniMap).toBe(true);
-    expect(resolveFlags({ mode: 'mini' }).showMiniMap).toBe(false);
-    // Overrides compose on top of the mode preset in either direction.
-    expect(resolveFlags({ mode: 'edit', showMiniMap: false }).showMiniMap).toBe(false);
-    expect(resolveFlags({ mode: 'view', showMiniMap: false }).showMiniMap).toBe(false);
-    expect(resolveFlags({ mode: 'mini', showMiniMap: true }).showMiniMap).toBe(true);
+  it('passes alignmentSnapThreshold through verbatim (no default)', () => {
+    expect(resolveFlags({}).alignmentSnapThreshold).toBeUndefined();
+    expect(resolveFlags({ alignmentSnapThreshold: 12 }).alignmentSnapThreshold).toBe(12);
   });
 });
 
@@ -4305,55 +4102,28 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     expect(() => handle.current?.pasteImageFromClipboard({} as DataTransfer)).not.toThrow();
   });
 
-  it('renders the ShareMenu in edit mode by default', () => {
-    const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter });
+  it('renders the ShareMenu by default', () => {
+    const tree = callSeeflowCanvas({ adapter: noopAdapter });
     expect(findShareMenu(tree)).not.toBeNull();
-  });
-
-  it('renders the ShareMenu in view mode by default', () => {
-    const tree = callSeeflowCanvas({ mode: 'view' });
-    expect(findShareMenu(tree)).not.toBeNull();
-  });
-
-  it("does NOT render the ShareMenu when mode === 'mini'", () => {
-    const tree = callSeeflowCanvas({ mode: 'mini' });
-    expect(findShareMenu(tree)).toBeNull();
   });
 
   it('does NOT render the ShareMenu when showShareMenu is explicitly false', () => {
-    const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter, showShareMenu: false });
+    const tree = callSeeflowCanvas({ adapter: noopAdapter, showShareMenu: false });
     expect(findShareMenu(tree)).toBeNull();
   });
 
-  it('renders the MiniMap in edit and view modes, suppresses it in mini', () => {
-    // The MiniMap is React Flow's outline / high-level box. It's a navigation
-    // aid for full / read-only canvases; mini mode IS the thumbnail so we
-    // gate it off there. Override `showMiniMap` flips this in either
-    // direction.
-    const editTree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter });
-    expect(findElement(editTree, (el) => el.type === MiniMap)).not.toBeNull();
+  it('renders the MiniMap by default and suppresses it via showMiniMap={false}', () => {
+    // The MiniMap is React Flow's outline / high-level box — a navigation aid
+    // for large canvases. `showMiniMap` flips it in either direction.
+    const tree = callSeeflowCanvas({ adapter: noopAdapter });
+    expect(findElement(tree, (el) => el.type === MiniMap)).not.toBeNull();
 
-    const viewTree = callSeeflowCanvas({ mode: 'view' });
-    expect(findElement(viewTree, (el) => el.type === MiniMap)).not.toBeNull();
-
-    const miniTree = callSeeflowCanvas({ mode: 'mini' });
-    expect(findElement(miniTree, (el) => el.type === MiniMap)).toBeNull();
-
-    // Mini consumer can opt back in, and edit consumer can opt out.
-    const miniOverride = callSeeflowCanvas({ mode: 'mini', showMiniMap: true });
-    expect(findElement(miniOverride, (el) => el.type === MiniMap)).not.toBeNull();
-
-    const editOverride = callSeeflowCanvas({
-      mode: 'edit',
-      adapter: noopAdapter,
-      showMiniMap: false,
-    });
-    expect(findElement(editOverride, (el) => el.type === MiniMap)).toBeNull();
+    const suppressed = callSeeflowCanvas({ adapter: noopAdapter, showMiniMap: false });
+    expect(findElement(suppressed, (el) => el.type === MiniMap)).toBeNull();
   });
 
   it('threads the exportApi callbacks into ShareMenu', () => {
     const tree = callSeeflowCanvas({
-      mode: 'edit',
       adapter: noopAdapter,
       projectId: 'demo-42',
     });
@@ -4490,7 +4260,6 @@ describe('US-004: alignment guides drag wiring', () => {
     const setterSink: CapturedSetterCall[] = [];
     const tree = callSeeflowCanvas(
       {
-        mode: 'edit',
         nodes: [refNode, draggedNode],
         selectedNodeIds: [],
         onNodePositionChange: () => {},
@@ -4538,7 +4307,7 @@ describe('US-004: alignment guides drag wiring', () => {
     };
     const setterSink: CapturedSetterCall[] = [];
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [refNode, draggedNode], selectedNodeIds: [] },
+      { nodes: [refNode, draggedNode], selectedNodeIds: [] },
       { setterSink },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -4588,7 +4357,6 @@ describe('US-004: alignment guides drag wiring', () => {
     };
     const positionCommits: Array<{ id: string; position: { x: number; y: number } }> = [];
     const tree = callSeeflowCanvas({
-      mode: 'edit',
       nodes: [refNode, draggedNode],
       selectedNodeIds: [],
       onNodePositionChange: (id, position) => positionCommits.push({ id, position }),
@@ -4633,7 +4401,7 @@ describe('US-004: alignment guides drag wiring', () => {
 // merged onNodePositionsChange (group + every member, equal deltas) with dedupe.
 // ===========================================================================
 describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
-  // The alignment hook (default-on in edit mode) batches guide commits through
+  // The alignment hook (default-on) batches guide commits through
   // requestAnimationFrame, which bun doesn't provide; onNodesChange runs the
   // alignment intercept first, so we stub a no-op rAF (same as the US-004 block).
   let savedRaf: typeof globalThis.requestAnimationFrame;
@@ -4691,10 +4459,7 @@ describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
     // guides on, the group's position change would be snapped mid-drag and skew
     // the asserted delta by the snap offset.
     const setterSink: CapturedSetterCall[] = [];
-    const tree = callSeeflowCanvas(
-      { mode: 'edit', enableAlignmentGuides: false, ...props },
-      { setterSink },
-    );
+    const tree = callSeeflowCanvas({ enableAlignmentGuides: false, ...props }, { setterSink });
     const rf = findElement(tree, (el) => el.type === ReactFlow);
     if (!rf) throw new Error('ReactFlow element not found');
     const initialNodes = rf.props.nodes as Node[];
@@ -4867,7 +4632,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
   });
 
   function reactFlowOf(props: Record<string, unknown>, setterSink: CapturedSetterCall[]) {
-    const tree = callSeeflowCanvas({ mode: 'edit', ...props }, { setterSink });
+    const tree = callSeeflowCanvas({ ...props }, { setterSink });
     const rf = findElement(tree, (el) => el.type === ReactFlow);
     if (!rf) throw new Error('ReactFlow element not found');
     return rf;
@@ -4898,13 +4663,13 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     expect(lastActiveSetter(sink)).toBeUndefined();
   });
 
-  it('M9 §9.9: double-clicking a group in VIEW mode does NOT enter isolation (edit-only)', () => {
-    // Enter isolation is an edit-only affordance (it makes members editable).
-    // In view mode `flags.showResizeHandles` is false, so the gate blocks it even
-    // though selection/pan stay on. The group still renders read-only.
+  it('M9 §9.9: double-clicking a group with showResizeHandles={false} does NOT enter isolation', () => {
+    // Enter isolation is an editing affordance (it makes members editable), so
+    // it rides on the same `flags.showResizeHandles` gate as the group ＋/⊟
+    // overlay. A host that turns resize handles off doesn't get isolation.
     const sink: CapturedSetterCall[] = [];
     const tree = callSeeflowCanvas(
-      { mode: 'view', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
+      { showResizeHandles: false, nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
       { setterSink: sink },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -4920,7 +4685,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1'; // entered
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
       { setterSink: sink, useStateOverrides: overrides },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -4944,7 +4709,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB(), outsider()], selectedNodeIds: [] },
+      { nodes: [grp(), nodeA(), nodeB(), outsider()], selectedNodeIds: [] },
       { setterSink: sink, useStateOverrides: overrides },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -4959,7 +4724,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
       { setterSink: sink, useStateOverrides: overrides },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -4974,7 +4739,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
+      { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
       { setterSink: sink, useStateOverrides: overrides },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -5012,7 +4777,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
       const overrides: unknown[] = [];
       overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
       callSeeflowCanvas(
-        { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['node-a'] },
+        { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['node-a'] },
         { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
       );
       // Register every keydown listener (the ESC chain among them). The effect
@@ -5042,7 +4807,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     const tree = callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
       { useStateOverrides: overrides },
     );
     const rf = findElement(tree, (el) => el.type === ReactFlow);
@@ -5059,7 +4824,6 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
 
   it('OVERLAY: with NO group entered every node renders unchanged (no active / no draggable flip)', () => {
     const tree = callSeeflowCanvas({
-      mode: 'edit',
       nodes: [grp(), nodeA(), nodeB()],
       selectedNodeIds: [],
     });
@@ -5080,7 +4844,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     // The group is NOT in `nodes` (ungrouped / deleted / flow swapped).
     callSeeflowCanvas(
-      { mode: 'edit', nodes: [nodeA(), nodeB()], selectedNodeIds: [] },
+      { nodes: [nodeA(), nodeB()], selectedNodeIds: [] },
       { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
     );
     // Find the cleanup effect by its deps shape: [activeGroupId, nodes].
@@ -5099,7 +4863,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     const overrides: unknown[] = [];
     overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
     callSeeflowCanvas(
-      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
       { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
     );
     const cleanup = effects.find(

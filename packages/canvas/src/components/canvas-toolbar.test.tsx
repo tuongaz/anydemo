@@ -540,7 +540,7 @@ describe('CanvasToolbar', () => {
       expect(received).toEqual([{ kind: 'draw', shape: 'rectangle' }]);
     });
 
-    it('showShapeTools=false hides every shape tile + icon picker (view-mode toolbar)', () => {
+    it('showShapeTools=false hides every shape tile + icon picker', () => {
       const tree = callToolbar({ showShapeTools: false, onPickIcon: () => {} });
       // Select + Hand still render.
       expect(findElement(tree, testIdEquals('toolbar-mode-select'))).not.toBeNull();

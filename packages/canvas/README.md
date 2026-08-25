@@ -36,51 +36,10 @@ import '@seeflow/canvas/style.css';
 import { SeeflowCanvas } from '@seeflow/canvas';
 ```
 
-## Quickstart — view mode
+## Quickstart
 
-Read-only navigable canvas. No adapter required.
-
-```tsx
-import { SeeflowCanvas } from '@seeflow/canvas';
-
-<SeeflowCanvas
-  mode="view"
-  nodes={nodes}
-  connectors={connectors}
-  selectedNodeIds={[]}
-  selectedConnectorIds={[]}
-/>;
-```
-
-## Quickstart — mini mode (thumbnails)
-
-Static preview — every chrome affordance off (no Controls cluster, toolbar,
-style-strip, detail panel, MiniMap) and every input path inert (no pan, zoom,
-selection, or node drag). `autoFitView` defaults to `true` so the flow
-self-frames inside whatever box you drop it into. No adapter required.
-
-```tsx
-import { SeeflowCanvas } from '@seeflow/canvas';
-
-<div style={{ width: 240, height: 160 }}>
-  <SeeflowCanvas
-    mode="mini"
-    nodes={nodes}
-    connectors={connectors}
-    selectedNodeIds={[]}
-    selectedConnectorIds={[]}
-  />
-</div>;
-```
-
-Mini mode is just the floor — `CanvasFeatureOverrides` still composes, so a
-thumbnail that wants pan-to-explore can pass `enablePan={true}`
-without leaving mini mode.
-
-## Quickstart — edit mode
-
-Edit mode requires a `CanvasAdapter` — the seam through which the canvas
-persists every mutation.
+The canvas is an editor and always requires a `CanvasAdapter` — the seam
+through which it persists every mutation.
 
 ```tsx
 import { SeeflowCanvas, createRestAdapter } from '@seeflow/canvas';
@@ -88,7 +47,6 @@ import { SeeflowCanvas, createRestAdapter } from '@seeflow/canvas';
 const adapter = createRestAdapter({ baseUrl: '', project: 'my-project', flow: 'main' });
 
 <SeeflowCanvas
-  mode="edit"
   adapter={adapter}
   nodes={nodes}
   connectors={connectors}
@@ -96,6 +54,27 @@ const adapter = createRestAdapter({ baseUrl: '', project: 'my-project', flow: 'm
   selectedConnectorIds={selection.connectors}
   onSelectionChange={onSelectionChange}
   onCreateShapeNode={onCreateShapeNode}
+/>;
+```
+
+## Feature flags (`CanvasFeatureOverrides`)
+
+Every chrome affordance and interaction path is on by default. A host narrows
+the surface by flipping individual flags off — `showToolbar`, `showStyleStrip`,
+`showDetailPanel`, `showResizeHandles`, `showControls`, `showShareMenu`,
+`showMiniMap`, `enableKeyboard`, `enableContextMenu`, `enableDragDrop`,
+`enableImageDrop`, `enableZoom`, `enablePan`, `enableSelection`,
+`enableNodeMove`, `enableAlignmentGuides`. `resolveFlags` is the exported pure
+resolver that layers the overrides over the defaults.
+
+```tsx
+// A presentation surface: no style strip, no context menu, no keyboard chords.
+<SeeflowCanvas
+  adapter={adapter}
+  showStyleStrip={false}
+  enableContextMenu={false}
+  enableKeyboard={false}
+  /* ...other props */
 />;
 ```
 
@@ -116,9 +95,8 @@ and Download PNG. Capture lives in the canvas via
 [`useCanvasExport`](./src/hooks/use-canvas-export.ts), so every embedder gets
 the same fit-view + snapshot + jspdf pipeline for free — no setup required.
 
-- The menu renders in `mode='edit'` and `mode='view'`, and is suppressed in
-  `mode='mini'`. Override with `showShareMenu={true|false}` to force it on or
-  off for a specific surface.
+- The menu renders by default. Pass `showShareMenu={false}` to suppress it on
+  a specific surface.
 - Both items are wired automatically from the canvas's own export hook; the
   trigger hides itself if neither download is available.
 - Pass `projectId` to seed the download filename (`<projectId>.pdf` /
@@ -126,7 +104,6 @@ the same fit-view + snapshot + jspdf pipeline for free — no setup required.
 
 ```tsx
 <SeeflowCanvas
-  mode="edit"
   adapter={adapter}
   projectId="my-demo"
   /* ...other props */
@@ -143,11 +120,11 @@ invariant).
 
 The canvas renders groups, draws the multi-select overlay (padded rect + 4
 corner resize handles + a ＋ create / ⊟ ungroup icon), and owns the
-double-click enter/exit **isolation** interaction (edit mode only — a group
-still renders read-only in `view`/`mini`). The actual create / ungroup / move /
-resize / delete / clipboard **mutations are composed by the host** inside a
-`history.batch(...)` using the exported pure ops, so undo/redo and optimistic
-overrides stay in the host's hands:
+double-click enter/exit **isolation** interaction (gated on
+`showResizeHandles`, the same flag as the group overlay chrome). The actual
+create / ungroup / move / resize / delete / clipboard **mutations are composed
+by the host** inside a `history.batch(...)` using the exported pure ops, so
+undo/redo and optimistic overrides stay in the host's hands:
 
 ```ts
 import {
@@ -163,9 +140,9 @@ import {
 } from '@seeflow/canvas';
 ```
 
-Wire the host callbacks `onCreateGroup(memberIds)` and `onUngroup(groupId)` (edit
-mode) to enable the affordances; grouping has no master flag, so leaving them
-unset disables the feature on that surface.
+Wire the host callbacks `onCreateGroup(memberIds)` and `onUngroup(groupId)` to
+enable the affordances; grouping has no master flag, so leaving them unset
+disables the feature on that surface.
 
 **Server-side membership integrity (when using the studio adapter):** every write
 re-validates the whole flow, and a `superRefine` rejects a group whose `childIds`
@@ -182,9 +159,7 @@ groups (`childIds: []`) are allowed and persist as labeled zones.
 outline of the whole flow — handy on large canvases where the viewport only
 shows a slice.
 
-- Default ON for `mode='edit'` and `mode='view'`; OFF for `mode='mini'` (the
-  canvas IS the thumbnail). Override with `showMiniMap={true|false}` to force
-  it on or off on any surface.
+- Default ON. Pass `showMiniMap={false}` to suppress it on a specific surface.
 - The minimap is themed under `.seeflow-canvas-root` so the background,
   viewport mask, and node fills track the canvas's light / dark tokens.
 - PDF / PNG export already excludes the minimap from captured snapshots, so
@@ -192,7 +167,7 @@ shows a slice.
 
 ```tsx
 // Hide the minimap on a specific embed surface:
-<SeeflowCanvas mode="view" showMiniMap={false} /* ... */ />;
+<SeeflowCanvas showMiniMap={false} /* ... */ />;
 ```
 
 ### Imperative handle (`SeeflowCanvasHandle`)
