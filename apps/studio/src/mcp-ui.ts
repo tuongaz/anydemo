@@ -68,12 +68,28 @@ export type CanvasWidgetState =
       justCreated?: boolean;
     };
 
-/** Lazy-resolved absolute path to the built iframe HTML. Resolved through
- *  `import.meta.resolve` so the path is stable whether the studio runs from
- *  the source tree (dev) or from the published `@tuongaz/seeflow` package
- *  (where `apps/mcp-app/dist/index.html` is bundled into the tarball). */
-const resolveCanvasHtmlPath = (): string =>
-  fileURLToPath(import.meta.resolve('../../mcp-app/dist/index.html'));
+/** Candidate locations for the built iframe HTML, checked in order.
+ *
+ *  1. `../../mcp-app/dist/index.html` — the dev source tree, where
+ *     `bun run --filter @seeflow/mcp-app build` writes it and where the
+ *     integration orchestrator checks freshness. Preferred so a canvas edit in
+ *     a checkout is picked up without re-running the packaging copy.
+ *  2. `../dist/mcp-app/index.html` — inside the published `@tuongaz/seeflow`
+ *     package. npm cannot pack a path outside the package root, so
+ *     `prepublishOnly` copies the bundle here and `files` lists `dist/mcp-app`.
+ *     From an install this is the ONLY one that exists — candidate 1 would
+ *     resolve to `node_modules/@tuongaz/mcp-app/dist/index.html`, which is not
+ *     a package we publish.
+ */
+const CANVAS_HTML_CANDIDATES = ['../../mcp-app/dist/index.html', '../dist/mcp-app/index.html'];
+
+/** Lazy-resolved absolute path to the built iframe HTML: the first candidate
+ *  that exists on disk, or the dev path (so the not-found error names the
+ *  location the build step below actually writes). */
+const resolveCanvasHtmlPath = (): string => {
+  const resolved = CANVAS_HTML_CANDIDATES.map((rel) => fileURLToPath(import.meta.resolve(rel)));
+  return resolved.find((p) => existsSync(p)) ?? (resolved[0] as string);
+};
 
 let cachedHtml: string | undefined;
 let cachedPath: string | undefined;

@@ -126,7 +126,8 @@ export const fetchFlowDetail = async (project: string, flow: string): Promise<Fl
 };
 
 export interface CreateProjectBody {
-  /** Optional: when omitted the studio scaffolds under ~/.seeflow/projects/<slug>. */
+  /** Optional: when omitted the studio scaffolds under `<seeflowHome()>/projects/<slug>`
+   *  (`~/.seeflow` by default, `$SEEFLOW_WORKSPACE` when set — e.g. `/workspace` in Docker). */
   path?: string;
   name: string;
   description?: string;

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';

@@ -166,6 +166,11 @@ import '@xyflow/react/dist/style.css';
  * `DEFAULT_STORAGE_PREFIX` and is unaffected by this prop.
  */
 export interface CanvasFeatureOverrides {
+  // Deliberate embedder API. Only `showShareMenu` has an in-repo caller today
+  // (the studio hides the in-canvas download menu because its header owns it),
+  // but the struct is the documented seam for narrowing the canvas surface now
+  // that the `view` / `mini` mode presets are gone. Keep the flags composable
+  // and default-on; do NOT reintroduce a mode discriminator over them.
   showToolbar?: boolean;
   showStyleStrip?: boolean;
   showDetailPanel?: boolean;

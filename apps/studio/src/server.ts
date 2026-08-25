@@ -216,12 +216,13 @@ export function createApp(options: CreateAppOptions = {}): Hono {
 
 export interface ServeOptions extends CreateAppOptions {
   port?: number;
+  /** Bind address. Defaults to loopback — see DEFAULT_CONFIG in runtime.ts. */
   hostname?: string;
 }
 
 export function serve(options: ServeOptions = {}) {
   const port = options.port ?? 4321;
-  const hostname = options.hostname ?? '0.0.0.0';
+  const hostname = options.hostname ?? '127.0.0.1';
   mkdirSync(seeflowHome(), { recursive: true });
   const app = createApp(options);
   // Bun's default per-connection idle timeout (~10s) reaps long-lived SSE

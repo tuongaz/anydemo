@@ -6,7 +6,6 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';

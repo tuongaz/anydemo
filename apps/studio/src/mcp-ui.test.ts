@@ -4,6 +4,8 @@
 // specific to the tool; these tests pin the shape contract for each.
 
 import { describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CANVAS_RESOURCE_URI, type CanvasWidgetState, canvasMeta } from './mcp-ui.ts';
 
 const BACKEND_URL = 'http://127.0.0.1:54321';
@@ -259,5 +261,27 @@ describe('canvasMeta()', () => {
       expect(widget.backendUrl).toBe(BACKEND_URL);
       expect(widget.backendToken).toBe(BACKEND_TOKEN);
     }
+  });
+});
+
+// The MCP App iframe bundle lives OUTSIDE apps/studio in the dev tree
+// (apps/mcp-app/dist/), and npm cannot pack a path outside the package root.
+// If `prepublishOnly` stops copying it into apps/studio/dist/mcp-app — or
+// `files` stops listing it — `resources/read ui://seeflow/canvas` throws
+// "MCP App bundle not found" for every npm install, which is exactly how it
+// shipped broken through 0.6.2.
+describe('mcp-app bundle packaging', () => {
+  const manifest = JSON.parse(readFileSync(join(import.meta.dir, '../package.json'), 'utf8')) as {
+    files: string[];
+    scripts: Record<string, string>;
+  };
+
+  it('ships dist/mcp-app in the tarball', () => {
+    expect(manifest.files).toContain('dist/mcp-app');
+  });
+
+  it('builds the bundle into the package on prepublishOnly', () => {
+    expect(manifest.scripts.prepublishOnly).toContain('build:mcp-app');
+    expect(manifest.scripts['build:mcp-app']).toContain('dist/mcp-app/index.html');
   });
 });

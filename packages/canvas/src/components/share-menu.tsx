@@ -12,12 +12,12 @@ import {
 export interface ShareMenuProps {
   /**
    * Download the current canvas as a PDF. When omitted, the "Download PDF"
-   * menu item is hidden. Works in both `edit` and `view` modes.
+   * menu item is hidden.
    */
   onDownloadPdf?: () => Promise<unknown> | unknown;
   /**
    * Download the current canvas as a PNG. When omitted, the "Download PNG"
-   * menu item is hidden. Works in both `edit` and `view` modes.
+   * menu item is hidden.
    */
   onDownloadPng?: () => Promise<unknown> | unknown;
 }

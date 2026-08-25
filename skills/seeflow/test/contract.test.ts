@@ -6,6 +6,33 @@ const SKILL_ROOT = resolve(__dirname, '..');
 const SKILL_MD = resolve(SKILL_ROOT, 'SKILL.md');
 const AGENTS_DIR = resolve(SKILL_ROOT, 'agents');
 const REFERENCES_DIR = resolve(SKILL_ROOT, 'references');
+const REPO_ROOT = resolve(SKILL_ROOT, '../..');
+
+/** Source trees + docs the removed-feature guard sweeps alongside the skill.
+ *  Deliberately excludes CHANGELOG.md and docs/adr/ — those are historical
+ *  records whose whole job is to name what was removed. */
+const GUARDED_FILES = ['README.md', 'docs/FEATURES.md', 'design/design.html', 'CONTEXT.md'];
+const GUARDED_TREES = [
+  'apps/studio/src',
+  'apps/web/src',
+  'apps/mcp-app/src',
+  'packages/canvas/src',
+];
+const GUARDED_EXTS = ['.ts', '.tsx', '.css', '.html', '.md'];
+
+function readAllSource(dir: string): { path: string; body: string }[] {
+  const out: { path: string; body: string }[] = [];
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === 'dist') continue;
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...readAllSource(full));
+    } else if (GUARDED_EXTS.some((ext) => entry.endsWith(ext))) {
+      out.push({ path: full, body: readFileSync(full, 'utf8') });
+    }
+  }
+  return out;
+}
 
 function readAllMarkdown(dir: string): { path: string; body: string }[] {
   const out: { path: string; body: string }[] = [];
@@ -67,6 +94,49 @@ describe('seeflow skill <-> CLI contract', () => {
       ...readAllMarkdown(REFERENCES_DIR),
     ];
     for (const { path, body } of docs) {
+      for (const pattern of banned) {
+        const match = pattern.exec(body);
+        if (match) {
+          const line = body.slice(0, match.index).split('\n').length;
+          throw new Error(`${path}:${line} references removed feature token "${match[0]}"`);
+        }
+      }
+    }
+  });
+
+  it('no source file or user-facing doc references a removed execution or cloud feature', () => {
+    // The scrub list that used to track this lived in docs/FEATURES.md
+    // Appendix B, which went with the cloud sections (docs/adr/0002). This is
+    // its replacement: the skill-only guard above missed the execution copy in
+    // design.html and the "keeps scripts" comments in operations.ts precisely
+    // because it never looked outside skills/.
+    const banned = [
+      /\bplayAction\b/,
+      /\bstatusAction\b/,
+      /\bStatusReport\b/,
+      /scripts\/(?:play|status)/,
+      /\bscriptPath\b/,
+      /\bresetAction\b/,
+      /\bhandlerModule\b/,
+      /--with-scripts/,
+      /cloud\.seeflow\.dev/,
+      /\bSEEFLOW_CLOUD_URL\b/,
+      /\bonExportToCloud\b/,
+      /\bonShareWithMembers\b/,
+      /\bopenEmbedDialog\b/,
+      /\bcapturePreview\b/,
+      /\bgetTenantId\b/,
+      /\bresolveFileSrc\b/,
+      /\bbuildEmbedSnippet\b/,
+    ];
+    const files = [
+      ...GUARDED_FILES.map((rel) => ({
+        path: join(REPO_ROOT, rel),
+        body: readFileSync(join(REPO_ROOT, rel), 'utf8'),
+      })),
+      ...GUARDED_TREES.flatMap((rel) => readAllSource(join(REPO_ROOT, rel))),
+    ];
+    for (const { path, body } of files) {
       for (const pattern of banned) {
         const match = pattern.exec(body);
         if (match) {

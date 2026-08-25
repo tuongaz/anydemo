@@ -5,7 +5,6 @@ import {
   applyThemeToHtml,
   isTheme,
   readStoredTheme,
-  readUrlTheme,
   resolveTheme,
   subscribeToColorScheme,
   writeStoredTheme,
@@ -96,46 +95,6 @@ describe('readStoredTheme / writeStoredTheme — localStorage roundtrip', () => 
       },
     };
     expect(() => writeStoredTheme(broken, 'dark')).not.toThrow();
-  });
-});
-
-describe('readUrlTheme — ?theme= URL param (US-010 viewer / embed iframe)', () => {
-  it('returns "light" for ?theme=light', () => {
-    expect(readUrlTheme('?theme=light')).toBe('light');
-  });
-
-  it('returns "dark" for ?theme=dark', () => {
-    expect(readUrlTheme('?theme=dark')).toBe('dark');
-  });
-
-  it('returns "light" for an unknown ?theme= value (matches new package default)', () => {
-    expect(readUrlTheme('?theme=midnight')).toBe('light');
-  });
-
-  it('returns "light" for an empty ?theme= value', () => {
-    expect(readUrlTheme('?theme=')).toBe('light');
-  });
-
-  it('returns null when no theme param is present (falls through to studio chain)', () => {
-    expect(readUrlTheme('')).toBe(null);
-    expect(readUrlTheme('?foo=bar')).toBe(null);
-  });
-
-  it('survives a search string that throws inside URLSearchParams', () => {
-    // URLSearchParams accepts most strings without throwing, so the catch
-    // branch is mostly defensive against future input shapes. Smoke-test that
-    // the function never throws on stress input.
-    expect(() => readUrlTheme('?theme=light&theme=dark&%E0')).not.toThrow();
-  });
-
-  it('honors the first ?theme= occurrence on a multi-value URL', () => {
-    expect(readUrlTheme('?theme=light&theme=dark')).toBe('light');
-    expect(readUrlTheme('?theme=dark&theme=light')).toBe('dark');
-  });
-
-  it('is case-sensitive (only accepts canonical lowercase)', () => {
-    expect(readUrlTheme('?theme=Light')).toBe('light');
-    expect(readUrlTheme('?theme=DARK')).toBe('light');
   });
 });
 

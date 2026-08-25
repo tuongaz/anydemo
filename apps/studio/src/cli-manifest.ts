@@ -69,12 +69,18 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   // ---- lifecycle ---------------------------------------------------------
   {
     name: 'start',
-    synopsis: 'seeflow start [--port <n>] [--foreground] [--debug]',
+    synopsis: 'seeflow start [--port <n>] [--host <addr>] [--foreground] [--debug]',
     description: 'Start the SeeFlow Studio server. Default when no command is given.',
     category: 'lifecycle',
     args: [],
     flags: [
       { name: 'port', valuePlaceholder: '<n>', description: 'Listen on port n (default: 4321)' },
+      {
+        name: 'host',
+        valuePlaceholder: '<addr>',
+        description:
+          'Bind address (default: 127.0.0.1, loopback only). Pass 0.0.0.0 to expose the studio on your network.',
+      },
       { name: 'foreground', description: 'Run attached to the terminal (default: background)' },
       { name: 'debug', description: 'Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log' },
     ],

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  DEFAULT_CONFIG,
   clearPid,
   isPidAlive,
   portInUse,
@@ -18,21 +19,30 @@ const tmpFile = (name: string) => {
   return join(dir, name);
 };
 
+describe('DEFAULT_CONFIG', () => {
+  // docs/adr/0002-localhost-only.md: "The studio binds loopback by default."
+  // Exposing the studio (and its $EDITOR-spawning routes) on a network is an
+  // explicit `--host` opt-out, never the default.
+  it('binds loopback', () => {
+    expect(DEFAULT_CONFIG.host).toBe('127.0.0.1');
+  });
+});
+
 describe('readConfig', () => {
   it('returns defaults when file does not exist', () => {
-    expect(readConfig(tmpFile('config.json'))).toEqual({ port: 4321, host: '0.0.0.0' });
+    expect(readConfig(tmpFile('config.json'))).toEqual({ port: 4321, host: '127.0.0.1' });
   });
 
   it('returns defaults when file is corrupt', () => {
     const path = tmpFile('config.json');
     writeFileSync(path, '{ not json');
-    expect(readConfig(path)).toEqual({ port: 4321, host: '0.0.0.0' });
+    expect(readConfig(path)).toEqual({ port: 4321, host: '127.0.0.1' });
   });
 
   it('merges user-set fields with defaults', () => {
     const path = tmpFile('config.json');
     writeFileSync(path, JSON.stringify({ port: 9999 }));
-    expect(readConfig(path)).toEqual({ port: 9999, host: '0.0.0.0' });
+    expect(readConfig(path)).toEqual({ port: 9999, host: '127.0.0.1' });
   });
 });
 

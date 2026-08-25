@@ -8,7 +8,7 @@ We have decided the product this leaves behind is the whole product: **SeeFlow i
 
 ## Decision
 
-- **Nothing in this repo talks to a network service it does not own.** The studio binds loopback; the CLI, the MCP server, and the canvas have no remote endpoint left to call.
+- **Nothing in this repo talks to a network service it does not own.** The studio binds loopback (`127.0.0.1`) by default — exposing it on a network is an explicit `seeflow start --host <addr>` opt-out, which is what the Docker image passes. The CLI, the MCP server, and the canvas have no remote endpoint left to call.
 - The publish/share/embed surface is deleted outright — CLI commands, HTTP routes, canvas exports, and UI — not deprecated, not stubbed.
 - **Export** now means one thing: downloading a flow as a PNG or PDF from the canvas. `CONTEXT.md` carries that definition; `docs/FEATURES.md` is written against it.
 
@@ -18,6 +18,7 @@ We have decided the product this leaves behind is the whole product: **SeeFlow i
 - **The canvas collapses to edit-only.** The read-only and thumbnail render paths existed for the hosted viewer and dashboard; with no viewer there is one mode. `@seeflow/canvas` loses `EmbedDialog`, `ShareMenuMode`, `NodeCapabilities`, `resolveFileSrc`, the `onExportToCloud` / `onShareWithMembers` / `enableEmbed` props, `openEmbedDialog()`, and `capturePreview()`. Download PDF/PNG stays.
 - **Credentials on disk are orphaned, not migrated.** `~/.seeflow/credentials.json` (or `$XDG_CONFIG_HOME/seeflow/credentials.json`) and any `<project>/.seeflow/cloud.json` are never read or written again. SeeFlow does not delete them for you — remove them by hand.
 - **No release lockstep.** Publishing to npm no longer triggers a downstream deploy; `release.yml` ends at npm + Docker Hub.
+- **`docs/FEATURES.md` lost its appendices.** Appendix A and Appendix B went with the cloud sections, so [0001](./0001-pivot-to-ai-human-bridge.md)'s pointer at "`FEATURES.md` Appendix B tracks the scrub" now resolves to nothing. That is intended: the scrub it tracked is complete. `skills/seeflow/test/contract.test.ts` is the standing guard against the removed tokens coming back.
 - **`docs/plans/` is untracked.** The 100-plus design documents stay on disk and out of git — they described a two-repo product and were the largest remaining source of contradictory guidance for agents reading the repo. Reach for `git history` if you need one back.
 
 ## Considered options

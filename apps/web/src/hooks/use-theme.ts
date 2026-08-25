@@ -22,25 +22,6 @@ export function readStoredTheme(storage: Readable): Theme {
   }
 }
 
-/**
- * Read the `theme` query-string param off a URL search string. Mirrors the
- * FOUC script in apps/web/index.html: when the param is present but invalid,
- * we resolve to 'light' (the new package default). Returns `null` when the
- * param is absent so callers can fall through to the studio's localStorage +
- * matchMedia chain.
- */
-export function readUrlTheme(search: string): ResolvedTheme | null {
-  try {
-    const params = new URLSearchParams(search);
-    if (!params.has('theme')) return null;
-    const raw = params.get('theme');
-    if (raw === 'light' || raw === 'dark') return raw;
-    return 'light';
-  } catch {
-    return null;
-  }
-}
-
 export function writeStoredTheme(storage: Writable, theme: Theme): void {
   try {
     storage.setItem(THEME_STORAGE_KEY, theme);
@@ -104,10 +85,8 @@ export interface UseThemeReturn {
 export function useTheme(): UseThemeReturn {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'system';
-    // URL `?theme=` wins on first paint so the React layer doesn't undo
-    // what the FOUC script in apps/web/index.html already pinned.
-    const url = readUrlTheme(window.location.search);
-    if (url) return url;
+    // Mirrors the FOUC script in apps/web/index.html so the React layer never
+    // undoes what it already pinned on <html>.
     return readStoredTheme(window.localStorage);
   });
 

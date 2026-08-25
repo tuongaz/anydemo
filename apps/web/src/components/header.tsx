@@ -28,7 +28,7 @@ export interface HeaderProps {
   onProjectCreated?: (result: CreateProjectResult) => void;
   onUnregisterProject?: (projectSlug: string) => Promise<void>;
   /**
-   * Renders the Share trigger between ProjectSwitcher and Settings. Pass
+   * Renders the Download trigger between ProjectSwitcher and Settings. Pass
    * `undefined` (the default) when no flow is open — the trigger is hidden
    * entirely on StudioHome.
    */

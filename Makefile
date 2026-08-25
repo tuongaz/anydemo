@@ -14,7 +14,7 @@ DRY_RUN ?= 0
 
 CLI := bun run apps/studio/src/cli.ts
 
-.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync release release.local docker.build docker.run docker.buildx docker.push
+.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync release.local docker.build docker.run docker.buildx docker.push
 
 SEEFLOW_SCHEMA_SRC := apps/studio/src/schema.ts
 SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
@@ -77,8 +77,13 @@ stop: ## Stop the studio daemon (sends SIGTERM)
 register: ## Register a demo: make register DIR=<path>
 	$(CLI) register --path $(DIR)
 
+# `seeflow start` already seeds + registers apps/studio/examples/order-pipeline
+# into $(HOME)/.seeflow/order-pipeline. Registering the SOURCE tree as well would
+# upsert a SECOND entry (registry keys on repoPath+flowPath), leaving two
+# identically-named "Main" flows in the switcher and letting canvas edits land in
+# the repo's tracked example. Point at the seeded copy instead.
 demo: ## Quickstart: register the bundled order-pipeline example and open it in the browser
-	@OUTPUT="$$($(CLI) register --path apps/studio/examples/order-pipeline)"; \
+	@OUTPUT="$$($(CLI) register --path $(HOME)/.seeflow/order-pipeline)"; \
 	echo "$$OUTPUT"; \
 	URL="$$(echo "$$OUTPUT" | grep -oE 'http://[^ ]+' | head -1)"; \
 	if [ -n "$$URL" ]; then \

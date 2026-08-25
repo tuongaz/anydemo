@@ -7,7 +7,12 @@ export interface StudioConfig {
   host: string;
 }
 
-export const DEFAULT_CONFIG: StudioConfig = { port: 4321, host: '0.0.0.0' };
+// Loopback by default: SeeFlow is a localhost tool (docs/adr/0002-localhost-only.md)
+// and every mutating route — including the one that spawns $EDITOR — is reachable
+// without an Origin header. Binding the wildcard is an explicit opt-in via
+// `seeflow start --host 0.0.0.0` (what the Docker image does) or a persisted
+// `host` in ~/.seeflow/config.json.
+export const DEFAULT_CONFIG: StudioConfig = { port: 4321, host: '127.0.0.1' };
 
 export function defaultConfigPath(): string {
   return join(seeflowHome(), 'config.json');

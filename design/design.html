@@ -233,17 +233,17 @@
     display: flex; flex-direction: column; gap: 8px;
     box-shadow: var(--shadow-card);
   }
-  .node.is-pending {
-    border-color: var(--amber);
-    box-shadow: var(--shadow-glow-pending);
-  }
-  .node.is-ok {
-    border-color: var(--emerald);
-    box-shadow: var(--shadow-glow-ok);
+  .node.is-hover {
+    border-color: var(--text-faint);
+    box-shadow: var(--shadow-card), 0 10px 28px -12px rgba(0,0,0,0.65);
   }
   .node.is-selected {
     border-color: var(--emerald-hi);
     box-shadow: var(--ring-selected);
+  }
+  .node.is-invalid {
+    border-color: var(--danger);
+    box-shadow: 0 0 30px -4px rgba(239,68,68,0.40);
   }
   .node-head { display: flex; align-items: center; gap: 10px; }
   .node-icon {
@@ -253,15 +253,15 @@
     display: flex; align-items: center; justify-content: center;
     color: var(--text-mute);
   }
-  .node-icon.ok { color: var(--emerald-hi); }
-  .node-icon.pending { color: var(--amber-hi); }
+  .node-icon.accent { color: var(--emerald-hi); }
+  .node-icon.invalid { color: var(--danger); }
   .node-title { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
   .node-sub {
     font-family: var(--font-mono); font-size: 12px;
     color: var(--text-dim);
   }
 
-  /* Status pills */
+  /* Metadata chips (mono, canvas + sidebar) */
   .pill {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 3px 8px; border-radius: var(--r-sm);
@@ -269,31 +269,26 @@
     align-self: flex-start;
     white-space: nowrap;
   }
-  .pill.ok {
+  .pill.neutral {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--text-mute);
+  }
+  .pill.accent {
     background: rgba(16,185,129,0.12);
     border: 1px solid rgba(16,185,129,0.3);
     color: var(--emerald-hi);
-  }
-  .pill.pending {
-    background: rgba(245,158,11,0.10);
-    border: 1px solid rgba(245,158,11,0.3);
-    color: var(--amber-hi);
-  }
-  .pill.live {
-    background: rgba(16,185,129,0.12);
-    border: 1px solid rgba(16,185,129,0.25);
-    color: var(--emerald-hi);
-    letter-spacing: 0.15em; text-transform: uppercase;
   }
   .pill .dot {
     width: 6px; height: 6px; border-radius: 3px;
     background: currentColor;
   }
-  .pill .spinner {
+  /* Base spinner. `.btn .spinner` below only resizes + retimes it, so keep the
+     transparent edge on the SAME side in both rules or the two stack. */
+  .spinner {
     width: 10px; height: 10px;
-    border: 1.6px solid rgba(251,191,36,0.25);
-    border-top-color: var(--amber-hi);
-    border-radius: 50%;
+    border: 1.6px solid currentColor; opacity: 0.85;
+    border-right-color: transparent; border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -359,7 +354,7 @@
     letter-spacing: 0.18em; text-transform: uppercase;
     margin-bottom: 10px;
   }
-  .endpoint {
+  .file-ref {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: var(--r-md);
     background: rgba(255,255,255,0.03);
@@ -367,14 +362,14 @@
     font-family: var(--font-mono); font-size: 13px;
     white-space: nowrap;
   }
-  .method-pill {
+  .kind-pill {
     padding: 2px 7px; border-radius: 3px;
     background: rgba(16,185,129,0.15);
     color: var(--emerald-hi);
     font-size: 10px; font-weight: 600;
     letter-spacing: 0.05em;
   }
-  .activity-row {
+  .attach-row {
     display: flex; align-items: center; gap: 10px;
     padding: 8px 10px; border-radius: var(--r-md);
     background: rgba(255,255,255,0.02);
@@ -382,9 +377,9 @@
     font-family: var(--font-mono); font-size: 12px;
     white-space: nowrap;
   }
-  .activity-row .dot { width: 6px; height: 6px; border-radius: 3px; flex-shrink: 0; }
-  .activity-row .dot.ok { background: var(--emerald-hi); }
-  .activity-row .dot.err { background: var(--danger); }
+  .attach-row .dot { width: 6px; height: 6px; border-radius: 3px; flex-shrink: 0; }
+  .attach-row .dot.on { background: var(--emerald-hi); }
+  .attach-row .dot.off { background: var(--text-faint); }
 
   /* SVG glyphs */
   .glyph svg { display: block; }
@@ -996,7 +991,7 @@
         <div class="meta">
           <span class="name">Emerald</span>
           <span class="hex">#10b981 → #34d399</span>
-          <span class="role">brand · 200 OK · live</span>
+          <span class="role">brand · selection · focus</span>
         </div>
       </div>
       <div class="swatch">
@@ -1004,7 +999,7 @@
         <div class="meta">
           <span class="name">Amber</span>
           <span class="hex">#f59e0b → #fbbf24</span>
-          <span class="role">pending / in-flight</span>
+          <span class="role">warning · needs attention</span>
         </div>
       </div>
       <div class="swatch">
@@ -1012,7 +1007,7 @@
         <div class="meta">
           <span class="name">Danger</span>
           <span class="hex">#ef4444</span>
-          <span class="role">4xx / 5xx</span>
+          <span class="role">destructive · invalid schema</span>
         </div>
       </div>
       <div class="swatch">
@@ -1020,7 +1015,7 @@
         <div class="meta">
           <span class="name">Emerald glow</span>
           <span class="hex">rgba(16,185,129,0.35)</span>
-          <span class="role">window &amp; node halos</span>
+          <span class="role">window &amp; selection halos</span>
         </div>
       </div>
     </div>
@@ -1079,7 +1074,7 @@
         <span class="label">Mono · code</span>
         <span class="spec">JetBrains · 14 / 400</span>
       </div>
-      <div class="type-sample" style="font-family: var(--font-mono); font-size: 14px; color: var(--text);">POST /payment/charge · 142ms · 200 OK</div>
+      <div class="type-sample" style="font-family: var(--font-mono); font-size: 14px; color: var(--text);">flows/main/flow.json · node-7Qk2Xv · aws:lambda</div>
     </div>
     <div class="type-row">
       <div class="type-meta">
@@ -1159,42 +1154,41 @@
           </div>
           <div class="node-sub">JWT · OAuth2</div>
         </div>
-        <div class="node is-pending">
+        <div class="node is-hover">
           <div class="node-head">
-            <div class="node-icon pending">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
-            </div>
-            <div class="node-title">Payment</div>
-          </div>
-          <div class="node-sub">Stripe API</div>
-          <span class="pill pending"><span class="spinner"></span>Processing…</span>
-        </div>
-        <div class="node is-ok">
-          <div class="node-head">
-            <div class="node-icon ok">
+            <div class="node-icon">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
             </div>
             <div class="node-title">Inventory DB</div>
           </div>
-          <div class="node-sub">PostgreSQL</div>
-          <span class="pill ok"><span class="dot"></span>200 OK</span>
+          <div class="node-sub">database · PostgreSQL</div>
         </div>
         <div class="node is-selected">
           <div class="node-head">
-            <div class="node-icon ok">
+            <div class="node-icon accent">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
             </div>
             <div class="node-title">Payment</div>
           </div>
-          <div class="node-sub">Stripe API · selected</div>
-          <span class="pill ok"><span class="dot"></span>200 OK</span>
+          <div class="node-sub">rectangle · aws:lambda</div>
+          <span class="pill accent"><span class="dot"></span>selected</span>
+        </div>
+        <div class="node is-invalid">
+          <div class="node-head">
+            <div class="node-icon invalid">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            </div>
+            <div class="node-title">Checkout UI</div>
+          </div>
+          <div class="node-sub">image · missing data.path</div>
+          <span class="pill neutral">badSchema</span>
         </div>
       </div>
-      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); display: flex; gap: 32px;">
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); display: flex; gap: 32px; flex-wrap: wrap;">
         <span>idle · border #27272a</span>
-        <span>pending · amber + glow + spinner</span>
-        <span>ok · emerald + glow + pill</span>
+        <span>hover · border lift + deeper shadow</span>
         <span>selected · emerald ring 3px</span>
+        <span>invalid · red border, schema rejected the write</span>
       </div>
     </div>
 
@@ -1242,7 +1236,7 @@
           <div>
             <div class="sidebar-section-label">Node detail</div>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <div class="node-icon ok" style="width: 32px; height: 32px; border-radius: 7px;">
+              <div class="node-icon accent" style="width: 32px; height: 32px; border-radius: 7px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
               </div>
               <div style="flex:1;">
@@ -1252,44 +1246,45 @@
             </div>
           </div>
           <div style="display: flex; gap: 10px;">
-            <span class="pill ok"><span class="dot"></span>200 OK</span>
-            <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid var(--border); color: var(--text-mute);">142 ms</span>
+            <span class="pill neutral">node-7Qk2Xv</span>
+            <span class="pill neutral">rectangle</span>
           </div>
           <div>
-            <div class="sidebar-section-label">Endpoint</div>
-            <div class="endpoint">
-              <span class="method-pill">POST</span>
-              <span>/payment/charge</span>
+            <div class="sidebar-section-label">Description</div>
+            <div style="font-size: 13px; line-height: 1.6; color: var(--text-mute);">Charges the customer via Stripe and writes the receipt to the orders table. Owns retry + idempotency keys.</div>
+          </div>
+          <div>
+            <div class="sidebar-section-label">Detail</div>
+            <div class="file-ref">
+              <span class="kind-pill">MD</span>
+              <span>nodes/payment/detail.md</span>
             </div>
           </div>
           <div>
-            <div class="sidebar-section-label">Recent activity</div>
+            <div class="sidebar-section-label">Attachments</div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
-              <div class="activity-row">
-                <span class="dot ok"></span>
-                <span style="color: var(--text); font-weight: 600; width: 28px;">200</span>
-                <span style="color: var(--text-dim); width: 48px;">142ms</span>
-                <span style="color: var(--text-faint); margin-left: auto;">just now</span>
+              <div class="attach-row">
+                <span class="dot on"></span>
+                <span style="color: var(--text); font-weight: 600;">view.html</span>
+                <span style="color: var(--text-faint); margin-left: auto;">4.1 KB</span>
               </div>
-              <div class="activity-row">
-                <span class="dot ok"></span>
-                <span style="color: var(--text); font-weight: 600; width: 28px;">200</span>
-                <span style="color: var(--text-dim); width: 48px;">98ms</span>
-                <span style="color: var(--text-faint); margin-left: auto;">12s ago</span>
+              <div class="attach-row">
+                <span class="dot on"></span>
+                <span style="color: var(--text); font-weight: 600;">sequence.png</span>
+                <span style="color: var(--text-faint); margin-left: auto;">88 KB</span>
               </div>
-              <div class="activity-row">
-                <span class="dot err"></span>
-                <span style="color: var(--text); font-weight: 600; width: 28px;">402</span>
-                <span style="color: var(--text-dim); width: 48px;">87ms</span>
-                <span style="color: var(--text-faint); margin-left: auto;">2m ago</span>
+              <div class="attach-row">
+                <span class="dot off"></span>
+                <span style="color: var(--text-dim); font-weight: 600;">spec.json</span>
+                <span style="color: var(--text-faint); margin-left: auto;">not set</span>
               </div>
             </div>
           </div>
         </div>
         <div style="flex: 1; color: var(--text-dim); font-size: 14px; line-height: 1.6;">
           <p style="margin: 0 0 12px;">Slides in from the right edge of the canvas. <strong style="color: var(--text);">tx: 420px → 0</strong>, easeOutCubic, 500ms.</p>
-          <p style="margin: 0 0 12px;">Content reveals in a stagger: <strong style="color: var(--text);">+0, +150, +300, +450ms</strong> per block. Activity rows pile in at <strong style="color: var(--text);">+80ms</strong> each.</p>
-          <p style="margin: 0;">The originating node gets a 3px emerald ring while the sidebar is open so the user keeps the visual link between the row of activity and the system it describes.</p>
+          <p style="margin: 0 0 12px;">Content reveals in a stagger: <strong style="color: var(--text);">+0, +150, +300, +450ms</strong> per block. Attachment rows pile in at <strong style="color: var(--text);">+80ms</strong> each.</p>
+          <p style="margin: 0;">The originating node keeps its 3px emerald selection ring while the sidebar is open, so the user never loses track of which node the panel is describing.</p>
         </div>
       </div>
     </div>
@@ -1408,7 +1403,7 @@
           <li>No filled secondary buttons in another accent color — use outline/ghost.</li>
           <li>Don't replace text with an icon unless it's a universally understood tool (gear, x, kebab).</li>
           <li>No gradient fills, drop shadows on hover, or transform scales.</li>
-          <li>No "Submit" — always describe the action: <em>Save changes</em>, <em>Send request</em>.</li>
+          <li>No "Submit" — always describe the action: <em>Save changes</em>, <em>Add node</em>.</li>
         </ul>
       </div>
     </div>
@@ -1431,11 +1426,11 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Request body</label>
-          <textarea class="textarea is-mono" style="font-family: var(--font-mono); font-size: 13px;">{
-  "items": ["sku_42"],
-  "currency": "USD"
-}</textarea>
+          <label class="field-label">Node detail (Markdown)</label>
+          <textarea class="textarea is-mono" style="font-family: var(--font-mono); font-size: 13px;">## Payment
+
+Charges via Stripe, writes the receipt to `orders`.
+Owns retry + idempotency keys.</textarea>
         </div>
       </div>
       <div class="strip" style="flex-direction: column; align-items: stretch; gap: 18px;">
@@ -1551,8 +1546,8 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
         </div>
         <div>
-          <div class="alert-title">Connected to checkout-api</div>
-          <div class="alert-desc">9 endpoints discovered · last heartbeat 1s ago.</div>
+          <div class="alert-title">Registered checkout-api</div>
+          <div class="alert-desc">3 flows scanned · 24 nodes, 31 connectors validated.</div>
         </div>
       </div>
       <div class="alert alert-destructive">
@@ -1621,10 +1616,10 @@
       <div class="comp-card">
         <div class="label">Tabs</div>
         <div class="tabs-list">
-          <button class="tab is-active">Canvas</button>
-          <button class="tab">Logs</button>
-          <button class="tab">Activity</button>
-          <button class="tab">Settings</button>
+          <button class="tab is-active">Bundled</button>
+          <button class="tab">AWS</button>
+          <button class="tab">Azure</button>
+          <button class="tab">Logos</button>
         </div>
       </div>
       <div class="comp-card" style="align-items: flex-start;">
@@ -1675,41 +1670,41 @@
       <table class="s-table">
         <thead>
           <tr>
-            <th>Endpoint</th>
-            <th>Method</th>
-            <th>Status</th>
-            <th>Latency</th>
-            <th>Last hit</th>
+            <th>Node</th>
+            <th>Type</th>
+            <th>Icon</th>
+            <th>Detail</th>
+            <th>Connectors</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td class="mono">/checkout</td>
-            <td><span class="badge badge-success">POST</span></td>
-            <td><span class="badge badge-success"><span class="dot"></span>200</span></td>
-            <td class="mono">142 ms</td>
-            <td class="mono">just now</td>
+            <td class="mono">api-gateway</td>
+            <td><span class="badge badge-secondary">server</span></td>
+            <td class="mono">aws:api-gateway</td>
+            <td><span class="badge badge-success"><span class="dot"></span>detail.md</span></td>
+            <td class="mono">4</td>
           </tr>
           <tr>
-            <td class="mono">/payment/charge</td>
-            <td><span class="badge badge-success">POST</span></td>
-            <td><span class="badge badge-success"><span class="dot"></span>200</span></td>
-            <td class="mono">98 ms</td>
-            <td class="mono">12s ago</td>
+            <td class="mono">payment</td>
+            <td><span class="badge badge-secondary">rectangle</span></td>
+            <td class="mono">aws:lambda</td>
+            <td><span class="badge badge-success"><span class="dot"></span>detail.md</span></td>
+            <td class="mono">3</td>
           </tr>
           <tr>
-            <td class="mono">/inventory/reserve</td>
-            <td><span class="badge badge-secondary">GET</span></td>
-            <td><span class="badge badge-warning"><span class="dot"></span>Pending</span></td>
+            <td class="mono">inventory-db</td>
+            <td><span class="badge badge-secondary">database</span></td>
             <td class="mono">—</td>
-            <td class="mono">48s ago</td>
+            <td><span class="badge badge-warning"><span class="dot"></span>empty</span></td>
+            <td class="mono">2</td>
           </tr>
           <tr>
-            <td class="mono">/notify</td>
-            <td><span class="badge badge-success">POST</span></td>
-            <td><span class="badge badge-destructive"><span class="dot"></span>502</span></td>
-            <td class="mono">5,003 ms</td>
-            <td class="mono">2m ago</td>
+            <td class="mono">checkout-ui</td>
+            <td><span class="badge badge-secondary">image</span></td>
+            <td class="mono">—</td>
+            <td><span class="badge badge-destructive"><span class="dot"></span>badSchema</span></td>
+            <td class="mono">0</td>
           </tr>
         </tbody>
       </table>
@@ -2124,23 +2119,23 @@
     <div class="grid grid-2" style="gap: 24px;">
       <div class="token-card" style="padding: 28px;">
         <div class="eyebrow">01</div>
-        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">A diagram is a control panel.</h3>
-        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Every node is clickable. Every edge carries a real request. If it can't be touched, it shouldn't be on the canvas.</p>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">A diagram is a shared artifact.</h3>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">An agent writes it as JSON; a human edits it as a picture. Every affordance has to work in both directions — if a human can't change it on the canvas, or an agent can't read it back out of the file, it doesn't belong here.</p>
       </div>
       <div class="token-card" style="padding: 28px;">
         <div class="eyebrow">02</div>
         <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Color is signal, not decoration.</h3>
-        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Emerald means OK. Amber means pending. Red means broken. Surfaces stay grayscale so signal can't be drowned out.</p>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Emerald is the one system accent — brand, selection, focus. Red means the schema rejected a write. Chrome stays grayscale so the colors an author chose for their own nodes are the only other color on screen.</p>
       </div>
       <div class="token-card" style="padding: 28px;">
         <div class="eyebrow">03</div>
         <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Motion follows causality.</h3>
-        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">A click animates the cursor. A request animates a packet along an edge. A response animates the receiving node. Nothing moves without a cause.</p>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">A drag moves the node under the cursor. An alignment guide snaps when two edges line up. A write on disk re-renders the canvas over SSE. Nothing moves without a cause the user can name.</p>
       </div>
       <div class="token-card" style="padding: 28px;">
         <div class="eyebrow">04</div>
         <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Mono earns the spotlight.</h3>
-        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Anything a developer would type — paths, statuses, durations — is set in JetBrains Mono. It signals "this came from your real system."</p>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Anything a developer would type — node ids, file paths, slugs, JSON keys, icon ids — is set in JetBrains Mono. It signals "this came out of your repo."</p>
       </div>
     </div>
   </section>

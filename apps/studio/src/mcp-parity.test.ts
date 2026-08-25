@@ -8,7 +8,7 @@
 // only one side) can't pass silently.
 
 import { describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CANVAS_RESOURCE_URI, type CanvasWidgetState } from './mcp-ui.ts';

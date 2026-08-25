@@ -15,8 +15,6 @@
  * the bbox math pure means it can be tested with explicit dims.
  */
 
-import type { Rect } from './scale-nodes.ts';
-
 /**
  * Minimal member shape {@link computeGroupBox} needs: an absolute top-left plus
  * the CALLER-RESOLVED width/height. A member without a resolvable size still

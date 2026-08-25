@@ -28,8 +28,10 @@ export type ImageNodeRuntimeData = ImageNodeData & {
   projectId?: string;
   /**
    * Optional override for the file-serving URL prefix. Threaded down from
-   * `<SeeflowCanvas>` so embedders (e.g. the public viewer) can point file
-   * fetches at a different host/route shape than the default `/api/projects`.
+   * `<SeeflowCanvas>` so embedders whose page is not same-origin with the
+   * studio (e.g. the MCP App iframe, which runs at `Origin: null`) can point
+   * file fetches at an absolute studio URL instead of the relative default
+   * `/api/projects`.
    * Not persisted to disk.
    */
   fileBaseUrl?: string;

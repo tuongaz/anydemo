@@ -19,7 +19,17 @@
     "seeflow": "bin/seeflow",
     "seeflow-mcp": "bin/seeflow-mcp"
   },
-  "files": ["bin", "src", "!src/**/*.test.ts", "dist/web", "public", "examples", "README.md"],
+  "files": [
+    "bin",
+    "src",
+    "!src/**/*.test.ts",
+    "dist/web",
+    "dist/mcp-app",
+    "public",
+    "examples",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "engines": {
     "node": ">=18"
   },
@@ -29,8 +39,9 @@
     "start": "bun run src/cli.ts start",
     "test": "bun test",
     "build:web": "cd ../web && bun run build",
+    "build:mcp-app": "bun run --filter @seeflow/mcp-app build && mkdir -p dist/mcp-app && cp ../mcp-app/dist/index.html dist/mcp-app/index.html",
     "vendor:tailwind-runtime": "cp ./node_modules/@tailwindcss/browser/dist/index.global.js public/runtime/tailwind.js",
-    "prepublishOnly": "bun run vendor:tailwind-runtime && bun run build:web && cp ../../README.md ./README.md",
+    "prepublishOnly": "bun run vendor:tailwind-runtime && bun run build:web && bun run build:mcp-app && cp ../../README.md ./README.md",
     "prepack": "bun run scripts/prepack-publish.mjs",
     "postpack": "bun run scripts/postpack-publish.mjs"
   },

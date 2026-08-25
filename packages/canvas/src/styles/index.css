@@ -89,12 +89,7 @@ layer(base);
   --radius: 0.5rem;
 
   --bg-canvas: #fafafa;
-  --emerald-glow: rgba(16, 185, 129, 0.18);
   --shadow-card: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
-  --shadow-window: 0 30px 80px -20px rgba(15, 23, 42, 0.12), 0 0 60px -20px var(--emerald-glow);
-  --shadow-glow-ok: 0 0 30px -4px rgba(16, 185, 129, 0.30);
-  --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.30);
-  --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 0 40px -6px rgba(16, 185, 129, 0.35);
   --glow-dot-color: rgba(0, 0, 0, 0.18);
 
   /* Alignment-guides overlay (drag/resize snapping). Edge/center guides reuse
@@ -159,12 +154,7 @@ layer(base);
   --ring: 160 84% 39.4%;
 
   --bg-canvas: #0a0a0c;
-  --emerald-glow: rgba(16, 185, 129, 0.35);
   --shadow-card: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
-  --shadow-window: 0 30px 80px -20px rgba(0, 0, 0, 0.6), 0 0 60px -20px var(--emerald-glow);
-  --shadow-glow-ok: 0 0 30px -4px rgba(16, 185, 129, 0.45);
-  --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.45);
-  --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 0 40px -6px rgba(16, 185, 129, 0.55);
   --glow-dot-color: rgba(255, 255, 255, 0.55);
 
   --detail-panel-border-left: 1px;

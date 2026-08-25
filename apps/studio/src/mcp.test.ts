@@ -120,6 +120,9 @@ describe('POST /mcp tools/list', () => {
       'seeflow_schema',
       'validate_seeflow',
     ]);
+    // README.md ("20 tools" / "the remaining 15 tools") and docs/FEATURES.md
+    // quote this number. Pin it so a tool removal can't silently desync them.
+    expect(names.length).toBe(20);
   });
 
   it('every tool inputSchema has type: "object" (MCP spec)', async () => {

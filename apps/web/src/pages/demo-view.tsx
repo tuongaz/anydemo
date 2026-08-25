@@ -3105,7 +3105,7 @@ export function DemoView({
             />
           }
           // US-010: SeeflowCanvas.projectId drives the project-scoped file URL
-          // composition (see fileUrl in @seeflow/canvas) and the embed snippet.
+          // composition (see fileUrl in @seeflow/canvas).
           // Post-US-008, file routes are addressed by project slug — so we
           // pass the URL slug here, not the registry entry id (`flowId`).
           projectId={project}

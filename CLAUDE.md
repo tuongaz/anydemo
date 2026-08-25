@@ -13,7 +13,7 @@ Bun workspaces under `apps/*` and `packages/*`:
 - `apps/studio/` — Bun + Hono backend, CLI, MCP server. Published package; source of truth for the Zod schema (`src/schema.ts`).
 - `apps/web/` — Vite + React SPA. Embeds `@seeflow/canvas`; built into `apps/studio/dist/web/` at publish time.
 - `apps/mcp-app/` — Single-file Vite bundle that mounts the canvas inside an MCP-Apps host iframe (Claude Desktop). See `apps/mcp-app/CLAUDE.md`.
-- `packages/canvas/` (`@seeflow/canvas`) — Embeddable React Flow canvas with its own compiled CSS (`sf:` Tailwind v4 prefix). See `packages/canvas/CLAUDE.md` for the deep rules (public API, peer deps, modes, ref handle).
+- `packages/canvas/` (`@seeflow/canvas`) — Embeddable React Flow canvas with its own compiled CSS (`sf:` Tailwind v4 prefix). See `packages/canvas/CLAUDE.md` for the deep rules (public API, peer deps, feature flags, ref handle).
 - `skills/`, `.claude-plugin/`, `.cursor-plugin/` — Claude Code / Cursor plugin shipping the `seeflow` + `seeflow-lookup` skills.
 
 **Per-package CLAUDE.md files at `apps/mcp-app/CLAUDE.md` and `packages/canvas/CLAUDE.md` carry rules that override anything generic here.** Read them before editing those packages.
@@ -46,7 +46,7 @@ bun test path/to/foo.test.ts   # single test file
 
 ## Icon packs
 
-- Cloud vendor icons (AWS, GCP, Azure) install into `~/.seeflow/icons/<vendor>/<version>/` with a shared `index.json`. Same root regardless of CLI vs studio entrypoint — both share the registry via `apps/studio/src/icons/jobs.ts`.
+- Cloud vendor icons (AWS and Azure — the only vendors with installable packs) install into `~/.seeflow/icons/<vendor>/<version>/` with a shared `index.json`. Same root regardless of CLI vs studio entrypoint — both share the registry via `apps/studio/src/icons/jobs.ts`.
 - Vendor-prefixed icon ids (`aws:lambda`, `gcp:cloud-run`, `azure:functions`, `iconify:logos:google-cloud`) round-trip through the schema; unprefixed names default to Lucide.
 - CLI: `seeflow icons list | add <vendor> [--accept-terms] [--pack-url <url>] | update <vendor> | remove <vendor>`. Each subcommand is in `COMMAND_MANIFEST` and surfaces under `seeflow help icons:*`.
 - HTTP: `/api/icons/*` mounted in `apps/studio/src/api.ts`. Install jobs serialize per vendor via an in-process `JobRegistry`; a parallel install of the same vendor returns 409 with the in-flight `jobId`. SSE replays buffered events for late subscribers.

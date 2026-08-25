@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { slugify } from '../src/registry.ts';
 import { uniqueFlowId } from './support/ids.ts';
-import { connectSse } from './support/sse-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
 
 // One shared studio per file — every test uses uniqueFlowId for its own

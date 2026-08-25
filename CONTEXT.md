@@ -5,7 +5,7 @@ SeeFlow is the bridge between AI coding agents and the humans they work with —
 ## Language
 
 **Flow**:
-A single canvas of nodes and connectors describing one system or story — the core artifact both AI agents and humans author, read, and edit. For newcomers it may be introduced as "a living architecture diagram."
+A single canvas of nodes and connectors describing one system or story — the core artifact both AI agents and humans author, read, and edit. For newcomers it may be introduced as "an architecture diagram that stays in sync with the repo it lives in."
 _Avoid_: Demo (dead legacy term — scrub on sight), board, drawing
 
 **Project**:

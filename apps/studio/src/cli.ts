@@ -9,7 +9,7 @@ import {
   printOk,
   printOutcome,
 } from './cli-helpers.ts';
-import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
+import { renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations, registerProject } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
 import { JqError, applyJq } from './jq-filter.ts';
@@ -292,6 +292,8 @@ Body source flags (where applicable):
 
 Options (start):
   --port <n>           Listen on port n (default: 4321)
+  --host <addr>        Bind address (default: 127.0.0.1 — loopback only).
+                       Pass 0.0.0.0 to expose the studio on your network.
   --foreground         Run attached to the terminal (default: background)
   --daemon             Deprecated alias — background is already the default
   --debug              Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log
@@ -352,6 +354,12 @@ async function runStart() {
     process.exit(1);
   }
 
+  // --host wins, then a persisted ~/.seeflow/config.json host, then the
+  // loopback default. Unlike --port we DO honour the persisted value: binding
+  // a non-loopback address is a deliberate opt-out (Docker, a LAN demo) and
+  // should stick until the operator changes it back.
+  const host = flagValue('host') ?? config.host;
+
   // Default to background. `--foreground` (or `--no-daemon`) keeps us attached
   // to the terminal; `--daemon` is a no-op alias kept for backwards compat. The
   // SEEFLOW_DAEMON env var marks the spawned child, so it must always run in
@@ -359,12 +367,12 @@ async function runStart() {
   const isDaemonChild = process.env.SEEFLOW_DAEMON === '1';
   const wantsForeground = hasFlag('foreground') || hasFlag('no-daemon');
   dbg(
-    `runStart port=${port} host=${config.host} mode=${
+    `runStart port=${port} host=${host} mode=${
       isDaemonChild ? 'daemon-child' : wantsForeground ? 'foreground' : 'background'
     }`,
   );
   if (!isDaemonChild && !wantsForeground) {
-    await spawnDaemon(port, config.host);
+    await spawnDaemon(port, host);
     return;
   }
 
@@ -372,14 +380,14 @@ async function runStart() {
   // between parent-check and child-bind can still let another process grab
   // the port. Re-check here so the child fails fast with a clear error
   // instead of EADDRINUSE at bind time.
-  await assertPortFree(port, config.host);
+  await assertPortFree(port, host);
 
   // persist the chosen address so other subcommands can find us
-  writeConfig({ port, host: config.host });
+  writeConfig({ port, host });
 
   const registry = createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = createEventBus();
-  const server = serve({ port, hostname: config.host, registry, events });
+  const server = serve({ port, hostname: host, registry, events });
   writePid(process.pid);
 
   const cleanup = () => {
@@ -436,7 +444,7 @@ async function spawnDaemon(port: number, host: string) {
   // generic timeout error.
   await assertPortFree(port, host);
 
-  const proc = spawnDetachedStudio(port);
+  const proc = spawnDetachedStudio(port, host);
   writePid(proc.pid);
   writeConfig({ port, host });
   dbg(`spawned daemon pid=${proc.pid}${proc.logPath ? ` log=${proc.logPath}` : ''}`);
@@ -450,7 +458,7 @@ async function spawnDaemon(port: number, host: string) {
   if (proc.logPath) console.log(`Daemon log: ${proc.logPath}`);
 }
 
-function spawnDetachedStudio(port: number): { pid: number; logPath?: string } {
+function spawnDetachedStudio(port: number, host?: string): { pid: number; logPath?: string } {
   let stdout: 'ignore' | number = 'ignore';
   let stderr: 'ignore' | number = 'ignore';
   let logPath: string | undefined;
@@ -463,6 +471,9 @@ function spawnDetachedStudio(port: number): { pid: number; logPath?: string } {
     stderr = fd;
   }
   const cmd = [process.execPath, import.meta.path, 'start', `--port=${port}`];
+  // Pass the bind address explicitly: the parent writes config.json only AFTER
+  // spawn, so the child cannot rely on reading it back in time.
+  if (host) cmd.push(`--host=${host}`);
   if (DEBUG) cmd.push('--debug');
   const proc = Bun.spawn({
     cmd,

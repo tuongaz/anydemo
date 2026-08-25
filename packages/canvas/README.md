@@ -27,7 +27,7 @@ The host app must provide:
 
 Two imports — that's the whole setup. No Tailwind configuration, no CSS
 variables, no font setup. The package ships pre-compiled styles
-(`dist/style.css`) with all utilities under the `sf-` prefix and tokens scoped
+(`dist/style.css`) with all utilities under the `sf:` prefix and tokens scoped
 to `.seeflow-canvas-root`, so the consumer's `:root` and global stylesheet stay
 untouched.
 
@@ -41,10 +41,15 @@ import { SeeflowCanvas } from '@seeflow/canvas';
 The canvas is an editor and always requires a `CanvasAdapter` — the seam
 through which it persists every mutation.
 
+`canvasMode` is lifted to the host so a page-level keyboard handler or command
+palette can drive tool switches — pass `{ kind: 'select' }` plus its setter.
+
 ```tsx
-import { SeeflowCanvas, createRestAdapter } from '@seeflow/canvas';
+import { useState } from 'react';
+import { SeeflowCanvas, type CanvasMode, createRestAdapter } from '@seeflow/canvas';
 
 const adapter = createRestAdapter({ baseUrl: '', project: 'my-project', flow: 'main' });
+const [canvasMode, setCanvasMode] = useState<CanvasMode>({ kind: 'select' });
 
 <SeeflowCanvas
   adapter={adapter}
@@ -53,6 +58,8 @@ const adapter = createRestAdapter({ baseUrl: '', project: 'my-project', flow: 'm
   selectedNodeIds={selection.nodes}
   selectedConnectorIds={selection.connectors}
   onSelectionChange={onSelectionChange}
+  canvasMode={canvasMode}
+  onCanvasModeChange={setCanvasMode}
   onCreateShapeNode={onCreateShapeNode}
 />;
 ```
@@ -128,7 +135,7 @@ undo/redo and optimistic overrides stay in the host's hands:
 
 ```ts
 import {
-  computeGroupBox,            // absolute bbox over members (+ padding + title band)
+  computeGroupBox,            // absolute bbox over members (+ symmetric padding)
   selectGroupableSet,         // eligible new-group members (loose, ungrouped, not a group)
   selectGroupSelection,       // selected group ids
   planGroupShortcutAction,    // ⌘G / ⌘⇧G oracle → 'group' | 'ungroup' | { none: reason }

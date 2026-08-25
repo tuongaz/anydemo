@@ -104,8 +104,8 @@ export const NodePatchBodySchema = z
     // preserved, and the post-merge ResolvedFlowSchema reparse enforces the
     // new type's required fields (e.g. type:'image' without a `path` in the
     // same body surfaces as `badSchema`). The per-node folder under
-    // `nodes/<id>/` is keyed by id, so retype keeps scripts, detail.md, and
-    // view.html attached.
+    // `nodes/<id>/` is keyed by id, so retype keeps detail.md, view.html,
+    // spec.json and uploaded files attached.
     type: NodeTypeSchema.optional(),
     position: PositionBodySchema.optional(),
     name: z.string().optional(),
@@ -380,8 +380,8 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
   // (they route to style.json on write); any semantic data key not allowed
   // by the new type's FlowDataSchema is stripped so the post-merge reparse
   // doesn't reject lingering fields. The per-node folder under
-  // `nodes/<id>/` is keyed by id (unchanged), so scripts and externalized
-  // files stay attached. Missing required fields on the new type (e.g.
+  // `nodes/<id>/` is keyed by id (unchanged), so detail.md, view.html,
+  // spec.json and uploaded files stay attached. Missing required fields on the new type (e.g.
   // retype to type:'image' without a `path` in the same patch) surface as
   // `badSchema` from the ResolvedFlowSchema reparse.
   if (updates.type !== undefined && updates.type !== node.type) {

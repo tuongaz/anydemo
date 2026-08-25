@@ -64,6 +64,12 @@ describe('COMMAND_MANIFEST', () => {
     expect(stop?.outputKind).toBe('text');
   });
 
+  it('advertises --host on start (the loopback-bind opt-out)', () => {
+    const start = COMMAND_MANIFEST.find((e) => e.name === 'start');
+    expect(start?.flags.map((f) => f.name)).toContain('host');
+    expect(start?.synopsis).toContain('--host');
+  });
+
   it('labels the ids command with outputKind: "text"', () => {
     const ids = COMMAND_MANIFEST.find((e) => e.name === 'ids');
     expect(ids?.outputKind).toBe('text');

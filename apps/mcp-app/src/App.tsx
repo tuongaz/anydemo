@@ -190,15 +190,24 @@ export function App() {
     );
   }
 
-  const wrappedAdapter = adapter as CanvasAdapter;
+  // The four early returns above cover every case where the `adapter` memo
+  // yields null, but narrowing by reading them is a landmine: `adapter` is a
+  // required prop and the canvas dereferences it during mount, so a future
+  // edit to that chain would blow up inside an iframe with no error boundary.
+  // Guard explicitly instead of asserting the type away.
+  if (!adapter) return <Message>Preparing canvas…</Message>;
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="mcp-app-root">
         {showJustCreated ? <JustCreatedBanner /> : null}
         <SeeflowCanvas
-          adapter={wrappedAdapter}
+          adapter={adapter}
           projectId={projectSlug ?? ''}
+          // The iframe document is `Origin: null` (srcdoc/blob), so a relative
+          // `/api/projects/...` <img src> would resolve against the HOST page,
+          // not the studio. Pin file fetches to the studio's absolute URL.
+          fileBaseUrl={`${widgetState.backendUrl}/api/projects`}
           nodes={load.nodes}
           connectors={load.connectors}
           selectedNodeIds={selectedNodeIds}
@@ -218,7 +227,7 @@ export function App() {
           // ---- Structural edits (wrapped adapter emits sendMessage) ----
           onCreateShapeNode={(shape: GeometricNodeType, position, dims) => {
             const id = `node-${shortId()}`;
-            void wrappedAdapter.createNode({
+            void adapter.createNode({
               id,
               type: shape,
               position,
@@ -226,23 +235,23 @@ export function App() {
             });
           }}
           onCreateConnector={(source, target, options) => {
-            void wrappedAdapter.createConnector({
+            void adapter.createConnector({
               source,
               target,
               targetPin: options?.targetPin,
             });
           }}
           onDeleteNode={(nodeId) => {
-            void wrappedAdapter.deleteNode(nodeId);
+            void adapter.deleteNode(nodeId);
           }}
           onNodePositionChange={(nodeId, position) => {
-            void wrappedAdapter.updateNodePosition(nodeId, position);
+            void adapter.updateNodePosition(nodeId, position);
           }}
           onNodeNameChange={(nodeId, name) => {
-            void wrappedAdapter.updateNode(nodeId, { name });
+            void adapter.updateNode(nodeId, { name });
           }}
           onNameChange={(nodeId, value) => {
-            void wrappedAdapter.updateNode(nodeId, { name: value });
+            void adapter.updateNode(nodeId, { name: value });
           }}
         />
       </div>

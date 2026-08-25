@@ -21,7 +21,6 @@ import {
   classifyHandleDropFailure,
   classifyReconnectBodyDrop,
   computeUnmovedLockPin,
-  eventTargetIsOtherNode,
   handleClipboardShortcut,
   pickNearestSnapTarget,
   resolveAutoFitView,
