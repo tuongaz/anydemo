@@ -4,7 +4,7 @@ import type { CanvasMode, GeometricNodeType } from '../types.ts';
 import { CanvasToolbar, TOOLBAR_MODES, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 
 // Bun runs apps/web tests without a DOM. The hook-shim pattern (also used by
-// icon-node.test.tsx / demo-canvas.test.tsx) replaces React's internal
+// icon-node.test.tsx / seeflow-canvas.test.tsx) replaces React's internal
 // dispatcher with synchronous stubs so we can call CanvasToolbar as a
 // function and walk the returned React element tree.
 type Hooks = {

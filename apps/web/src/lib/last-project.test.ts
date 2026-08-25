@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { FlowSummary } from '@/lib/api';
-import { pickInitialDemo } from '@/lib/last-project';
+import { pickLandingFlow } from '@/lib/last-project';
 
 const summary = (id: string, slug: string): FlowSummary => ({
   id,
@@ -11,33 +11,33 @@ const summary = (id: string, slug: string): FlowSummary => ({
   valid: true,
 });
 
-describe('pickInitialDemo', () => {
-  it('returns null when there are no demos', () => {
-    expect(pickInitialDemo([], null)).toBeNull();
-    expect(pickInitialDemo([], 'anything')).toBeNull();
+describe('pickLandingFlow', () => {
+  it('returns null when there are no flows', () => {
+    expect(pickLandingFlow([], null)).toBeNull();
+    expect(pickLandingFlow([], 'anything')).toBeNull();
   });
 
-  it('returns the only demo when exactly one is registered (ignoring stored id)', () => {
+  it('returns the only flow when exactly one is registered (ignoring stored id)', () => {
     const a = summary('a', 'alpha');
-    expect(pickInitialDemo([a], null)).toBe(a);
-    expect(pickInitialDemo([a], 'stale')).toBe(a);
+    expect(pickLandingFlow([a], null)).toBe(a);
+    expect(pickLandingFlow([a], 'stale')).toBe(a);
   });
 
-  it('returns the demo matching the stored id when 2+ are registered', () => {
-    const a = summary('a', 'alpha');
-    const b = summary('b', 'beta');
-    expect(pickInitialDemo([a, b], 'b')).toBe(b);
-  });
-
-  it('returns null with 2+ demos and no stored id so the picker shows', () => {
+  it('returns the flow matching the stored id when 2+ are registered', () => {
     const a = summary('a', 'alpha');
     const b = summary('b', 'beta');
-    expect(pickInitialDemo([a, b], null)).toBeNull();
+    expect(pickLandingFlow([a, b], 'b')).toBe(b);
   });
 
-  it('returns null with 2+ demos when stored id is no longer in the registry', () => {
+  it('returns null with 2+ flows and no stored id so the picker shows', () => {
     const a = summary('a', 'alpha');
     const b = summary('b', 'beta');
-    expect(pickInitialDemo([a, b], 'gone')).toBeNull();
+    expect(pickLandingFlow([a, b], null)).toBeNull();
+  });
+
+  it('returns null with 2+ flows when stored id is no longer in the registry', () => {
+    const a = summary('a', 'alpha');
+    const b = summary('b', 'beta');
+    expect(pickLandingFlow([a, b], 'gone')).toBeNull();
   });
 });

@@ -19,8 +19,8 @@ const readFixture = async (name: string): Promise<unknown> =>
   await Bun.file(fixturePath(name)).json();
 
 describe('ResolvedFlowSchema', () => {
-  it('rejects an invalid demo fixture with a usable Zod error', async () => {
-    const data = await readFixture('invalid-demo.json');
+  it('rejects an invalid flow fixture with a usable Zod error', async () => {
+    const data = await readFixture('invalid-flow.json');
     const result = ResolvedFlowSchema.safeParse(data);
     expect(result.success).toBe(false);
     if (result.success) return;
@@ -38,8 +38,8 @@ describe('ResolvedFlowSchema', () => {
     expect(nameIssue).toBeDefined();
   });
 
-  it('rejects an invalid-demo-connector fixture (connector references missing nodeId)', async () => {
-    const data = await readFixture('invalid-demo-connector.json');
+  it('rejects an invalid-flow-connector fixture (connector references missing nodeId)', async () => {
+    const data = await readFixture('invalid-flow-connector.json');
     const result = ResolvedFlowSchema.safeParse(data);
     expect(result.success).toBe(false);
     if (result.success) return;
@@ -56,7 +56,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('parses connectors with arbitrary metadata combinations (method/url/eventName/queueName)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'connector-metadata',
       nodes: [
@@ -101,7 +101,7 @@ describe('ResolvedFlowSchema', () => {
       ],
     };
 
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`);
     }
@@ -130,7 +130,7 @@ describe('ResolvedFlowSchema', () => {
         | 'hexagon',
     ) => ({
       version: 2 as const,
-      name: 'shape-demo',
+      name: 'shape-flow',
       nodes: [
         {
           id: `shape-${type}`,
@@ -166,7 +166,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts a database node with no label (illustrative geometric)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'db-shape',
       nodes: [
@@ -179,7 +179,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected database to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -188,7 +188,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts a geometric node without an optional label', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'no-label-shape',
       nodes: [
@@ -201,12 +201,12 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     expect(result.success).toBe(true);
   });
 
   it('rejects an unknown node type', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-shape',
       nodes: [
@@ -219,12 +219,12 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     expect(result.success).toBe(false);
   });
 
   it('accepts node visual fields (width/height/borderColor/backgroundColor) on every node type', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'visual-fields',
       nodes: [
@@ -264,7 +264,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -272,7 +272,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts nodes that omit the new visual fields entirely (backwards compatible)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'no-visual-fields',
       nodes: [
@@ -285,11 +285,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(true);
   });
 
   it('rejects width/height that are zero or negative', () => {
-    const demo = (width: number, height: number) => ({
+    const flow = (width: number, height: number) => ({
       version: 2 as const,
       name: 'bad-size',
       nodes: [
@@ -306,13 +306,13 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     });
-    expect(ResolvedFlowSchema.safeParse(demo(0, 80)).success).toBe(false);
-    expect(ResolvedFlowSchema.safeParse(demo(-1, 80)).success).toBe(false);
-    expect(ResolvedFlowSchema.safeParse(demo(120, 0)).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow(0, 80)).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow(-1, 80)).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow(120, 0)).success).toBe(false);
   });
 
   it('rejects an invalid color token (only enum values allowed)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-color',
       nodes: [
@@ -328,7 +328,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     expect(result.success).toBe(false);
     if (result.success) return;
     const issue = result.error.issues.find(
@@ -338,7 +338,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('round-trips a default connector with no semantic payload', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'default-conn',
       nodes: [
@@ -357,7 +357,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', label: 'see also' }],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -366,7 +366,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts connector visual fields (style/color/direction) on every kind', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'visual-connectors',
       nodes: [
@@ -411,7 +411,7 @@ describe('ResolvedFlowSchema', () => {
         },
       ],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -419,7 +419,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('round-trips optional sourceHandle/targetHandle on connectors (US-013)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'connector-handles',
       nodes: [
@@ -446,7 +446,7 @@ describe('ResolvedFlowSchema', () => {
         },
       ],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -456,7 +456,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('parses connectors authored without handle ids (back-compat for US-013)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'no-handles',
       nodes: [
@@ -475,7 +475,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -485,7 +485,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('round-trips optional sourcePin/targetPin on connectors (US-006)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'connector-pins',
       nodes: [
@@ -512,7 +512,7 @@ describe('ResolvedFlowSchema', () => {
         },
       ],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -522,7 +522,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('parses connectors authored without sourcePin/targetPin (back-compat for US-006)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'no-pins',
       nodes: [
@@ -541,7 +541,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -551,7 +551,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('rejects a pin with an unknown side (US-006)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-pin-side',
       nodes: [
@@ -577,7 +577,7 @@ describe('ResolvedFlowSchema', () => {
         },
       ],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects a pin with t outside [0, 1] (US-006)', () => {
@@ -614,7 +614,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('rejects an invalid connector style value', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-style',
       nodes: [
@@ -633,11 +633,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', style: 'wavy' }],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects an invalid connector direction value', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-dir',
       nodes: [
@@ -656,11 +656,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', direction: 'sideways' }],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects an invalid connector color token', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-color',
       nodes: [
@@ -679,7 +679,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'magenta' }],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('accepts a non-negative borderSize on nodes and connectors, rejects negatives', () => {
@@ -770,10 +770,10 @@ describe('ResolvedFlowSchema', () => {
   // relative `path` under the project root. The renderer resolves it via
   // the file-serving endpoint added in US-001. Path-safety:
   // no absolute paths, no `..` traversal, no leading slash.
-  it('parses a demo containing one type:image node with data.path (US-004)', () => {
-    const demo = {
+  it('parses a flow containing one type:image node with data.path (US-004)', () => {
+    const flow = {
       version: 2 as const,
-      name: 'image-demo',
+      name: 'image-flow',
       nodes: [
         {
           id: 'img-1',
@@ -789,7 +789,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -804,7 +804,7 @@ describe('ResolvedFlowSchema', () => {
     // the hard-cut, `image` is an unknown key and `path` is required — the
     // result is that the schema rejects the legacy payload, with no compat
     // layer.
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'legacy-image',
       nodes: [
@@ -817,11 +817,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects an image node whose path is absolute (US-004)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-image-abs',
       nodes: [
@@ -834,11 +834,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects an image node whose path uses `..` traversal (US-004)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-image-traversal',
       nodes: [
@@ -851,7 +851,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects an image node whose path is outside its nodes/<id>/ folder', () => {
@@ -931,7 +931,7 @@ describe('ResolvedFlowSchema', () => {
   // + `borderStyle` already come via NodeVisualBaseShape — these tests pin
   // the new field's accept/reject behavior alongside back-compat for unset fields.
   it('round-trips an image node with borderColor / borderWidth / borderStyle (US-014)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'styled-image',
       nodes: [
@@ -949,7 +949,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -961,7 +961,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts an image node with no border fields (US-014 back-compat)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'plain-image',
       nodes: [
@@ -974,7 +974,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1017,7 +1017,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts a connector pointing at a type:image node id (US-002)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'image-conn',
       nodes: [
@@ -1036,7 +1036,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 's', target: 'img-1' }],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1048,7 +1048,7 @@ describe('ResolvedFlowSchema', () => {
   // nodes[], not about the node's discriminator. Schema-level fence so a future
   // change can't add a hidden node-type whitelist.
   it('accepts a connector pointing at a type:icon node id as source AND target (US-023)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'icon-conn',
       nodes: [
@@ -1080,7 +1080,7 @@ describe('ResolvedFlowSchema', () => {
         { id: 'c3', source: 'icon-1', target: 'icon-2' },
       ],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1088,9 +1088,9 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('parses a type:icon node with only the required icon field (US-008)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
-      name: 'icon-demo',
+      name: 'icon-flow',
       nodes: [
         {
           id: 'icon-1',
@@ -1101,7 +1101,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1113,7 +1113,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('parses a type:icon node with every optional field set (US-008)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'icon-full',
       nodes: [
@@ -1134,7 +1134,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1153,7 +1153,7 @@ describe('ResolvedFlowSchema', () => {
     // Empty string is the documented "no label" sentinel and must round-trip
     // through the schema (consumers can treat empty + absent the same way at
     // render time without needing a coercion step).
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'icon-empty-label',
       nodes: [
@@ -1166,7 +1166,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1176,7 +1176,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts a vendor-prefixed decorative icon on a geometric node (US-001 cloud icon packs)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'vendor-decorative',
       nodes: [
@@ -1188,7 +1188,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = FlowSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1198,7 +1198,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('accepts a vendor-prefixed icon on a type:icon node (US-001 cloud icon packs)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'vendor-icon-node',
       nodes: [
@@ -1210,7 +1210,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    const result = FlowSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1220,7 +1220,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('rejects a type:icon node with an empty icon string (US-008)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'bad-icon',
       nodes: [
@@ -1233,7 +1233,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects a type:icon node strokeWidth outside [0.5, 4] (US-008)', () => {
@@ -1277,7 +1277,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('round-trips optional connector fontSize (US-018)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'connector-fontsize',
       nodes: [
@@ -1296,7 +1296,7 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: 16 }],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1329,8 +1329,8 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(make(12)).success).toBe(true);
   });
 
-  it('demos without group nodes round-trip unchanged', () => {
-    // Demos without group nodes produce a deep-equal result with no injected keys.
+  it('flows without group nodes round-trip unchanged', () => {
+    // Flows without group nodes produce a deep-equal result with no injected keys.
     const raw = {
       version: 2,
       name: 'Legacy Flow',
@@ -1354,7 +1354,7 @@ describe('ResolvedFlowSchema', () => {
     };
     const parsed = ResolvedFlowSchema.safeParse(raw);
     if (!parsed.success) {
-      throw new Error(`expected legacy demo to parse: ${JSON.stringify(parsed.error.issues)}`);
+      throw new Error(`expected legacy flow to parse: ${JSON.stringify(parsed.error.issues)}`);
     }
     const serialized = JSON.parse(JSON.stringify(parsed.data)) as unknown;
     expect(serialized).toEqual(raw);
@@ -1364,9 +1364,9 @@ describe('ResolvedFlowSchema', () => {
   // `description` (short body text) and `detail` (long-form sidebar text)
   // alongside `name`. Both string-typed, both optional, both no length cap.
   describe('description / detail metadata', () => {
-    const makeDemoWithNode = (node: Record<string, unknown>) => ({
+    const makeFlowWithNode = (node: Record<string, unknown>) => ({
       version: 2 as const,
-      name: 'meta-demo',
+      name: 'meta-flow',
       nodes: [node],
       connectors: [],
     });
@@ -1440,8 +1440,8 @@ describe('ResolvedFlowSchema', () => {
       ];
 
       for (const { id, node } of variants) {
-        const demo = makeDemoWithNode(node);
-        const parsed = ResolvedFlowSchema.safeParse(demo);
+        const flow = makeFlowWithNode(node);
+        const parsed = ResolvedFlowSchema.safeParse(flow);
         if (!parsed.success) {
           throw new Error(
             `${id} expected to parse, got: ${JSON.stringify(parsed.error.issues, null, 2)}`,
@@ -1450,29 +1450,29 @@ describe('ResolvedFlowSchema', () => {
         // Round-trip preserves both fields byte-for-byte (no silent
         // injection or stripping of the optional fields).
         const serialized = JSON.parse(JSON.stringify(parsed.data)) as unknown;
-        expect(serialized).toEqual(demo);
+        expect(serialized).toEqual(flow);
       }
     });
 
     it('accepts nodes with NO description / detail (back-compat)', () => {
-      const demo = makeDemoWithNode({
+      const flow = makeFlowWithNode({
         id: 'n1',
         type: 'rectangle',
         position: { x: 0, y: 0 },
         data: {},
       });
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
+      expect(ResolvedFlowSchema.safeParse(flow).success).toBe(true);
     });
 
     it('accepts description with no length cap (large free-form text round-trips)', () => {
       const big = 'line\n'.repeat(2000); // 10kB of newlines
-      const demo = makeDemoWithNode({
+      const flow = makeFlowWithNode({
         id: 'n1',
         type: 'rectangle',
         position: { x: 0, y: 0 },
         data: { description: big },
       });
-      const parsed = ResolvedFlowSchema.safeParse(demo);
+      const parsed = ResolvedFlowSchema.safeParse(flow);
       if (!parsed.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
       }
@@ -1486,13 +1486,13 @@ describe('ResolvedFlowSchema', () => {
       // but the schema itself must accept '' so the optimistic override
       // (which carries '' through React state) still validates if a stray
       // SSE echo replays it back.
-      const demo = makeDemoWithNode({
+      const flow = makeFlowWithNode({
         id: 'n1',
         type: 'rectangle',
         position: { x: 0, y: 0 },
         data: { description: '', detail: '' },
       });
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
+      expect(ResolvedFlowSchema.safeParse(flow).success).toBe(true);
     });
   });
 
@@ -1501,9 +1501,9 @@ describe('ResolvedFlowSchema', () => {
   // `file://` ref in flow.json; the file-ref resolver inlines on read.
   describe('type:html', () => {
     it('parses a minimal type:html node with optional html (omitted)', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
-        name: 'html-demo',
+        name: 'html-flow',
         nodes: [
           {
             id: 'html-1',
@@ -1514,7 +1514,7 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1549,7 +1549,7 @@ describe('ResolvedFlowSchema', () => {
     });
 
     it('round-trips a type:html node with label + every NodeVisualBaseShape field', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'html-styled',
         nodes: [
@@ -1573,7 +1573,7 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1592,7 +1592,7 @@ describe('ResolvedFlowSchema', () => {
     });
 
     it('round-trips description / detail on a type:html node', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'html-meta',
         nodes: [
@@ -1609,16 +1609,16 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
       };
-      const parsed = ResolvedFlowSchema.safeParse(demo);
+      const parsed = ResolvedFlowSchema.safeParse(flow);
       if (!parsed.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
       }
       const serialized = JSON.parse(JSON.stringify(parsed.data)) as unknown;
-      expect(serialized).toEqual(demo);
+      expect(serialized).toEqual(flow);
     });
 
     it('accepts a type:html node as a connector endpoint (source AND target)', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'html-conn',
         nodes: [
@@ -1640,7 +1640,7 @@ describe('ResolvedFlowSchema', () => {
           { id: 'c2', source: 'html-1', target: 's' },
         ],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1655,30 +1655,30 @@ describe('ResolvedFlowSchema', () => {
   // render-time check, not a parse-time refine.
   describe('type:linkflow', () => {
     it('parses a type:linkflow node with a target slug pair', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
-        name: 'linkflow-demo',
+        name: 'linkflow-flow',
         nodes: [
           {
             id: 'lf-1',
             type: 'linkflow' as const,
             position: { x: 10, y: 20 },
-            data: { target: { project: 'demo-app', flow: 'checkout' } },
+            data: { target: { project: 'sample-app', flow: 'checkout' } },
           },
         ],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
       if (node?.type !== 'linkflow') throw new Error('expected linkflow');
-      expect(node.data.target).toEqual({ project: 'demo-app', flow: 'checkout' });
+      expect(node.data.target).toEqual({ project: 'sample-app', flow: 'checkout' });
     });
 
     it('parses a type:linkflow node WITHOUT a target (unlinked state)', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'linkflow-unlinked',
         nodes: [
@@ -1691,7 +1691,7 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1701,7 +1701,7 @@ describe('ResolvedFlowSchema', () => {
     });
 
     it('rejects a target whose project slug violates FlowIdPattern', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'bad-project-slug',
         nodes: [
@@ -1709,16 +1709,16 @@ describe('ResolvedFlowSchema', () => {
             id: 'lf-1',
             type: 'linkflow' as const,
             position: { x: 0, y: 0 },
-            data: { target: { project: 'Demo App', flow: 'checkout' } },
+            data: { target: { project: 'Flow App', flow: 'checkout' } },
           },
         ],
         connectors: [],
       };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+      expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
     });
 
     it('rejects a target whose flow slug violates FlowIdPattern', () => {
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'bad-flow-slug',
         nodes: [
@@ -1726,12 +1726,12 @@ describe('ResolvedFlowSchema', () => {
             id: 'lf-1',
             type: 'linkflow' as const,
             position: { x: 0, y: 0 },
-            data: { target: { project: 'demo-app', flow: '-leading-dash' } },
+            data: { target: { project: 'sample-app', flow: '-leading-dash' } },
           },
         ],
         connectors: [],
       };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+      expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
     });
 
     it('rejects a target missing either project or flow', () => {
@@ -1743,7 +1743,7 @@ describe('ResolvedFlowSchema', () => {
             id: 'lf-1',
             type: 'linkflow' as const,
             position: { x: 0, y: 0 },
-            data: { target: { project: 'demo-app' } },
+            data: { target: { project: 'sample-app' } },
           },
         ],
         connectors: [],
@@ -1765,7 +1765,7 @@ describe('ResolvedFlowSchema', () => {
       // Target slug pair is well-formed but the referenced flow may not exist
       // in the registry. The schema must NOT reject this — the renderer
       // surfaces the broken-link state at runtime.
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: 'unresolved-target',
         nodes: [
@@ -1778,7 +1778,7 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
       };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
+      expect(ResolvedFlowSchema.safeParse(flow).success).toBe(true);
     });
 
     it('round-trips a type:linkflow node byte-for-byte (FlowSchema, .strict())', () => {
@@ -1791,7 +1791,7 @@ describe('ResolvedFlowSchema', () => {
             type: 'linkflow' as const,
             data: {
               name: 'See checkout',
-              target: { project: 'demo-app', flow: 'checkout' },
+              target: { project: 'sample-app', flow: 'checkout' },
             },
           },
         ],
@@ -1814,7 +1814,7 @@ describe('ResolvedFlowSchema', () => {
             id: 'lf-1',
             type: 'linkflow' as const,
             data: {
-              target: { project: 'demo-app', flow: 'checkout' },
+              target: { project: 'sample-app', flow: 'checkout' },
               bogus: true,
             },
           },
@@ -2134,13 +2134,13 @@ describe('US-009: flat node types — 17-tag matrix + shared-field invariants', 
   it('every one of the 17 type tags parses with a minimal valid payload', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: `minimal-${type}`,
         nodes: [{ id, type, position: { x: 0, y: 0 }, data: minimalData(type, id) }],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
           `expected ${type} minimal payload to parse, got: ${JSON.stringify(result.error.issues)}`,
@@ -2151,34 +2151,34 @@ describe('US-009: flat node types — 17-tag matrix + shared-field invariants', 
   });
 
   it('rejects an unknown type tag (only the 23 flat tags are valid)', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'unknown-type',
       nodes: [{ id: 'n', type: 'pyramid' as const, position: { x: 0, y: 0 }, data: {} }],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   it('rejects type:image without the required path field', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'image-missing-path',
       nodes: [{ id: 'img-1', type: 'image' as const, position: { x: 0, y: 0 }, data: {} }],
       connectors: [],
     };
-    const result = ResolvedFlowSchema.safeParse(demo);
+    const result = ResolvedFlowSchema.safeParse(flow);
     expect(result.success).toBe(false);
   });
 
   it('rejects type:icon without the required icon field', () => {
-    const demo = {
+    const flow = {
       version: 2 as const,
       name: 'icon-missing-icon',
       nodes: [{ id: 'i', type: 'icon' as const, position: { x: 0, y: 0 }, data: {} }],
       connectors: [],
     };
-    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(flow).success).toBe(false);
   });
 
   // The on-disk FlowSchema (FlowGeometricNodeData) is `.strict()`, so the
@@ -2271,7 +2271,7 @@ describe('US-009: flat node types — 17-tag matrix + shared-field invariants', 
   it('every one of the 17 type tags accepts detail in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
-      const demo = {
+      const flow = {
         version: 2 as const,
         name: `detail-${type}`,
         nodes: [
@@ -2287,7 +2287,7 @@ describe('US-009: flat node types — 17-tag matrix + shared-field invariants', 
         ],
         connectors: [],
       };
-      const result = ResolvedFlowSchema.safeParse(demo);
+      const result = ResolvedFlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
           `expected ${type} with detail to parse, got: ${JSON.stringify(result.error.issues)}`,
@@ -2341,7 +2341,7 @@ describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
   it('ResolvedFlowSchema round-trips a component node with set actions', () => {
     const flow = {
       version: 2 as const,
-      name: 'demo',
+      name: 'flow',
       nodes: [
         {
           id: 'n1',
@@ -2385,7 +2385,7 @@ describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
   it('ResolvedFlowSchema rejects a set action whose path lacks the leading "/"', () => {
     const flow = {
       version: 2 as const,
-      name: 'demo',
+      name: 'flow',
       nodes: [
         {
           id: 'n1',
@@ -2416,7 +2416,7 @@ describe('US-004: catalog superRefine on ResolvedFlowSchema', () => {
   it('rejects an element whose type is not in the catalog', () => {
     const flow = {
       version: 2 as const,
-      name: 'demo',
+      name: 'flow',
       nodes: [
         {
           id: 'n1',
@@ -2451,7 +2451,7 @@ describe('US-004: catalog superRefine on ResolvedFlowSchema', () => {
   it('rejects a Button element with empty props (label required)', () => {
     const flow = {
       version: 2 as const,
-      name: 'demo',
+      name: 'flow',
       nodes: [
         {
           id: 'n1',

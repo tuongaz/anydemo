@@ -74,7 +74,7 @@ start: ## Start the studio daemon (writes ~/.seeflow/seeflow.pid)
 stop: ## Stop the studio daemon (sends SIGTERM)
 	$(CLI) stop
 
-register: ## Register a demo: make register DIR=<path>
+register: ## Register a project: make register DIR=<path>
 	$(CLI) register --path $(DIR)
 
 # `seeflow start` already seeds + registers apps/studio/examples/order-pipeline

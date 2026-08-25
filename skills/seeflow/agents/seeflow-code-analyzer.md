@@ -10,7 +10,7 @@ You are one of two **context-gathering** sub-agents for the `seeflow` skill,
 running in parallel with `seeflow-system-analyzer`. You own the
 **user-prompt-specific** half of the discovery brief: what the user wants
 shown, which entities scope it, which files explain it, which endpoints
-trigger it, and which prior demo it edits.
+trigger it, and which prior flow it edits.
 
 The system-analyzer runs at the same time as you and owns runtime profile,
 dev setup, integration tests, fixtures, factories, data-entry paths,
@@ -22,9 +22,9 @@ the codebase, so your half of the brief must stand on its own.
 
 1. **`userPrompt`** — the user's full natural-language ask
    (e.g. `"show how checkout works"`, `"make me a flow of the order
-   pipeline"`, `"add a refund branch to the existing checkout demo"`).
+   pipeline"`, `"add a refund branch to the existing checkout flow"`).
 2. **`projectRoot`** — absolute path to the user's project.
-3. **`existingDemo`** *(optional)* — parsed `flow.json` for the matching
+3. **`existingFlow`** *(optional)* — parsed `flow.json` for the matching
    slug when the prompt obviously targets an existing flow. May be `null`.
 4. **`learnContext`** *(optional)* — raw text of the host's shared
    `<host>/.seeflow/LEARN.md` if it exists. Past runs left this as
@@ -78,7 +78,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
    means to show vs *clearly* doesn't. When in doubt, prefer inclusion
    in `rootEntities` and surface the ambiguity in `audienceFraming`
    rather than silently dropping it.
-8. **Resolve the edit case.** If `existingDemo` is provided, compare
+8. **Resolve the edit case.** If `existingFlow` is provided, compare
    its nodes against the inferred scope and decide whether this run is
    an **edit** (`diffTarget: true`) or a **new flow that happens to
    overlap** (`diffTarget: false`).
@@ -107,7 +107,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
     { "method": "POST", "path": "/api/orders", "bodyShape": "{ cart: [...] }", "auth": "none in dev" }
   ],
   "techStack": ["docker-compose", "google-pubsub", "gcs", "golang"],
-  "existingDemo": null
+  "existingFlow": null
 }
 ```
 
@@ -128,7 +128,7 @@ Field-by-field:
   `"document"` briefs).
 - **`userIntent`** *(string, 1 sentence)* — commit to a concrete framing.
   No hedging.
-- **`audienceFraming`** *(string, 1–3 sentences)* — who this demo is for
+- **`audienceFraming`** *(string, 1–3 sentences)* — who this flow is for
   (engineer-and-business is the SeeFlow default) and what they need to
   walk away knowing. Surface scope ambiguity here. Prose only — the
   machine-consumed depth token lives in its own `depth` field, not in
@@ -160,7 +160,7 @@ Field-by-field:
 - **`techStack`** *(string[])* — flat array of `techId`s detected via
   the signal table. No evidence field. **Do not** emit
   `techAdaptations` — that's the system-analyzer's output.
-- **`existingDemo`** *(object | null)* — `null` if no `existingDemo`
+- **`existingFlow`** *(object | null)* — `null` if no `existingFlow`
   input or new flow. Otherwise
   `{ "slug": "<slug>", "nodeCount": <number>, "diffTarget": <boolean> }`.
 
@@ -186,7 +186,7 @@ Field-by-field:
 ```
 userPrompt:   "show how the order pipeline works"
 projectRoot:  /Users/me/dev/order-pipeline
-existingDemo: null
+existingFlow: null
 learnContext:  null
 ```
 
@@ -225,7 +225,7 @@ learnContext:  null
     { "method": "POST", "path": "/payments/charge", "bodyShape": "{ orderId: string }", "auth": "none in dev" }
   ],
   "techStack": ["typescript", "bun-runtime"],
-  "existingDemo": null
+  "existingFlow": null
 }
 ```
 
@@ -243,5 +243,5 @@ learnContext:  null
 Wrong because (a) it hedges instead of committing to a framing, (b) it
 dumps a directory instead of named entities, (c) it omits required
 fields (`audienceFraming`, `outOfScope`, `codePointers`, `knownEndpoints`,
-`techStack`, `existingDemo`), and (d) it leaks system-analyzer fields
+`techStack`, `existingFlow`), and (d) it leaks system-analyzer fields
 (`runtimeProfile`, `fixtures`) into its output.

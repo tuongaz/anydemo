@@ -2,7 +2,7 @@ import type { FlowSummary } from '@/lib/api';
 import type { LinkflowTarget } from '@seeflow/canvas';
 
 /**
- * Resolve a linkflow `target` against the `demos` cache.
+ * Resolve a linkflow `target` against the `flows` cache.
  *
  * The renderer at `packages/canvas/src/nodes/linkflow-node.tsx` derives its
  * three visual states from `data.target` (semantic, on-disk) + `data._resolvedTarget`
@@ -24,11 +24,11 @@ import type { LinkflowTarget } from '@seeflow/canvas';
  */
 export function resolveLinkflowTarget(
   target: LinkflowTarget | undefined,
-  demos: readonly FlowSummary[],
+  flows: readonly FlowSummary[],
 ): { projectName: string; flowName: string } | null {
   if (!target) return null;
   const slug = `${target.project}/${target.flow}`;
-  const match = demos.find((d) => d.slug === slug);
+  const match = flows.find((d) => d.slug === slug);
   if (!match) return null;
   return { projectName: target.project, flowName: match.name };
 }

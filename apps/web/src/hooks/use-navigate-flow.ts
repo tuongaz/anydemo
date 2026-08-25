@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react';
  * The stack is mirrored into `history.state.stackDepth` so the popstate handler
  * can rebuild the truncated stack after a back/forward without retaining
  * cross-history references. US-005 keeps the stack at length 1 throughout —
- * US-006 will render one mounted `DemoView` per entry on top of the same stack.
+ * US-006 will render one mounted `FlowView` per entry on top of the same stack.
  */
 
 export interface FlowStackEntry {

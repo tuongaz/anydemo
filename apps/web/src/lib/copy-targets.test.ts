@@ -16,7 +16,7 @@ const conn = (id: string, source: string, target: string): Connector =>
 describe('collectCopyTargets', () => {
   it('copies a node that exists only as an optimistic override (un-echoed create)', () => {
     // The reported bug: a just-created node lives only in the override map; the
-    // raw server snapshot has nothing, so the old demoNodes-only filter copied
+    // raw server snapshot has nothing, so the old flowNodes-only filter copied
     // an empty set and the paste silently no-opped.
     const fresh = node('new-1', 10, 20);
     const { nodes } = collectCopyTargets({

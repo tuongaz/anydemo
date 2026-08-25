@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
 
-const VALID_DEMO = {
+const VALID_FLOW = {
   version: 2,
   name: 'Checkout Flow',
   nodes: [
@@ -25,9 +25,9 @@ const tmpRegistry = () => {
   return join(dir, 'registry.json');
 };
 
-const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
+const tmpRepoWithFlow = (flow: unknown = VALID_FLOW) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-mcp-repo-'));
-  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(flow));
   return repoDir;
 };
 
@@ -420,7 +420,7 @@ describe('seeflow_list_flows', () => {
 
   it('reflects entries added through seeflow_register_flow', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     await callTool(app, 'seeflow_register_flow', {
       repoPath,
       flowPath: 'flow.json',
@@ -435,9 +435,9 @@ describe('seeflow_list_flows', () => {
 });
 
 describe('seeflow_get_flow', () => {
-  it('returns the validated demo for a registered id', async () => {
+  it('returns the validated flow for a registered id', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const registerEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
       flowPath: 'flow.json',
@@ -474,8 +474,8 @@ describe('seeflow_get_flow', () => {
 describe('seeflow_list_flows_summary', () => {
   it('returns id, name, description for each registered flow', async () => {
     const { app } = buildApp();
-    const repoA = tmpRepoWithDemo({ ...VALID_DEMO, description: 'main flow' });
-    const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund' });
+    const repoA = tmpRepoWithFlow({ ...VALID_FLOW, description: 'main flow' });
+    const repoB = tmpRepoWithFlow({ ...VALID_FLOW, name: 'Refund' });
     await callTool(app, 'seeflow_register_flow', {
       repoPath: repoA,
       flowPath: 'flow.json',
@@ -499,11 +499,11 @@ describe('seeflow_list_flows_summary', () => {
 describe('seeflow_get_flow_graph', () => {
   it('returns nodes/connectors with detail and html stripped, description preserved', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo({
-      ...VALID_DEMO,
-      description: 'demo flow',
+    const repoPath = tmpRepoWithFlow({
+      ...VALID_FLOW,
+      description: 'sample flow',
       nodes: [
-        ...VALID_DEMO.nodes,
+        ...VALID_FLOW.nodes,
         {
           id: 'shape-1',
           type: 'rectangle',
@@ -528,7 +528,7 @@ describe('seeflow_get_flow_graph', () => {
       description?: string;
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
     };
-    expect(body.description).toBe('demo flow');
+    expect(body.description).toBe('sample flow');
     expect(body.nodes.find((n) => n.id === 'shape-1')?.data.detail).toBeUndefined();
     expect(body.nodes.find((n) => n.id === 'html-1')?.data.html).toBeUndefined();
   });
@@ -546,7 +546,7 @@ describe('seeflow_get_flow_graph', () => {
 describe('seeflow_get_node', () => {
   it('returns a single node with detail content inlined', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath,
@@ -594,7 +594,7 @@ describe('seeflow_get_node', () => {
 
   it('returns an isError result for an unknown nodeId in a registered flow', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath,
@@ -612,9 +612,9 @@ describe('seeflow_get_node', () => {
 });
 
 describe('seeflow_register_flow', () => {
-  it('registers a valid demo and returns id + slug', async () => {
+  it('registers a valid flow and returns id + slug', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
       flowPath: 'flow.json',
@@ -627,7 +627,7 @@ describe('seeflow_register_flow', () => {
     expect(registry.list()).toHaveLength(1);
   });
 
-  it('errors when the demo file is missing on disk', async () => {
+  it('errors when the flow file is missing on disk', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath: '/this/path/does/not/exist',
@@ -640,9 +640,9 @@ describe('seeflow_register_flow', () => {
 });
 
 describe('seeflow_delete_flow', () => {
-  it('removes a registered demo and accepts id or slug', async () => {
+  it('removes a registered flow and accepts id or slug', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const regEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
       flowPath: 'flow.json',
@@ -657,7 +657,7 @@ describe('seeflow_delete_flow', () => {
 
     // A second register + delete confirms the project+flow surface works
     // across consecutive registrations on the same studio.
-    const repoPath2 = tmpRepoWithDemo();
+    const repoPath2 = tmpRepoWithFlow();
     const second = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath: repoPath2,
@@ -753,7 +753,7 @@ describe('seeflow_create_project', () => {
 
 // Multi-node fixture for delete-cascade and reorder coverage. Nodes a/b/c
 // chained via connectors a→b and b→c.
-const VALID_DEMO_THREE_NODES = {
+const VALID_FLOW_THREE_NODES = {
   version: 2,
   name: 'Three Nodes',
   nodes: [
@@ -803,9 +803,9 @@ const splitSlug = (slug: string): { project: string; flow: string } => {
 
 const registerFixture = async (
   app: ReturnType<typeof buildApp>['app'],
-  demo: unknown = VALID_DEMO,
+  initialFlow: unknown = VALID_FLOW,
 ) => {
-  const repoPath = tmpRepoWithDemo(demo);
+  const repoPath = tmpRepoWithFlow(initialFlow);
   const envelope = await callTool(app, 'seeflow_register_flow', {
     repoPath,
     flowPath: 'flow.json',
@@ -814,7 +814,7 @@ const registerFixture = async (
   const { project, flow } = splitSlug(reg.slug);
   return {
     repoPath,
-    demoFile: join(repoPath, 'flow.json'),
+    flowFile: join(repoPath, 'flow.json'),
     styleFile: join(repoPath, 'style.json'),
     reg: { ...reg, project, flow },
   };
@@ -823,7 +823,7 @@ const registerFixture = async (
 describe('seeflow_add_node', () => {
   it('appends a new node and auto-generates an id when absent', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
+    const { flowFile, reg } = await registerFixture(app);
 
     const envelope = await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -837,7 +837,7 @@ describe('seeflow_add_node', () => {
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^node-/);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; type: string }>;
     };
     expect(onDisk.nodes).toHaveLength(2);
@@ -846,8 +846,8 @@ describe('seeflow_add_node', () => {
 
   it('returns isError with schema text when the new node is malformed', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app);
+    const before = readFileSync(flowFile, 'utf8');
 
     // type:'image' without required `path` — ResolvedFlowSchema rejects the post-merge.
     const envelope = await callTool(app, 'seeflow_add_node', {
@@ -857,22 +857,22 @@ describe('seeflow_add_node', () => {
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
     // File untouched on failed validation.
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
-  it('errors with "unknown demo" for an unknown project/flow pair', async () => {
+  it('errors with "unknown flow" for an unknown project/flow pair', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_node', {
       project: 'does-not-exist',
       flow: 'main',
       node: { type: 'rectangle', position: { x: 0, y: 0 }, data: {} },
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 
   it('externalizes detail to nodes/<id>/detail.md when provided', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     const envelope = await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -885,7 +885,7 @@ describe('seeflow_add_node', () => {
     });
     expect(expectOk(envelope)).toMatchObject({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
@@ -895,7 +895,7 @@ describe('seeflow_add_node', () => {
 
   it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -907,7 +907,7 @@ describe('seeflow_add_node', () => {
       },
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
@@ -919,7 +919,7 @@ describe('seeflow_add_node', () => {
 describe("seeflow_add_node + html externalization (type:'html')", () => {
   it('externalizes html to nodes/<id>/view.html when provided', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -931,7 +931,7 @@ describe("seeflow_add_node + html externalization (type:'html')", () => {
       },
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'html-mcp');
@@ -943,7 +943,7 @@ describe("seeflow_add_node + html externalization (type:'html')", () => {
 
   it("writes empty view.html and file:// ref when html is omitted on type:'html'", async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -951,7 +951,7 @@ describe("seeflow_add_node + html externalization (type:'html')", () => {
       node: { id: 'html-empty', type: 'html', data: {} },
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'html-empty')?.data.html).toBe('file://view.html');
@@ -962,7 +962,7 @@ describe("seeflow_add_node + html externalization (type:'html')", () => {
 describe("seeflow_patch_node + html externalization (type:'html')", () => {
   it('writes patch.html to view.html and keeps the file:// ref', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -976,7 +976,7 @@ describe("seeflow_patch_node + html externalization (type:'html')", () => {
       html: '<p>patched</p>',
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'h1')?.data.html).toBe('file://view.html');
@@ -987,7 +987,7 @@ describe("seeflow_patch_node + html externalization (type:'html')", () => {
 describe('seeflow_patch_node + detail externalization', () => {
   it('writes patch.detail to detail.md and keeps the file:// ref', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -1001,7 +1001,7 @@ describe('seeflow_patch_node + detail externalization', () => {
       detail: 'patched',
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
@@ -1011,7 +1011,7 @@ describe('seeflow_patch_node + detail externalization', () => {
 
   it('empties detail.md when patch.detail is empty, keeps the file:// ref', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       project: reg.project,
@@ -1029,7 +1029,7 @@ describe('seeflow_patch_node + detail externalization', () => {
       detail: '',
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
@@ -1041,7 +1041,7 @@ describe('seeflow_patch_node + detail externalization', () => {
 describe('seeflow_delete_node', () => {
   it('removes the node and cascades adjacent connectors in one write', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_THREE_NODES);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_THREE_NODES);
 
     const envelope = await callTool(app, 'seeflow_delete_node', {
       project: reg.project,
@@ -1050,7 +1050,7 @@ describe('seeflow_delete_node', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string }>;
       connectors: Array<{ id: string }>;
     };
@@ -1132,14 +1132,14 @@ describe('seeflow_move_node', () => {
 });
 
 describe('seeflow_reorder_node', () => {
-  const onDiskOrder = (demoFile: string) =>
-    (JSON.parse(readFileSync(demoFile, 'utf8')) as { nodes: Array<{ id: string }> }).nodes.map(
+  const onDiskOrder = (flowFile: string) =>
+    (JSON.parse(readFileSync(flowFile, 'utf8')) as { nodes: Array<{ id: string }> }).nodes.map(
       (n) => n.id,
     );
 
   it('moves a node forward (swap with the next sibling)', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_THREE_NODES);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_THREE_NODES);
 
     const envelope = await callTool(app, 'seeflow_reorder_node', {
       project: reg.project,
@@ -1148,12 +1148,12 @@ describe('seeflow_reorder_node', () => {
       op: 'forward',
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
-    expect(onDiskOrder(demoFile)).toEqual(['b', 'a', 'c']);
+    expect(onDiskOrder(flowFile)).toEqual(['b', 'a', 'c']);
   });
 
   it('toIndex pins the node to an absolute index', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_THREE_NODES);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_THREE_NODES);
 
     const envelope = await callTool(app, 'seeflow_reorder_node', {
       project: reg.project,
@@ -1163,12 +1163,12 @@ describe('seeflow_reorder_node', () => {
       index: 2,
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
-    expect(onDiskOrder(demoFile)).toEqual(['b', 'c', 'a']);
+    expect(onDiskOrder(flowFile)).toEqual(['b', 'c', 'a']);
   });
 
   it('errors for an unknown nodeId', async () => {
     const { app } = buildApp();
-    const { reg } = await registerFixture(app, VALID_DEMO_THREE_NODES);
+    const { reg } = await registerFixture(app, VALID_FLOW_THREE_NODES);
     const envelope = await callTool(app, 'seeflow_reorder_node', {
       project: reg.project,
       flow: reg.flow,
@@ -1230,7 +1230,7 @@ describe('seeflow_patch_node', () => {
 
   it('merges a partial label update into node.data and rewrites the file', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
+    const { flowFile, reg } = await registerFixture(app);
 
     const envelope = await callTool(app, 'seeflow_patch_node', {
       project: reg.project,
@@ -1240,7 +1240,7 @@ describe('seeflow_patch_node', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{
         id: string;
         data: { name: string };
@@ -1252,7 +1252,7 @@ describe('seeflow_patch_node', () => {
 
   it('merges multiple fields at once (label + borderColor + width + height)', async () => {
     const { app } = buildApp();
-    const { demoFile, styleFile, reg } = await registerFixture(app);
+    const { flowFile, styleFile, reg } = await registerFixture(app);
 
     const envelope = await callTool(app, 'seeflow_patch_node', {
       project: reg.project,
@@ -1266,7 +1266,7 @@ describe('seeflow_patch_node', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const arch = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { name: string } }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
@@ -1304,8 +1304,8 @@ describe('seeflow_patch_node', () => {
 
   it('rejects schema-violating input before the handler runs (borderColor outside enum)', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app);
+    const before = readFileSync(flowFile, 'utf8');
 
     const envelope = await callTool(app, 'seeflow_patch_node', {
       project: reg.project,
@@ -1315,7 +1315,7 @@ describe('seeflow_patch_node', () => {
     });
     expect(expectError(envelope)).toContain('Invalid patch_node arguments');
     // File untouched — Zod rejected before any IO.
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('rejects unknown top-level keys via .strict()', async () => {
@@ -1337,14 +1337,14 @@ describe('seeflow_patch_node', () => {
   // variants (database/server/user/queue/cloud/diamond/hexagon/triangle/parallelogram/document)
   // so a future schema split narrowing the allowed retype set surfaces here.
   it('accepts the illustrative shape variants (database/server/user/queue/cloud/diamond/hexagon/triangle/parallelogram/document)', async () => {
-    const shapeDemo = {
+    const shapeFlow = {
       version: 2,
       name: 'Shape Patch',
       nodes: [{ id: 'shape-a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [],
     };
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, shapeDemo);
+    const { flowFile, reg } = await registerFixture(app, shapeFlow);
 
     for (const next of [
       'database',
@@ -1366,7 +1366,7 @@ describe('seeflow_patch_node', () => {
       });
       expect(expectOk(envelope)).toEqual({ ok: true });
 
-      const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
         nodes: Array<{ id: string; type: string }>;
       };
       expect(onDisk.nodes.find((n) => n.id === 'shape-a')?.type).toBe(next);
@@ -1381,7 +1381,7 @@ describe('seeflow_patch_node', () => {
       nodeId: 'api-checkout',
       name: 'x',
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 
   it('returns isError with the node id in the message for an unknown nodeId', async () => {
@@ -1397,10 +1397,10 @@ describe('seeflow_patch_node', () => {
     expect(expectError(envelope)).toBe('Unknown nodeId: missing');
   });
 
-  it('returns Flow failed schema validation when the post-merge demo violates ResolvedFlowSchema', async () => {
+  it('returns Flow failed schema validation when the post-merge flow violates ResolvedFlowSchema', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app);
+    const before = readFileSync(flowFile, 'utf8');
 
     // Under the flat-types refactor, `name` is optional on every variant —
     // the legacy "empty name" rejection no longer applies. Retype the
@@ -1415,14 +1415,14 @@ describe('seeflow_patch_node', () => {
       type: 'image',
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('rejects unknown forward-compat fields on the flow node (strict schema)', async () => {
     const { app } = buildApp();
     // FlowSchema is strict — unknown fields at the node root are
     // rejected on register so the user gets a useful schema error.
-    const repoPath = tmpRepoWithDemo({
+    const repoPath = tmpRepoWithFlow({
       version: 2,
       name: 'Forward Compat',
       nodes: [
@@ -1447,7 +1447,7 @@ describe('seeflow_patch_node', () => {
 
 // ---------- Connector CRUD tools (US-005) ----------
 
-const VALID_DEMO_TWO_NODES = {
+const VALID_FLOW_TWO_NODES = {
   version: 2,
   name: 'Two Nodes',
   nodes: [
@@ -1469,15 +1469,15 @@ const VALID_DEMO_TWO_NODES = {
   connectors: [],
 };
 
-const VALID_DEMO_WITH_CONN = {
-  ...VALID_DEMO_TWO_NODES,
+const VALID_FLOW_WITH_CONN = {
+  ...VALID_FLOW_TWO_NODES,
   connectors: [{ id: 'a-to-b', source: 'a', target: 'b', label: 'flow' }],
 };
 
 describe('seeflow_add_connector', () => {
   it('appends a new connector and auto-generates id', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_TWO_NODES);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_TWO_NODES);
 
     const envelope = await callTool(app, 'seeflow_add_connector', {
       project: reg.project,
@@ -1488,7 +1488,7 @@ describe('seeflow_add_connector', () => {
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^conn-/);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; source: string; target: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
@@ -1500,7 +1500,7 @@ describe('seeflow_add_connector', () => {
 
   it('honors a caller-provided id and persists optional eventName metadata', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_TWO_NODES);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_TWO_NODES);
 
     const envelope = await callTool(app, 'seeflow_add_connector', {
       project: reg.project,
@@ -1515,7 +1515,7 @@ describe('seeflow_add_connector', () => {
     const body = expectOk(envelope) as { id: string };
     expect(body.id).toBe('my-conn');
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; eventName?: string }>;
     };
     const created = onDisk.connectors.find((c) => c.id === 'my-conn');
@@ -1524,8 +1524,8 @@ describe('seeflow_add_connector', () => {
 
   it('returns isError with schema text when source references an unknown node', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_TWO_NODES);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_TWO_NODES);
+    const before = readFileSync(flowFile, 'utf8');
 
     const envelope = await callTool(app, 'seeflow_add_connector', {
       project: reg.project,
@@ -1534,17 +1534,17 @@ describe('seeflow_add_connector', () => {
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
     // File untouched on failed validation.
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
-  it('errors with "unknown demo" for an unknown project/flow pair', async () => {
+  it('errors with "unknown flow" for an unknown project/flow pair', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_connector', {
       project: 'does-not-exist',
       flow: 'main',
       connector: { source: 'a', target: 'b' },
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 });
 
@@ -1578,9 +1578,9 @@ describe('seeflow_patch_connector', () => {
     expect(required).toEqual(expect.arrayContaining(['project', 'flow', 'connectorId']));
   });
 
-  it('merges visual fields into the connector and rewrites the demo', async () => {
+  it('merges visual fields into the connector and rewrites the flow', async () => {
     const { app } = buildApp();
-    const { demoFile, styleFile, reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
+    const { flowFile, styleFile, reg } = await registerFixture(app, VALID_FLOW_WITH_CONN);
 
     const envelope = await callTool(app, 'seeflow_patch_connector', {
       project: reg.project,
@@ -1598,7 +1598,7 @@ describe('seeflow_patch_connector', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const arch = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; label?: string }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
@@ -1625,7 +1625,7 @@ describe('seeflow_patch_connector', () => {
 
   it('merges optional eventName metadata into the connector on PATCH', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_WITH_CONN);
 
     const envelope = await callTool(app, 'seeflow_patch_connector', {
       project: reg.project,
@@ -1635,7 +1635,7 @@ describe('seeflow_patch_connector', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; eventName?: string }>;
     };
     const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
@@ -1643,12 +1643,12 @@ describe('seeflow_patch_connector', () => {
   });
 
   it('clears handle id when patch body passes sourceHandle: null', async () => {
-    const demo = {
-      ...VALID_DEMO_TWO_NODES,
+    const flow = {
+      ...VALID_FLOW_TWO_NODES,
       connectors: [{ id: 'a-to-b', source: 'a', target: 'b' }],
     };
     const { app } = buildApp();
-    const { repoPath, styleFile, reg } = await registerFixture(app, demo);
+    const { repoPath, styleFile, reg } = await registerFixture(app, flow);
     // Seed style.json with handle ids on the connector — those live in style.json
     // post-split, not on the flow file's connector entry.
     writeFileSync(
@@ -1676,7 +1676,7 @@ describe('seeflow_patch_connector', () => {
 
   it('rejects unknown top-level keys via .strict()', async () => {
     const { app } = buildApp();
-    const { reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
+    const { reg } = await registerFixture(app, VALID_FLOW_WITH_CONN);
 
     const envelope = await callTool(app, 'seeflow_patch_connector', {
       project: reg.project,
@@ -1695,12 +1695,12 @@ describe('seeflow_patch_connector', () => {
       connectorId: 'a-to-b',
       label: 'x',
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 
   it('returns isError with the connector id in the message for an unknown connectorId', async () => {
     const { app } = buildApp();
-    const { reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
+    const { reg } = await registerFixture(app, VALID_FLOW_WITH_CONN);
 
     const envelope = await callTool(app, 'seeflow_patch_connector', {
       project: reg.project,
@@ -1713,8 +1713,8 @@ describe('seeflow_patch_connector', () => {
 });
 
 describe('seeflow_delete_connector', () => {
-  const VALID_DEMO_WITH_TWO_CONNS = {
-    ...VALID_DEMO_TWO_NODES,
+  const VALID_FLOW_WITH_TWO_CONNS = {
+    ...VALID_FLOW_TWO_NODES,
     connectors: [
       { id: 'a-to-b', source: 'a', target: 'b' },
       { id: 'b-to-a', source: 'b', target: 'a' },
@@ -1723,7 +1723,7 @@ describe('seeflow_delete_connector', () => {
 
   it('removes only the targeted connector and leaves the rest', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_WITH_TWO_CONNS);
+    const { flowFile, reg } = await registerFixture(app, VALID_FLOW_WITH_TWO_CONNS);
 
     const envelope = await callTool(app, 'seeflow_delete_connector', {
       project: reg.project,
@@ -1732,7 +1732,7 @@ describe('seeflow_delete_connector', () => {
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string }>;
     };
     expect(onDisk.connectors.map((c) => c.id)).toEqual(['b-to-a']);
@@ -1740,7 +1740,7 @@ describe('seeflow_delete_connector', () => {
 
   it('errors with the connector id in the message for an unknown connectorId', async () => {
     const { app } = buildApp();
-    const { reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
+    const { reg } = await registerFixture(app, VALID_FLOW_WITH_CONN);
     const envelope = await callTool(app, 'seeflow_delete_connector', {
       project: reg.project,
       flow: reg.flow,
@@ -1749,21 +1749,21 @@ describe('seeflow_delete_connector', () => {
     expect(expectError(envelope)).toBe('Unknown connectorId: missing');
   });
 
-  it('errors with "unknown demo" for an unknown project/flow pair', async () => {
+  it('errors with "unknown flow" for an unknown project/flow pair', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_delete_connector', {
       project: 'does-not-exist',
       flow: 'main',
       connectorId: 'a-to-b',
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 });
 
 describe('seeflow_add_bulk', () => {
   it('appends nodes + connectors atomically, with connectors referencing same-batch nodes', async () => {
     const { app } = buildApp();
-    const { demoFile, repoPath, reg } = await registerFixture(app);
+    const { flowFile, repoPath, reg } = await registerFixture(app);
 
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       project: reg.project,
@@ -1785,7 +1785,7 @@ describe('seeflow_add_bulk', () => {
     expect(body.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3']);
     expect(body.connectors.map((c) => c.id)).toEqual(['n1-to-n2']);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string; html?: string } }>;
       connectors: Array<{ id: string }>;
     };
@@ -1798,7 +1798,7 @@ describe('seeflow_add_bulk', () => {
 
   it('accepts a connectors-only body wiring existing nodes', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
+    const { flowFile, reg } = await registerFixture(app);
     // Seed two rectangles so the connectors have endpoints to wire.
     await callTool(app, 'seeflow_add_bulk', {
       project: reg.project,
@@ -1838,7 +1838,7 @@ describe('seeflow_add_bulk', () => {
     expect(body.nodes).toHaveLength(0);
     expect(body.connectors[1]?.id).toBe('pinned');
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; eventName?: string }>;
     };
     expect(onDisk.connectors).toHaveLength(2);
@@ -1847,8 +1847,8 @@ describe('seeflow_add_bulk', () => {
 
   it('rolls back BOTH arrays when a connector dangles against the merged graph', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app);
+    const before = readFileSync(flowFile, 'utf8');
 
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       project: reg.project,
@@ -1860,13 +1860,13 @@ describe('seeflow_add_bulk', () => {
       connectors: [{ source: 'a', target: 'never-added' }],
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('rejects the whole batch with a schema-validation error when one node is bad', async () => {
     const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app);
-    const before = readFileSync(demoFile, 'utf8');
+    const { flowFile, reg } = await registerFixture(app);
+    const before = readFileSync(flowFile, 'utf8');
 
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       project: reg.project,
@@ -1878,7 +1878,7 @@ describe('seeflow_add_bulk', () => {
       ],
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('errors on intra-batch duplicate node id (collection labelled)', async () => {
@@ -1937,14 +1937,14 @@ describe('seeflow_add_bulk', () => {
     expect(expectError(envelope)).toContain('Invalid add_bulk arguments');
   });
 
-  it('errors with "unknown demo" for an unknown project/flow pair', async () => {
+  it('errors with "unknown flow" for an unknown project/flow pair', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       project: 'does-not-exist',
       flow: 'main',
       nodes: [{ type: 'rectangle', data: { name: 'A' } }],
     });
-    expect(expectError(envelope)).toBe('unknown demo');
+    expect(expectError(envelope)).toBe('unknown flow');
   });
 
   it('input schema advertises the 100-item cap for both nodes and connectors', async () => {

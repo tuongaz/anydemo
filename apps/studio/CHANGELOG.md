@@ -14,6 +14,7 @@ SeeFlow is now a purely localhost tool. The hosted layer at `cloud.seeflow.dev` 
 
 ### Changed
 
+- **Vocabulary: "demo" is now "flow" everywhere.** The renamed artifact reaches the wire in error payloads: REST and MCP responses now say `unknown flow` (was `unknown demo`) and `Failed to write flow file: …` (was `Failed to write demo file: …`). Any client matching on the literal text needs updating; status codes, error `code` kinds, and every response shape are unchanged. CLI help text moved with it.
 - **BREAKING — the studio binds loopback.** `seeflow start` now listens on `127.0.0.1:4321` instead of `0.0.0.0:4321`, matching [ADR 0002](../../docs/adr/0002-localhost-only.md). Every mutating route (including the one that opens a file in `$EDITOR`) was reachable from the LAN before. Pass `seeflow start --host 0.0.0.0` — or set `host` in `~/.seeflow/config.json` — to opt back in. The Docker image passes the wildcard for you via `SEEFLOW_HOST`.
 - **Docker auto-registration.** The entrypoint now registers `$SEEFLOW_WORKSPACE` when it holds a `seeflow.json` manifest. It previously gated on `$SEEFLOW_WORKSPACE/.seeflow/flow.json`, a path no supported project layout produces, so the mounted workspace was silently never registered. `SEEFLOW_FLOW` now defaults to `flow.json` and applies only to pre-manifest single-flow projects.
 

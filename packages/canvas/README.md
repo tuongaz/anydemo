@@ -112,7 +112,7 @@ the same fit-view + snapshot + jspdf pipeline for free — no setup required.
 ```tsx
 <SeeflowCanvas
   adapter={adapter}
-  projectId="my-demo"
+  projectId="my-project"
   /* ...other props */
 />
 ```

@@ -3,7 +3,7 @@
  * reads more like a wireframe diagram than a poster. The defaults apply ONLY
  * to fresh nodes (toolbar drag-create, drop-popover create, programmatic
  * insert). Pasted clones preserve their source data verbatim — defaults are
- * never backfilled. Existing demos on disk that lack these fields keep
+ * never backfilled. Existing flows on disk that lack these fields keep
  * rendering via the renderer's CSS / className fallbacks (per the optional
  * schema fields in `apps/studio/src/schema.ts`).
  *

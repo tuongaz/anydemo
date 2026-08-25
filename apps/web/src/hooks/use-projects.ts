@@ -25,7 +25,7 @@ export interface UseProjectsResult {
 /**
  * US-036: source the project switcher from `GET /api/projects` so a multi-flow
  * project surfaces as one row, not one row per flow. Mirrors the
- * useProjectFlows / useDemos shape: idle when `loading`, populated list
+ * useProjectFlows / useFlows shape: idle when `loading`, populated list
  * otherwise, `refresh()` to re-fetch, plus an `unregisterProject` mutation
  * that calls the project-level DELETE endpoint.
  */

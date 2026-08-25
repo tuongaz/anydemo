@@ -33,11 +33,11 @@ export interface LinkflowPickerDialogProps {
   /**
    * 'link' = first-time pick (title: "Link to a flow", no preselection).
    * 'edit' = swap an existing target (title: "Change linked flow", pre-selects
-   *          `initialTarget` when it resolves in `demos`).
+   *          `initialTarget` when it resolves in `flows`).
    */
   mode: 'link' | 'edit';
-  /** FlowSummary[] from `useDemos()`. */
-  demos: readonly FlowSummary[];
+  /** FlowSummary[] from `useFlows()`. */
+  flows: readonly FlowSummary[];
   /** slug ('project/flow') of the currently-viewed flow — earns a "Currently
    *  viewing" badge but stays selectable so self-links work. */
   currentSlug?: string | null;
@@ -62,7 +62,7 @@ export function LinkflowPickerDialog({
   open,
   onOpenChange,
   mode,
-  demos,
+  flows,
   currentSlug,
   initialTarget,
   onCommit,
@@ -83,12 +83,12 @@ export function LinkflowPickerDialog({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q.length === 0) return demos.slice();
-    return demos.filter((d) => {
+    if (q.length === 0) return flows.slice();
+    return flows.filter((d) => {
       const projectSlug = d.slug.split('/')[0] ?? '';
       return projectSlug.toLowerCase().includes(q) || d.name.toLowerCase().includes(q);
     });
-  }, [demos, query]);
+  }, [flows, query]);
 
   const selectedIndex = useMemo(() => {
     if (!selectedSlug) return -1;

@@ -36,7 +36,7 @@ const CORNER_STYLE: CSSProperties = {
 // the React Flow centering transform; 10px hits the visual mark.
 //
 // Width / height / border-width / border-radius are inverse-scaled by
-// `--rf-zoom` (mirrored from React Flow's viewport zoom in demo-canvas) so the
+// `--rf-zoom` (mirrored from React Flow's viewport zoom in seeflow-canvas) so the
 // corner box reads the same VISUAL size at every zoom level. Falls back to 1
 // (no compensation) until the first onMove sets the var. Same approach as the
 // outlet handles and the outer selection rectangle for consistency — the four

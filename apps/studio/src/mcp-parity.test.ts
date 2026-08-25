@@ -18,7 +18,7 @@ import { createApp } from './server.ts';
 // Same shape as the fixtures in mcp.test.ts; duplicated here to keep this
 // file self-contained (test files shouldn't cross-import from each other —
 // re-running mcp.test.ts in isolation should still work).
-const VALID_DEMO_TWO_NODES = {
+const VALID_FLOW_TWO_NODES = {
   version: 2,
   name: 'Parity Two Nodes',
   nodes: [
@@ -40,13 +40,13 @@ const VALID_DEMO_TWO_NODES = {
   connectors: [],
 };
 
-const VALID_DEMO_WITH_CONN = {
-  ...VALID_DEMO_TWO_NODES,
+const VALID_FLOW_WITH_CONN = {
+  ...VALID_FLOW_TWO_NODES,
   name: 'Parity Two Nodes With Conn',
   connectors: [{ id: 'a-to-b', source: 'a', target: 'b', label: 'flow' }],
 };
 
-const VALID_DEMO_THREE_NODES = {
+const VALID_FLOW_THREE_NODES = {
   version: 2,
   name: 'Parity Three Nodes',
   nodes: [
@@ -81,33 +81,33 @@ const VALID_DEMO_THREE_NODES = {
 const tmpRegistryPath = () =>
   join(mkdtempSync(join(tmpdir(), 'seeflow-parity-reg-')), 'registry.json');
 
-interface DemoFixture {
+interface FlowFixture {
   app: ReturnType<typeof createApp>;
   registry: ReturnType<typeof createRegistry>;
-  demoFile: string;
+  flowFile: string;
   flowId: string;
   projectSlug: string;
   flowSlug: string;
 }
 
-// Build a fresh studio app with a freshly-registered demo on disk. Each call
+// Build a fresh studio app with a freshly-registered flow on disk. Each call
 // produces an independent registry + tmpdir so REST and MCP runs of the same
 // scenario never observe each other.
-const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
+const buildFlowFixture = (initialFlow: unknown): FlowFixture => {
   const registry = createRegistry({ path: tmpRegistryPath() });
   const app = createApp({ mode: 'prod', staticRoot: './dist/web', registry, disableWatcher: true });
 
   const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-parity-repo-'));
-  const demoFile = join(repoPath, 'flow.json');
+  const flowFile = join(repoPath, 'flow.json');
   // operations.ts writes the canonical 2-space JSON + trailing newline back to
   // disk on every mutation, so the byte comparison only kicks in after the
   // first mutation runs. The initial seed bytes can be whatever — pretty or
   // minified — because both fixtures start from the same seed bytes anyway.
-  writeFileSync(demoFile, `${JSON.stringify(initialDemo, null, 2)}\n`);
+  writeFileSync(flowFile, `${JSON.stringify(initialFlow, null, 2)}\n`);
 
-  const demoName = (initialDemo as { name?: string }).name ?? 'Parity Flow';
+  const fixtureName = (initialFlow as { name?: string }).name ?? 'Parity Flow';
   const entry = registry.upsert({
-    name: demoName,
+    name: fixtureName,
     repoPath,
     flowPath: 'flow.json',
     projectSlug: 'p',
@@ -120,25 +120,25 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
   return {
     app,
     registry,
-    demoFile,
+    flowFile,
     flowId: entry.id,
     projectSlug: entry.projectSlug,
     flowSlug: entry.flowSlug,
   };
 };
 
-// REST URL prefix for the demo fixture — collapses the projectSlug + flowSlug
+// REST URL prefix for the flow fixture — collapses the projectSlug + flowSlug
 // pair into `/api/projects/<p>/flows/<f>` so scenario URLs stay short. Both
 // values come from the registry entry, so any future widening of the slug
 // alphabet flows through here automatically.
-const flowApi = (fix: DemoFixture, suffix = ''): string =>
+const flowApi = (fix: FlowFixture, suffix = ''): string =>
   `/api/projects/${encodeURIComponent(fix.projectSlug)}/flows/${encodeURIComponent(fix.flowSlug)}${suffix}`;
 
 interface ProjectFixture {
   app: ReturnType<typeof createApp>;
   registry: ReturnType<typeof createRegistry>;
   projectPath: string;
-  demoFile: string;
+  flowFile: string;
 }
 
 // create_project fixture: empty tmp dir + a derived project folder path the
@@ -157,13 +157,13 @@ const buildProjectFixture = (name: string): ProjectFixture => {
     name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'demo';
+      .replace(/^-+|-+$/g, '') || 'flow';
   const projectPath = join(baseDir, slug);
   return {
     app,
     registry,
     projectPath,
-    demoFile: join(projectPath, 'flows', 'main', 'flow.json'),
+    flowFile: join(projectPath, 'flows', 'main', 'flow.json'),
   };
 };
 
@@ -213,10 +213,10 @@ const restJson = async (
 
 interface ParityScenario {
   toolName: string;
-  /** Build a fresh fixture for each side. Returns the demo file path that
+  /** Build a fresh fixture for each side. Returns the flow file path that
    *  will be compared byte-for-byte and any handles the call sites need. */
   build: () => {
-    demoFile: string;
+    flowFile: string;
     runRest: () => Promise<unknown>;
     runMcp: () => Promise<unknown>;
   };
@@ -232,7 +232,7 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_add_node',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
       // Explicit id keeps the on-disk bytes deterministic — auto-generated ids
       // would diverge between REST and MCP runs even with identical inputs.
       const newNode = {
@@ -241,7 +241,7 @@ const SCENARIOS: ParityScenario[] = [
         data: { name: 'New' },
       };
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/nodes'), newNode),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_node', {
@@ -255,10 +255,10 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_patch_node',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
       const body = { name: 'Renamed', borderColor: 'blue' as const, width: 200 };
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_node', {
@@ -273,11 +273,11 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_delete_node',
     build: () => {
-      // Three-node demo with chained connectors so the cascade-removal of
+      // Three-node flow with chained connectors so the cascade-removal of
       // both a-to-b and b-to-c lands in the byte comparison.
-      const fix = buildDemoFixture(VALID_DEMO_THREE_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_THREE_NODES);
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/nodes/b')),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_delete_node', {
@@ -291,9 +291,9 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_move_node',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () =>
           restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a/position'), {
             x: 321,
@@ -313,9 +313,9 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_reorder_node',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_THREE_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_THREE_NODES);
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () =>
           restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a/order'), {
             op: 'toIndex',
@@ -335,11 +335,11 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_add_connector',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
       // Explicit id + kind so the on-disk connector record is deterministic.
       const conn = { id: 'parity-conn', source: 'a', target: 'b' };
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/connectors'), conn),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_connector', {
@@ -353,10 +353,10 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_patch_connector',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_WITH_CONN);
+      const fix = buildFlowFixture(VALID_FLOW_WITH_CONN);
       const body = { label: 'renamed', style: 'dashed' as const, color: 'green' as const };
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/connectors/a-to-b'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_connector', {
@@ -371,9 +371,9 @@ const SCENARIOS: ParityScenario[] = [
   {
     toolName: 'seeflow_delete_connector',
     build: () => {
-      const fix = buildDemoFixture(VALID_DEMO_WITH_CONN);
+      const fix = buildFlowFixture(VALID_FLOW_WITH_CONN);
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/connectors/a-to-b')),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_delete_connector', {
@@ -390,7 +390,7 @@ const SCENARIOS: ParityScenario[] = [
       // Use the empty starter and seed both arrays in the same call so the
       // atomic shape gets exercised end-to-end. Explicit ids keep the
       // on-disk bytes deterministic across the REST and MCP runs.
-      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
       const body = {
         nodes: [
           {
@@ -408,7 +408,7 @@ const SCENARIOS: ParityScenario[] = [
         ],
       };
       return {
-        demoFile: fix.demoFile,
+        flowFile: fix.flowFile,
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/bulk'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_bulk', {
@@ -429,16 +429,16 @@ const SCENARIOS: ParityScenario[] = [
         // Comparing two separate scaffolds: the project tool creates a fresh
         // flow.json under each fixture's projectPath. Folders differ, file
         // contents shouldn't.
-        demoFile: '__pair__',
+        flowFile: '__pair__',
         runRest: async () => {
           const body = await restJson(restFix.app, 'POST', '/api/projects', {
             path: restFix.projectPath,
             name,
           });
-          // Stash the demoFile bytes via a property-bag side channel so the
+          // Stash the flowFile bytes via a property-bag side channel so the
           // outer test code can compare both fixtures' on-disk flow.json.
-          (body as Record<string, unknown>).__demoFileBytes = readFileSync(
-            restFix.demoFile,
+          (body as Record<string, unknown>).__flowFileBytes = readFileSync(
+            restFix.flowFile,
             'utf8',
           );
           return body;
@@ -448,14 +448,14 @@ const SCENARIOS: ParityScenario[] = [
             path: mcpFix.projectPath,
             name,
           })) as Record<string, unknown>;
-          body.__demoFileBytes = readFileSync(mcpFix.demoFile, 'utf8');
+          body.__flowFileBytes = readFileSync(mcpFix.flowFile, 'utf8');
           return body;
         },
       };
     },
     // Registry-generated id is non-deterministic (shortId). Strip
     // it before the equality check — slug and the on-disk bytes (smuggled in
-    // as __demoFileBytes) are the meaningful invariants.
+    // as __flowFileBytes) are the meaningful invariants.
     normalizeResponse: (body) => {
       const { id: _id, ...rest } = body as Record<string, unknown>;
       return rest;
@@ -470,16 +470,16 @@ describe('REST and MCP parity for every mutating tool', () => {
       const restPair = scenario.build();
       const restResponse = await restPair.runRest();
       const restBytes =
-        restPair.demoFile === '__pair__' ? null : readFileSync(restPair.demoFile, 'utf8');
+        restPair.flowFile === '__pair__' ? null : readFileSync(restPair.flowFile, 'utf8');
 
       // Run MCP second on a separate, freshly-built fixture.
       const mcpPair = scenario.build();
       const mcpResponse = await mcpPair.runMcp();
       const mcpBytes =
-        mcpPair.demoFile === '__pair__' ? null : readFileSync(mcpPair.demoFile, 'utf8');
+        mcpPair.flowFile === '__pair__' ? null : readFileSync(mcpPair.flowFile, 'utf8');
 
-      // On-disk bytes must match for tools that mutate a registered demo's
-      // file. (create_project smuggles its bytes through __demoFileBytes
+      // On-disk bytes must match for tools that mutate a registered flow's
+      // file. (create_project smuggles its bytes through __flowFileBytes
       // because it produces a new file under a fresh folder; the response
       // comparison below covers it.)
       if (restBytes !== null && mcpBytes !== null) {
@@ -503,14 +503,14 @@ describe('REST and MCP parity for every mutating tool', () => {
 
     const restPair = scenario.build();
     const restResponse = await restPair.runRest();
-    const restBytes = readFileSync(restPair.demoFile, 'utf8');
+    const restBytes = readFileSync(restPair.flowFile, 'utf8');
 
     const mcpPair = scenario.build();
     const mcpResponse = await mcpPair.runMcp();
     // Manually corrupt the MCP-side on-disk file so the byte compare diverges.
     const tamperedBytes = `${restBytes}/* tampered */`;
-    writeFileSync(mcpPair.demoFile, tamperedBytes);
-    const mcpBytesAfterTamper = readFileSync(mcpPair.demoFile, 'utf8');
+    writeFileSync(mcpPair.flowFile, tamperedBytes);
+    const mcpBytesAfterTamper = readFileSync(mcpPair.flowFile, 'utf8');
 
     expect(mcpBytesAfterTamper).not.toBe(restBytes);
 
@@ -591,8 +591,8 @@ const buildMetaFixture = () => {
     httpUrl: META_TEST_HTTP_URL,
   });
   const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-meta-repo-'));
-  const demoFile = join(repoPath, 'flow.json');
-  writeFileSync(demoFile, `${JSON.stringify(VALID_DEMO_TWO_NODES, null, 2)}\n`);
+  const flowFile = join(repoPath, 'flow.json');
+  writeFileSync(flowFile, `${JSON.stringify(VALID_FLOW_TWO_NODES, null, 2)}\n`);
   const entry = registry.upsert({
     name: 'Meta Rule Flow',
     repoPath,
@@ -724,7 +724,7 @@ describe('canvas _meta attachment rules', () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-meta-register-'));
     writeFileSync(
       join(repoPath, 'flow.json'),
-      `${JSON.stringify({ ...VALID_DEMO_TWO_NODES, name: 'Register Meta Flow' }, null, 2)}\n`,
+      `${JSON.stringify({ ...VALID_FLOW_TWO_NODES, name: 'Register Meta Flow' }, null, 2)}\n`,
     );
     const result = await callMcpToolFull(fix.app, 'seeflow_register_flow', {
       repoPath,
@@ -799,7 +799,7 @@ describe('canvas _meta attachment rules', () => {
       { name: 'seeflow_list_flows_summary', args: {} },
       { name: 'seeflow_schema', args: {} },
       { name: 'seeflow_ids', args: { type: 'node', count: 1 } },
-      { name: 'validate_seeflow', args: { flow: VALID_DEMO_TWO_NODES } },
+      { name: 'validate_seeflow', args: { flow: VALID_FLOW_TWO_NODES } },
       {
         name: 'seeflow_add_node',
         args: { project: fix.projectSlug, flow: fix.flowSlug, node: newNode },
@@ -851,7 +851,7 @@ describe('canvas _meta attachment rules', () => {
   });
 
   it('patch_connector also returns no _meta[outputTemplate] (covers all mutating tools)', async () => {
-    // Separate fixture so the seeded VALID_DEMO_WITH_CONN gives patch_connector
+    // Separate fixture so the seeded VALID_FLOW_WITH_CONN gives patch_connector
     // a connector to target. Keeps the main non-canvas case list above
     // dependency-free.
     const registry = createRegistry({ path: tmpRegistryPath() });
@@ -866,7 +866,7 @@ describe('canvas _meta attachment rules', () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-meta-conn-'));
     writeFileSync(
       join(repoPath, 'flow.json'),
-      `${JSON.stringify(VALID_DEMO_WITH_CONN, null, 2)}\n`,
+      `${JSON.stringify(VALID_FLOW_WITH_CONN, null, 2)}\n`,
     );
     const entry = registry.upsert({
       name: 'Meta Patch Conn Flow',
@@ -934,7 +934,7 @@ describe('canvas _meta attachment rules', () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-meta-degrade-'));
     writeFileSync(
       join(repoPath, 'flow.json'),
-      `${JSON.stringify(VALID_DEMO_TWO_NODES, null, 2)}\n`,
+      `${JSON.stringify(VALID_FLOW_TWO_NODES, null, 2)}\n`,
     );
     const entry = registry.upsert({
       name: 'Degrade Flow',
@@ -967,7 +967,7 @@ describe('canvas _meta attachment rules', () => {
 
 describe('linkflow node MCP round-trip parity', () => {
   it('add (MCP) → get (MCP) → get (REST) → delete (MCP) all agree on the linkflow shape', async () => {
-    const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+    const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
     // Self-link is allowed (per US-003 picker AC) and keeps the fixture single-flow.
     const target = { project: fix.projectSlug, flow: fix.flowSlug };
     const newNode = {
@@ -988,7 +988,7 @@ describe('linkflow node MCP round-trip parity', () => {
     expect((addedNode.data as { target?: unknown }).target).toEqual(target);
 
     // On-disk flow.json contains the linkflow node with the target preserved.
-    const onDisk = JSON.parse(readFileSync(fix.demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(fix.flowFile, 'utf8')) as {
       nodes: Array<{ id: string; type: string; data: { target?: unknown } }>;
     };
     const diskNode = onDisk.nodes.find((n) => n.id === 'lf-parity-1');
@@ -1029,7 +1029,7 @@ describe('linkflow node MCP round-trip parity', () => {
     expect(deleteResponse).toBeDefined();
 
     // The node must disappear from flow.json after the delete.
-    const afterDelete = JSON.parse(readFileSync(fix.demoFile, 'utf8')) as {
+    const afterDelete = JSON.parse(readFileSync(fix.flowFile, 'utf8')) as {
       nodes: Array<{ id: string }>;
     };
     expect(afterDelete.nodes.find((n) => n.id === 'lf-parity-1')).toBeUndefined();
@@ -1066,7 +1066,7 @@ describe('linkflow node MCP round-trip parity', () => {
   it('linkflow without target round-trips correctly (target is optional)', async () => {
     // Optional target — schema-level invariant from US-001. The add path must
     // not require it and the round-trip must not synthesize it.
-    const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+    const fix = buildFlowFixture(VALID_FLOW_TWO_NODES);
     const newNode = {
       id: 'lf-unlinked',
       type: 'linkflow',

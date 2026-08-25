@@ -111,7 +111,7 @@ function hasActiveEdge(edges: ResizeEdges): boolean {
  * payloads update LIVE during the drag, not just on release. The same
  * callback is invoked at `onResizeEnd` (back-compat: existing tests + the
  * click-guard branch still flow through there). The end-fired call carries
- * the SAME dims as the last per-tick call, so demo-view's optimistic
+ * the SAME dims as the last per-tick call, so flow-view's optimistic
  * overrides + the coalesced undo key make the redundant dispatch a no-op
  * visually (one undo entry per gesture; PATCHes are idempotent on the
  * server).

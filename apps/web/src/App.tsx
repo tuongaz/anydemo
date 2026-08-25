@@ -1,5 +1,5 @@
 import { Header, type HeaderShareCallbacks } from '@/components/header';
-import { useDemos } from '@/hooks/use-demos';
+import { useFlows } from '@/hooks/use-flows';
 import {
   ensureFlowNavigation,
   popBack,
@@ -11,7 +11,7 @@ import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import type { CreateProjectResult } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
-import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
+import { pickLandingFlow, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
 import { FlowStackPane } from '@/pages/flow-stack-pane';
 import { StudioHome } from '@/pages/studio-home';
@@ -25,14 +25,14 @@ if (typeof window !== 'undefined') ensureFlowNavigation();
 
 export function App() {
   const pathname = usePathname();
-  const { demos, refresh: refreshFlows } = useDemos();
+  const { flows, refresh: refreshFlows } = useFlows();
   // US-036: the top-right ProjectSwitcher is sourced from `GET /api/projects`
   // so a multi-flow project surfaces once, not once per flow. The legacy
-  // `demos` list (FlowSummary[]) still backs the canvas page resolution, the
+  // `flows` list (FlowSummary[]) still backs the canvas page resolution, the
   // `/` landing picker, and SSE-driven detail caches.
   const { projects, refresh: refreshProjects, unregisterProject } = useProjects();
   // US-006: one entry per mounted flow. The renderer (FlowStackPane) owns
-  // the per-entry data + SSE wiring so a hidden DemoView keeps its state +
+  // the per-entry data + SSE wiring so a hidden FlowView keeps its state +
   // viewport + connection alive. App reads only the top entry for
   // header/last-flow plumbing.
   const stack = useFlowStack();
@@ -41,7 +41,7 @@ export function App() {
   const topSlug = topEntry?.slug ?? null;
   // US-007: header back-arrow surfaces iff a previous flow is on the stack
   // (linkflow body click pushed the current entry on top). We resolve the
-  // previous entry's human-readable name via the demos cache when possible,
+  // previous entry's human-readable name via the flows cache when possible,
   // falling back to the flow slug so the tooltip never reads "Back to undefined".
   const prevEntry = stack.length > 1 ? (stack.at(-2) ?? null) : null;
 
@@ -55,7 +55,7 @@ export function App() {
 
   // External writes (CLI register / unregister) reach us via the global
   // registry SSE channel. Both flow and project lists refetch; node-level
-  // state stays bound to the open demo and is untouched.
+  // state stays bound to the open flow and is untouched.
   useRegistryEvents({
     onRegistryReload: () => {
       refreshFlows();
@@ -63,32 +63,32 @@ export function App() {
     },
   });
 
-  const currentSummary = topSlug ? (demos ?? []).find((d) => d.slug === topSlug) : undefined;
+  const currentSummary = topSlug ? (flows ?? []).find((d) => d.slug === topSlug) : undefined;
 
   // US-031: when the URL points to a slug we don't yet have in the cached
-  // demos list (e.g. the user just created a flow via the switcher popover
-  // and the demos refresh hasn't echoed back yet), kick off a refresh so the
-  // "Unknown demo" page resolves without the user having to reload the tab.
-  // Demos is `null` while loading; only react once it's been resolved at
+  // flows list (e.g. the user just created a flow via the switcher popover
+  // and the flows refresh hasn't echoed back yet), kick off a refresh so the
+  // "Unknown flow" page resolves without the user having to reload the tab.
+  // Flows is `null` while loading; only react once it's been resolved at
   // least once and is missing the slug.
   //
   // HARD CAP: refetch AT MOST ONCE per missing slug. The original effect
-  // refetched on every `demos` change while `currentSummary` was undefined — so
+  // refetched on every `flows` change while `currentSummary` was undefined — so
   // a slug the registry can NEVER return (a stale/unreachable URL, or a host
   // shell that can't address it) spun `GET /api/flows` forever (the "infinite
   // /api/flows" report). One refetch still catches the just-created-not-yet-
-  // echoed race; if the slug still isn't there, fall through to the Unknown-demo
+  // echoed race; if the slug still isn't there, fall through to the Unknown-flow
   // page instead of hammering the server. (Registry SSE reloads refresh
   // separately, so an externally-registered slug still resolves live.)
   const healAttemptedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!topSlug) return;
-    if (demos === null) return;
+    if (flows === null) return;
     if (currentSummary) return;
     if (healAttemptedRef.current.has(topSlug)) return;
     healAttemptedRef.current.add(topSlug);
     refreshFlows();
-  }, [topSlug, demos, currentSummary, refreshFlows]);
+  }, [topSlug, flows, currentSummary, refreshFlows]);
 
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
@@ -99,7 +99,7 @@ export function App() {
       // is immediately navigable. Navigate with the BARE projectSlug + its
       // defaultFlow — `result.slug` is flow-qualified (`<proj>/<flow>`), so
       // passing it as `project` produced a malformed
-      // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown demo" page.
+      // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown flow" page.
       resetFlow({ project: result.projectSlug, flow: result.defaultFlow });
     },
     [refreshFlows, refreshProjects],
@@ -107,7 +107,7 @@ export function App() {
 
   // Unregister a project (and optionally rm-rf its repoPath). The hook calls
   // the atomic project-level DELETE endpoint and refreshes the projects list;
-  // here we refetch the legacy demos list too and navigate away when the open
+  // here we refetch the legacy flows list too and navigate away when the open
   // flow lived under the removed project.
   const onUnregisterProject = useCallback(
     async (projectSlug: string, opts?: { deleteSource?: boolean }) => {
@@ -119,8 +119,8 @@ export function App() {
   );
 
   // On the FIRST load only, skip the picker when there's nothing to pick: jump
-  // straight in if only one demo is registered, or if the stored last-used demo
-  // still resolves. Otherwise (2+ demos, no recall) StudioHome renders the picker.
+  // straight in if only one flow is registered, or if the stored last-used flow
+  // still resolves. Otherwise (2+ flows, no recall) StudioHome renders the picker.
   //
   // This runs once per app mount — gated on `autoResumedRef`. Re-running it on
   // every navigation to '/' would make "home" unreachable: an explicit go-home
@@ -128,16 +128,16 @@ export function App() {
   // back to the last-opened flow.
   const autoResumedRef = useRef(false);
   useEffect(() => {
-    if (demos === null) return;
+    if (flows === null) return;
     if (autoResumedRef.current) return;
     autoResumedRef.current = true;
     if (pathname !== '/') return;
-    const target = pickInitialDemo(demos, readLastProjectId());
+    const target = pickLandingFlow(flows, readLastProjectId());
     if (target) {
       const split = splitFlowSlug(target.slug);
       if (split) resetFlow(split);
     }
-  }, [pathname, demos]);
+  }, [pathname, flows]);
 
   // US-001: persist whichever project is currently open so we can reopen it
   // next visit.
@@ -177,7 +177,7 @@ export function App() {
     };
   }, [flowId]);
 
-  if (demos === null) {
+  if (flows === null) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background text-sm text-muted-foreground">
         Loading…
@@ -186,7 +186,7 @@ export function App() {
   }
 
   const previousFlowName = prevEntry
-    ? (demos.find((d) => d.slug === prevEntry.slug)?.name ?? prevEntry.flow)
+    ? (flows.find((d) => d.slug === prevEntry.slug)?.name ?? prevEntry.flow)
     : undefined;
 
   return (
@@ -203,9 +203,9 @@ export function App() {
         />
         <main className="min-h-0 flex-1">
           {stack.length > 0 ? (
-            <FlowStackPane demos={demos} refreshFlows={refreshFlows} canvasRef={canvasRef} />
+            <FlowStackPane flows={flows} refreshFlows={refreshFlows} canvasRef={canvasRef} />
           ) : (
-            <StudioHome demos={demos} onProjectCreated={onProjectCreated} />
+            <StudioHome flows={flows} onProjectCreated={onProjectCreated} />
           )}
         </main>
       </div>

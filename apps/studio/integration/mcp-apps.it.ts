@@ -20,10 +20,10 @@ const CANVAS_BUNDLE_PATH = resolve(STUDIO_DIR, '../mcp-app/dist/index.html');
 const PORT_RELEASE_TIMEOUT_MS = 2_000;
 const PORT_POLL_INTERVAL_MS = 50;
 
-// Minimal-but-valid demo matching the fixtures used in mcp-parity.test.ts. The
-// shape mirrors VALID_DEMO_TWO_NODES (two rectangles) so `seeflow_register_flow`
+// Minimal-but-valid flow matching the fixtures used in mcp-parity.test.ts. The
+// shape mirrors VALID_FLOW_TWO_NODES (two rectangles) so `seeflow_register_flow`
 // accepts it through the same Flow schema the rest of the studio uses.
-const VALID_DEMO_TWO_NODES = {
+const VALID_FLOW_TWO_NODES = {
   version: 2,
   name: 'Integration Two Nodes',
   nodes: [
@@ -115,7 +115,7 @@ describe('MCP Apps integration (US-010)', () => {
       repoPath = mkdtempSync(join(tmpdir(), 'seeflow-mcp-apps-repo-'));
       writeFileSync(
         join(repoPath, 'flow.json'),
-        `${JSON.stringify(VALID_DEMO_TWO_NODES, null, 2)}\n`,
+        `${JSON.stringify(VALID_FLOW_TWO_NODES, null, 2)}\n`,
       );
 
       client = await spawnMcpClient({

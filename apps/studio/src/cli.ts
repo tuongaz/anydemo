@@ -223,7 +223,7 @@ if (argv.includes('--version') || argv.includes('-v')) {
 function printHelp() {
   console.log(
     `
-seeflow — local studio for file-defined interactive demos
+seeflow — localhost studio for file-defined, Zod-validated flows
 
 Usage:
   npx -y @tuongaz/seeflow@latest [command] [options]
@@ -231,8 +231,8 @@ Usage:
 Commands (work without a running studio):
   start                Start the SeeFlow Studio server (default port 4321) — default when no command is given
   stop                 Stop a background studio instance
-  register             Register a demo repo. Manifest-aware: when <repoPath>/seeflow.json exists, re-scans every declared flow; otherwise reads <repoPath>/<flow> (defaults to flow.json) as a single-flow project (alias of flows:register)
-  flows:register       Register a demo repo (manifest-aware — same behaviour as register)
+  register             Register a project. Manifest-aware: when <repoPath>/seeflow.json exists, re-scans every declared flow; otherwise reads <repoPath>/<flow> (defaults to flow.json) as a single-flow project (alias of flows:register)
+  flows:register       Register a project (manifest-aware — same behaviour as register)
   projects:create      Scaffold a new project (writes <path>/seeflow.json + <path>/flows/main/flow.json) — (--path <dir> --name <name> [--description <text>])
   projects:list        List every registered project with projectSlug, name, defaultFlow, flowCount
   flows:list           List registered flows. With --project <p>, filters to one project (returns flowSlug, name, icon?, isDefault per flow)
@@ -603,25 +603,25 @@ async function runRegister() {
   // Legacy single-flow path: pre-manifest projects (and skill tests that
   // exercise registerFlow directly) still pass a bare flow.json at the
   // root. Read it, schema-validate, upsert one entry.
-  const demoPathArg = flagValue('flow') ?? DEFAULT_FLOW_PATH;
-  const fullPath = isAbsolute(demoPathArg) ? demoPathArg : join(repoPath, demoPathArg);
+  const flowPathArg = flagValue('flow') ?? DEFAULT_FLOW_PATH;
+  const fullPath = isAbsolute(flowPathArg) ? flowPathArg : join(repoPath, flowPathArg);
   if (!existsSync(fullPath)) {
-    console.error(`No demo file at ${fullPath}`);
+    console.error(`No flow file at ${fullPath}`);
     console.error(
       `Create ${DEFAULT_FLOW_PATH} in your repo, or pass --flow <path>. For manifest-driven projects, place a seeflow.json at the repo root.`,
     );
     process.exit(1);
   }
 
-  let demo: unknown;
+  let flow: unknown;
   try {
-    demo = await Bun.file(fullPath).json();
+    flow = await Bun.file(fullPath).json();
   } catch (err) {
     console.error(`Failed to parse ${fullPath}: ${String(err)}`);
     process.exit(1);
   }
 
-  const parsed = FlowSchema.safeParse(demo);
+  const parsed = FlowSchema.safeParse(flow);
   if (!parsed.success) {
     console.error(`${fullPath} failed schema validation:`);
     for (const issue of parsed.error.issues) {
@@ -634,7 +634,7 @@ async function runRegister() {
   const result = await ops.registerFlow({
     name: parsed.data.name,
     repoPath,
-    flowPath: demoPathArg,
+    flowPath: flowPathArg,
   });
   if (result.kind !== 'ok') {
     printOutcome(result);

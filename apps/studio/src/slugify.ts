@@ -6,11 +6,11 @@
 //   - lowercase
 //   - any run of non-alphanumeric characters collapses to a single dash
 //   - leading + trailing dashes are stripped
-//   - empty result falls back to `'demo'` so callers always get a usable slug
+//   - empty result falls back to `'flow'` so callers always get a usable slug
 export function slugify(name: string): string {
   const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return slug || 'demo';
+  return slug || 'flow';
 }

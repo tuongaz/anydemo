@@ -53,10 +53,10 @@ afterEach(() => {
 describe('openProjectFile (US-018)', () => {
   it('POSTs JSON to /api/projects/:id/files/open with the path body', async () => {
     nextResponse = { status: 200, body: { ok: true, absPath: '/abs/blocks/x.html' } };
-    const result = await openProjectFile('demo-1', 'blocks/x.html');
+    const result = await openProjectFile('project-1', 'blocks/x.html');
     expect(recorded).toHaveLength(1);
     const req = recorded[0];
-    expect(req?.url).toBe('/api/projects/demo-1/files/open');
+    expect(req?.url).toBe('/api/projects/project-1/files/open');
     expect(req?.method).toBe('POST');
     expect(req?.headers['content-type']).toBe('application/json');
     expect(req?.body).toEqual({ path: 'blocks/x.html' });
@@ -65,8 +65,8 @@ describe('openProjectFile (US-018)', () => {
 
   it('URL-encodes the projectId so slashes / spaces survive the segment cleanly', async () => {
     nextResponse = { status: 200, body: { ok: true, absPath: '/abs/x.html' } };
-    await openProjectFile('demo with space/and-slash', 'blocks/x.html');
-    expect(recorded[0]?.url).toBe('/api/projects/demo%20with%20space%2Fand-slash/files/open');
+    await openProjectFile('project with space/and-slash', 'blocks/x.html');
+    expect(recorded[0]?.url).toBe('/api/projects/project%20with%20space%2Fand-slash/files/open');
   });
 
   it('resolves with ok:false + absPath when the backend soft-fails (EDITOR unset / spawn fail)', async () => {
@@ -78,7 +78,7 @@ describe('openProjectFile (US-018)', () => {
       status: 200,
       body: { ok: false, absPath: '/abs/blocks/x.html', error: 'EDITOR not set' },
     };
-    const result = await openProjectFile('demo-1', 'blocks/x.html');
+    const result = await openProjectFile('project-1', 'blocks/x.html');
     expect(result).toEqual({
       ok: false,
       absPath: '/abs/blocks/x.html',
@@ -91,7 +91,7 @@ describe('openProjectFile (US-018)', () => {
       status: 404,
       body: { error: 'file not found', absPath: '/abs/blocks/missing.html' },
     };
-    const result = await openProjectFile('demo-1', 'blocks/missing.html');
+    const result = await openProjectFile('project-1', 'blocks/missing.html');
     expect(result).toEqual({
       ok: false,
       absPath: '/abs/blocks/missing.html',
@@ -101,7 +101,7 @@ describe('openProjectFile (US-018)', () => {
 
   it('throws on a 400 path-validation rejection (no absPath to fall back to)', async () => {
     nextResponse = { status: 400, body: { error: 'absolute paths not allowed' } };
-    await expect(openProjectFile('demo-1', '/etc/passwd')).rejects.toThrow(
+    await expect(openProjectFile('project-1', '/etc/passwd')).rejects.toThrow(
       'absolute paths not allowed',
     );
   });
@@ -117,9 +117,9 @@ describe('openProjectFile (US-018)', () => {
 describe('revealProjectFile (US-018)', () => {
   it('POSTs to /api/projects/:id/files/reveal with the path body', async () => {
     nextResponse = { status: 200, body: { ok: true, absPath: '/abs/blocks/x.html' } };
-    const result = await revealProjectFile('demo-1', 'blocks/x.html');
+    const result = await revealProjectFile('project-1', 'blocks/x.html');
     const req = recorded[0];
-    expect(req?.url).toBe('/api/projects/demo-1/files/reveal');
+    expect(req?.url).toBe('/api/projects/project-1/files/reveal');
     expect(req?.method).toBe('POST');
     expect(req?.body).toEqual({ path: 'blocks/x.html' });
     expect(result.ok).toBe(true);
@@ -133,7 +133,7 @@ describe('revealProjectFile (US-018)', () => {
       status: 200,
       body: { ok: false, absPath: '/abs/blocks/x.html', error: 'spawn failed' },
     };
-    const result = await revealProjectFile('demo-1', 'blocks/x.html');
+    const result = await revealProjectFile('project-1', 'blocks/x.html');
     expect(result).toEqual({
       ok: false,
       absPath: '/abs/blocks/x.html',

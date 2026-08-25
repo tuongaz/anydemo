@@ -1,7 +1,7 @@
 import { type FlowDetail, fetchFlowDetail } from '@/lib/api';
 import { useCallback, useEffect, useState } from 'react';
 
-export interface UseDemoDataResult {
+export interface UseFlowDataResult {
   detail: FlowDetail | null;
   loading: boolean;
   error: string | null;
@@ -15,7 +15,7 @@ export interface UseDemoDataResult {
   applyDetail: (next: FlowDetail) => void;
 }
 
-export const useDemoData = (project: string | null, flow: string | null): UseDemoDataResult => {
+export const useFlowData = (project: string | null, flow: string | null): UseFlowDataResult => {
   const enabled = project !== null && flow !== null;
   const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(enabled);
@@ -30,7 +30,7 @@ export const useDemoData = (project: string | null, flow: string | null): UseDem
         setError(null);
       })
       .catch((err) => {
-        console.error('[useDemoData] failed', err);
+        console.error('[useFlowData] failed', err);
         setError(String(err));
       })
       .finally(() => setLoading(false));

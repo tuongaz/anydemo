@@ -35,7 +35,7 @@ import { IconPickerPopover } from './icon-picker-popover.tsx';
  * type:'html'-create gesture (vs. an OS image-file drop). The toolbar no
  * longer surfaces a draggable tile for it — html nodes are now created via
  * the programmatic createNode REST endpoint (API/LLM path). Kept so the
- * existing drop branch in demo-canvas continues to compile against a single
+ * existing drop branch in seeflow-canvas continues to compile against a single
  * source of truth for the marker literal.
  */
 export const HTML_BLOCK_DND_TYPE = 'application/x-seeflow-create-html-block';
@@ -60,7 +60,7 @@ export interface CanvasToolbarProps {
   /**
    * US-013 (icon picker): controlled-open state for the insert-icon popover.
    * The Insert icon button anchors the IconPickerPopover; the toolbar's parent
-   * (demo-canvas) owns the open/close lifecycle so the same slice can serve
+   * (seeflow-canvas) owns the open/close lifecycle so the same slice can serve
    * insert and replace modes from different call sites.
    */
   iconPickerOpen?: boolean;
@@ -146,7 +146,7 @@ const SECONDARY_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
 // opens a popover. Append-only as more illustrative shapes land.
 const ILLUSTRATIVE_SHAPES: ToolbarShapeEntry[] = [
   // US-010: drag-create commits a node with `type: 'database'`; the ghost
-  // preview in demo-canvas.tsx renders <DatabaseShape> directly (not the
+  // preview in seeflow-canvas.tsx renders <DatabaseShape> directly (not the
   // wrapper chrome) so the preview matches the committed visual.
   { shape: 'database', label: 'Database', commandId: 'tool.database', Icon: Database },
   // US-022: rack-chassis illustrative shape, same ghost-dispatch contract as
@@ -197,7 +197,7 @@ const SHAPE_PICKER_LABEL = 'Shape';
 
 // US-020: the "Tidy layout" (Auto Align) button used to live here, between the
 // shapes and the icon picker. It moved to the bottom-left Controls cluster in
-// demo-canvas.tsx so all canvas-view actions (zoom, fit, auto align) live in
+// seeflow-canvas.tsx so all canvas-view actions (zoom, fit, auto align) live in
 // one consistent place. The keyboard shortcut (⌘⇧L) is unchanged.
 export function CanvasToolbar({
   mode,

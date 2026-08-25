@@ -39,9 +39,9 @@ describe('slugify', () => {
     expect(slugify('  spaces   here ')).toBe('spaces-here');
   });
 
-  it('returns "demo" for empty/non-alphanumeric input', () => {
-    expect(slugify('')).toBe('demo');
-    expect(slugify('!!!')).toBe('demo');
+  it('returns "flow" for empty/non-alphanumeric input', () => {
+    expect(slugify('')).toBe('flow');
+    expect(slugify('!!!')).toBe('flow');
   });
 });
 

@@ -36,7 +36,7 @@ export interface ProjectSwitcherProps {
   /**
    * Unregister the project. When `opts.deleteSource` is true, the studio
    * also rm-rf's the repoPath after the registry is cleaned. App.tsx is
-   * responsible for refreshing the demos cache and navigating away if the
+   * responsible for refreshing the flows cache and navigating away if the
    * open flow lived under the removed project.
    */
   onUnregisterProject?: (projectSlug: string, opts?: UnregisterProjectOpts) => Promise<void>;

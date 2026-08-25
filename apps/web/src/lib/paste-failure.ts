@@ -8,7 +8,7 @@ import { reconcilePasteFailure } from '@/lib/clipboard';
 export interface PasteFailureDeps {
   /** Refetch the authoritative flow detail from the server. */
   fetchDetail: () => Promise<FlowDetail>;
-  /** Push a fresh detail into the demo-data cache (SSE `flow:reload` channel). */
+  /** Push a fresh detail into the flow-data cache (SSE `flow:reload` channel). */
   applyDetail: (detail: FlowDetail) => void;
   /** Drop a node's optimistic override. */
   dropNode: (id: string) => void;

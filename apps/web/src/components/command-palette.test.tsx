@@ -102,7 +102,7 @@ const FULL_CTX: CommandContext = {
   canUndo: true,
   canRedo: true,
   hasClipboard: true,
-  canExportDemo: true,
+  canExportFlow: true,
 };
 
 const EMPTY_CTX: CommandContext = {
@@ -110,7 +110,7 @@ const EMPTY_CTX: CommandContext = {
   canUndo: false,
   canRedo: false,
   hasClipboard: false,
-  canExportDemo: false,
+  canExportFlow: false,
 };
 
 // useState call order in CommandPalette: [query, highlightedIndex, recents].
@@ -340,13 +340,13 @@ describe('CommandPalette', () => {
     expect(findRow(tree, 'export.png')).not.toBeNull();
   });
 
-  it('disables export rows when the demo context does not support them', () => {
+  it('disables export rows when the flow context does not support them', () => {
     const ctx: CommandContext = {
       hasSelection: false,
       canUndo: false,
       canRedo: false,
       hasClipboard: false,
-      canExportDemo: false,
+      canExportFlow: false,
     };
     const tree = renderPalette({ ctx }, { recents: ['export.pdf', 'export.png'] });
     for (const id of ['export.pdf', 'export.png']) {

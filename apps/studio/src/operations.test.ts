@@ -1103,14 +1103,14 @@ describe('getFlowGraphImpl', () => {
     if (!entry) throw new Error('entry missing');
     const flowAbs = join(entry.repoPath, entry.flowPath);
     const raw = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    raw.description = 'demo flow';
+    raw.description = 'sample flow';
     writeFileSync(flowAbs, JSON.stringify(raw));
 
     const result = await getFlowGraphImpl(deps, flowId);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
 
-    expect(result.data.description).toBe('demo flow');
+    expect(result.data.description).toBe('sample flow');
     expect(result.data.nodes).toHaveLength(2);
 
     const rectNode = result.data.nodes.find((n) => n.id === detailAdd.data.id);

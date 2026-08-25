@@ -16,10 +16,10 @@ export interface PendingOverrides<T extends { id: string }> {
    * Reconcile against a fresh snapshot of server entities. For each override,
    * drop any field whose value already matches the server's value (server
    * caught up); if no fields remain, drop the entry. Entities missing from
-   * the snapshot are left alone — they get cleared on the next demo-id reset.
+   * the snapshot are left alone — they get cleared on the next flow-id reset.
    */
   pruneAgainst: (items: T[]) => void;
-  /** Clear every override (used when switching demos). */
+  /** Clear every override (used when switching flows). */
   reset: () => void;
 }
 
@@ -108,7 +108,7 @@ export const applyPruneAgainst = <T extends { id: string }>(
 
 /**
  * Generalized optimistic-edit reconciliation. Generalizes the original
- * `positionOverrides` flow in `demo-view.tsx`: callers `setOverride` BEFORE
+ * `positionOverrides` flow in `flow-view.tsx`: callers `setOverride` BEFORE
  * firing the API call, then either `pruneAgainst` on the next flow:reload
  * echo (server caught up) or `dropOverride` on API failure (revert).
  */

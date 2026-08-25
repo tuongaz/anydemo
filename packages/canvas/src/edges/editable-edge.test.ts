@@ -7,7 +7,7 @@ import { join } from 'node:path';
 // Invariants:
 //
 //   1. The per-edge SVG inline zIndex (DEFAULT_EDGE_OPTIONS in
-//      demo-canvas.tsx) MUST be 0 so connectors paint under nodes (nodes
+//      seeflow-canvas.tsx) MUST be 0 so connectors paint under nodes (nodes
 //      naturally win via DOM order: xyflow renders NodeRenderer after
 //      EdgeRenderer in the viewport). Only the outlet endpoint dots
 //      (CSS z-index 2000 via <ViewportPortal>) stay above nodes.

@@ -7,16 +7,16 @@ describe('createEventBus', () => {
     const aEvents: StudioEvent[] = [];
     const bEvents: StudioEvent[] = [];
 
-    const offA = bus.subscribe('demo-a', (e) => aEvents.push(e));
-    const offB = bus.subscribe('demo-b', (e) => bEvents.push(e));
+    const offA = bus.subscribe('flow-a', (e) => aEvents.push(e));
+    const offB = bus.subscribe('flow-b', (e) => bEvents.push(e));
 
-    bus.broadcast({ type: 'flow:reload', flowId: 'demo-a', payload: { valid: true } });
-    bus.broadcast({ type: 'flow:reload', flowId: 'demo-b', payload: { valid: false } });
+    bus.broadcast({ type: 'flow:reload', flowId: 'flow-a', payload: { valid: true } });
+    bus.broadcast({ type: 'flow:reload', flowId: 'flow-b', payload: { valid: false } });
 
     expect(aEvents).toHaveLength(1);
     expect(bEvents).toHaveLength(1);
-    expect(aEvents[0]?.flowId).toBe('demo-a');
-    expect(bEvents[0]?.flowId).toBe('demo-b');
+    expect(aEvents[0]?.flowId).toBe('flow-a');
+    expect(bEvents[0]?.flowId).toBe('flow-b');
 
     offA();
     offB();

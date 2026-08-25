@@ -9,7 +9,7 @@ describe('GET /healthz (US-011 readiness probe)', () => {
     expect(await res.json()).toEqual({ status: 'ok' });
   });
 
-  it('works without any registered demos and without authentication headers', async () => {
+  it('works without any registered flows and without authentication headers', async () => {
     const app = createApp({ disableWatcher: true });
     const res = await app.request('/healthz');
     expect(res.status).toBe(200);

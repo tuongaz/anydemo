@@ -2,7 +2,7 @@
 // @seeflow/canvas — public barrel
 //
 // Sections (in order):
-//   1. Schema types          — node / connector / demo shapes
+//   1. Schema types          — node / connector / flow shapes
 //   2. Theming               — color tokens + styles
 //   3. Icon registry         — built-in lucide icon set
 //   4. Helpers               — pure functions / browser utilities

@@ -14,7 +14,7 @@ import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gestur
  * `LinkflowNodeData` (semantic + visual base + optional target). The host
  * injects extra fields at mount:
  *
- *  - `_resolvedTarget` — what the host's resolver (see US-008 — useDemos
+ *  - `_resolvedTarget` — what the host's resolver (see US-008 — useFlows
  *    lookup in apps/web) found for `data.target`. `undefined` means
  *    "not yet resolved" (treated as broken once target is set);
  *    `null` means "resolved but missing" (broken state);

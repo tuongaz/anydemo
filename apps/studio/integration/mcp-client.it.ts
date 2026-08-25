@@ -23,8 +23,8 @@ describe('integration: mcp client', () => {
     expect(Array.isArray(result.tools)).toBe(true);
     expect(result.tools.length).toBeGreaterThan(0);
     const names = result.tools.map((t) => t.name);
-    // seeflow_list_flows is the wire-level rename of the legacy "listDemos"
-    // tool the PRD referenced. Verified against apps/studio/src/mcp.ts.
+    // seeflow_list_flows is the wire-level name of the list-flows tool the PRD
+    // referenced under its old label. Verified against apps/studio/src/mcp.ts.
     expect(names).toContain('seeflow_list_flows');
   });
 });

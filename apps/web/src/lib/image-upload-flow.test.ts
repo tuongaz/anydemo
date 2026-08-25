@@ -92,7 +92,7 @@ const buildDeps = (overrides?: {
 
 const baseArgs = (overrides: Partial<Parameters<typeof performImageDropUpload>[0]> = {}) => ({
   nodeId: 'node-test-1',
-  flowId: 'demo-1',
+  flowId: 'flow-1',
   file: stubFile('Hero.png'),
   originalFilename: 'Hero.png',
   position: { x: 100, y: 200 },
@@ -141,7 +141,8 @@ describe('performImageDropUpload (US-008)', () => {
     const file = stubFile('Logo.SVG', 'image/svg+xml');
     await performImageDropUpload(baseArgs({ file, originalFilename: 'Logo.SVG' }), ctx.deps);
     expect(ctx.uploadCalls).toHaveLength(1);
-    expect(ctx.uploadCalls[0]?.projectId).toBe('demo-1');
+    // flowId doubles as the registry's projectId — see ImageDropDeps.upload.
+    expect(ctx.uploadCalls[0]?.projectId).toBe('flow-1');
     expect(ctx.uploadCalls[0]?.file).toBe(file);
     expect(ctx.uploadCalls[0]?.filename).toBe('Logo.SVG');
   });
@@ -167,7 +168,7 @@ describe('performImageDropUpload (US-008)', () => {
     const ctx = buildDeps();
     await performImageDropUpload(baseArgs(), ctx.deps);
     expect(ctx.createCalls).toHaveLength(1);
-    expect(ctx.createCalls[0]?.flowId).toBe('demo-1');
+    expect(ctx.createCalls[0]?.flowId).toBe('flow-1');
     expect(ctx.createCalls[0]?.body.id).toBe('node-test-1');
     expect(ctx.createCalls[0]?.body.type).toBe('image');
     expect(ctx.createCalls[0]?.body.position).toEqual({ x: 100, y: 200 });

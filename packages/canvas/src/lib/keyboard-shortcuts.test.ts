@@ -131,7 +131,7 @@ describe('applyNudge', () => {
 });
 
 describe('resolveClipboardChord (US-020)', () => {
-  // The handler in demo-view.tsx defers to this resolver for every Cmd/Ctrl
+  // The handler in flow-view.tsx defers to this resolver for every Cmd/Ctrl
   // chord. These tests pin the contract so a future refactor of the chord
   // wiring (e.g. another marquee-perf change like US-010 deferring selection
   // propagation) can't silently break Cmd+C/V from a click selection.

@@ -517,7 +517,7 @@ describe('IconNode', () => {
   });
 
   it('dblclick is a no-op (and does NOT stop propagation) when onNameChange is absent (US-004)', () => {
-    // Read-only / no-demo contexts don't wire the callback; the wrapper
+    // Read-only / no-flow contexts don't wire the callback; the wrapper
     // should still render with an onDoubleClick handler, but the handler
     // bails before stopPropagation so a wrapping listener (e.g. the canvas
     // dblclick-to-create-shape handler) still gets to run.

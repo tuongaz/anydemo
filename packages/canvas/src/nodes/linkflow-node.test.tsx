@@ -207,8 +207,8 @@ describe('LinkflowNode unlinked state (US-002)', () => {
 describe('LinkflowNode linked-healthy state (US-002)', () => {
   it('renders flow name from resolved target (project name suppressed)', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'orders' },
-      _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
+      target: { project: 'sample', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Sample Project', flowName: 'Orders Flow' },
     });
     const root = getRoot(tree);
     expect((root.props as { 'data-linkflow-state'?: string })['data-linkflow-state']).toBe(
@@ -232,8 +232,8 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
 
   it('body button has no-op safe onClick when onFollow is absent (US-002 placeholder)', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'orders' },
-      _resolvedTarget: { projectName: 'Demo', flowName: 'Orders' },
+      target: { project: 'sample', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Sample', flowName: 'Orders' },
     });
     const body = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
@@ -248,8 +248,8 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
   it('renders a Pencil edit button in the header trailing slot that fires onOpenPicker("edit")', () => {
     const seen: { mode: string | null } = { mode: null };
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'orders' },
-      _resolvedTarget: { projectName: 'Demo', flowName: 'Orders' },
+      target: { project: 'sample', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Sample', flowName: 'Orders' },
       onOpenPicker: (mode: string) => {
         seen.mode = mode;
       },
@@ -275,7 +275,7 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
 describe('LinkflowNode broken state (US-002)', () => {
   it('renders amber + AlertTriangle when target is set but _resolvedTarget is null', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'missing' },
+      target: { project: 'sample', flow: 'missing' },
       _resolvedTarget: null,
     });
     const root = getRoot(tree);
@@ -288,7 +288,7 @@ describe('LinkflowNode broken state (US-002)', () => {
 
   it('renders broken when target is set but _resolvedTarget is undefined', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'missing' },
+      target: { project: 'sample', flow: 'missing' },
     });
     expect((getRoot(tree).props as { 'data-linkflow-state'?: string })['data-linkflow-state']).toBe(
       'broken',
@@ -310,7 +310,7 @@ describe('LinkflowNode broken state (US-002)', () => {
   it('body click fires onOpenPicker("edit")', () => {
     const seen: { mode: string | null } = { mode: null };
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'missing' },
+      target: { project: 'sample', flow: 'missing' },
       _resolvedTarget: null,
       onOpenPicker: (mode: string) => {
         seen.mode = mode;
@@ -335,11 +335,11 @@ describe('LinkflowNode connect handles', () => {
     for (const data of [
       {},
       {
-        target: { project: 'demo', flow: 'orders' },
-        _resolvedTarget: { projectName: 'Demo', flowName: 'Orders' },
+        target: { project: 'sample', flow: 'orders' },
+        _resolvedTarget: { projectName: 'Sample', flowName: 'Orders' },
       },
       {
-        target: { project: 'demo', flow: 'missing' },
+        target: { project: 'sample', flow: 'missing' },
         _resolvedTarget: null,
       },
     ]) {
@@ -501,7 +501,7 @@ describe('LinkflowNode header bar (icon + editable title)', () => {
 
   it('broken state renders the header + linkflow-broken-label, and the outer element is NOT a <button>', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'missing' },
+      target: { project: 'sample', flow: 'missing' },
       _resolvedTarget: null,
     });
     const header = getLinkflowHeader(tree);
@@ -518,8 +518,8 @@ describe('LinkflowNode header bar (icon + editable title)', () => {
 
   it('linked-healthy renders the header with the empty-name placeholder when data.name is unset AND still renders linkflow-flow-name', () => {
     const tree = callLinkflowNode({
-      target: { project: 'demo', flow: 'orders' },
-      _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
+      target: { project: 'sample', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Sample Project', flowName: 'Orders Flow' },
     });
     const header = getLinkflowHeader(tree);
     // Empty by default — NodeHeader renders its italic placeholder for '' .
@@ -534,8 +534,8 @@ describe('LinkflowNode header bar (icon + editable title)', () => {
   it('header title reflects data.name when set and does NOT fall back to the resolved flow name', () => {
     const tree = callLinkflowNode({
       name: 'My Link',
-      target: { project: 'demo', flow: 'orders' },
-      _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
+      target: { project: 'sample', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Sample Project', flowName: 'Orders Flow' },
     });
     const header = getLinkflowHeader(tree);
     expect((header.props as { name?: string }).name).toBe('My Link');

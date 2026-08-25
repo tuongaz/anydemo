@@ -63,7 +63,7 @@ function renderInlineEdit(props: Partial<React.ComponentProps<typeof InlineEdit>
 describe('InlineEdit', () => {
   it('onKeyDown stops native event propagation so window-level shortcuts do NOT fire (US-018)', () => {
     // Without nativeEvent.stopPropagation, a Backspace inside the editor would
-    // bubble to the window-level Delete/Backspace handler in demo-view.tsx and
+    // bubble to the window-level Delete/Backspace handler in flow-view.tsx and
     // delete the focused connector. React's e.stopPropagation alone only stops
     // the synthetic event tree, not native event listeners attached to window.
     const tree = renderInlineEdit();
@@ -110,7 +110,7 @@ describe('InlineEdit', () => {
 
   it('contenteditable rendered as plaintext-friendly div with role textbox', () => {
     // Smoke check the rendered shape so a future refactor that drops the
-    // testid (which the demo-view defense-in-depth check queries for) blows
+    // testid (which the flow-view defense-in-depth check queries for) blows
     // this test up loudly. US-018 defense relies on this exact testid.
     const tree = renderInlineEdit();
     const props = tree.props as Record<string, unknown>;

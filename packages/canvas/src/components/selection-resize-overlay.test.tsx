@@ -419,7 +419,7 @@ describe('TRIPWIRE: frozen baseline does NOT compound (design §6.4, L0.1)', () 
   // future regression on the group branch is caught here too (design §6.4, the
   // M5 "extend the tripwire to the group path" deliverable).
   it('GROUP path: members + box scale once from the frozen set (no runaway on a fast drag)', () => {
-    // grouping-demo geometry: group box encloses node-a (120,120,160×80) and
+    // grouping-flow geometry: group box encloses node-a (120,120,160×80) and
     // node-b (380,120,160×80). The box (computeGroupBox, symmetric 12px padding,
     // no title band) sits at (108,108) and is 444 wide × 104 tall. The frozen set
     // the overlay scales = members + box.

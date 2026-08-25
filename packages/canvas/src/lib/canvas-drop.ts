@@ -1,7 +1,7 @@
 /**
  * US-008: OS-image drag-and-drop helpers. Pure functions consumed by the
- * demo-canvas drop handler. The orchestration of upload + optimistic placement
- * + persist + retry lives in `apps/web/src/pages/demo-view.tsx`; this module
+ * seeflow-canvas drop handler. The orchestration of upload + optimistic placement
+ * + persist + retry lives in `apps/web/src/pages/flow-view.tsx`; this module
  * stays free of API + React dependencies so the helpers are unit-testable
  * without a DOM.
  */
@@ -180,7 +180,7 @@ export const layoutImageGrid = (
 };
 
 /**
- * Compose the OS-image drop flow from its primitives so the demo-canvas drop
+ * Compose the OS-image drop flow from its primitives so the seeflow-canvas drop
  * handler stays a thin wiring layer over a unit-testable async pipeline.
  * Returns `false` when nothing was dispatched (no image, no rfInstance, etc.)
  * so the caller can decide whether to preventDefault. Promise resolves once

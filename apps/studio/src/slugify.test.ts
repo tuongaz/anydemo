@@ -23,9 +23,9 @@ describe('slugify', () => {
     expect(slugify('Order Pipeline 42')).toBe('order-pipeline-42');
   });
 
-  it('returns "demo" for empty/non-alphanumeric input', () => {
-    expect(slugify('')).toBe('demo');
-    expect(slugify('!!!')).toBe('demo');
-    expect(slugify('   ')).toBe('demo');
+  it('returns "flow" for empty/non-alphanumeric input', () => {
+    expect(slugify('')).toBe('flow');
+    expect(slugify('!!!')).toBe('flow');
+    expect(slugify('   ')).toBe('flow');
   });
 });

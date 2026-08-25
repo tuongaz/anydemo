@@ -14,7 +14,7 @@ import {
 //      registerFlow because the current toolbar has no linkflow tile (a
 //      future tile would still ride the same picker → commit path).
 //   2. Delete key removes the selected linkflow node.
-//   3. Broken state when the target flow does not resolve in the demos
+//   3. Broken state when the target flow does not resolve in the flows
 //      cache (seeded with a target pointing at a non-existent slug).
 //   4. Three visual baselines — linkflow-unlinked / linkflow-linked /
 //      linkflow-broken — pinned to chromium-linux pixels.
@@ -110,14 +110,14 @@ test.describe('canvas — linkflow (US-009)', () => {
     await page.locator('[data-testid="linkflow-picker-commit"]').click();
     await expect(dialog).toHaveCount(0);
 
-    // Renderer flips to linked-healthy after the patch + demos resolution.
+    // Renderer flips to linked-healthy after the patch + flows resolution.
     // The visible flow name comes from FlowSummary.name (the registration's
     // `name` field on /api/flows/register) — NOT the inline `name` field of
     // the resolved flow envelope. registerFlow above passes 'LF Target Nav'.
     await expect(linkflowNode).toHaveAttribute('data-linkflow-state', 'linked-healthy');
     await expect(page.locator('[data-testid="linkflow-flow-name"]')).toHaveText('LF Target Nav');
 
-    // Measure marker BEFORE navigating — the source's DemoView will be
+    // Measure marker BEFORE navigating — the source's FlowView will be
     // hidden under display:none after pushLink but stays mounted so its
     // canvas viewport survives. We compare against the post-back rect.
     const marker = page.locator('.react-flow__node[data-id="marker"]');
@@ -130,7 +130,7 @@ test.describe('canvas — linkflow (US-009)', () => {
     await page.waitForURL(`**${projectFlowPath(target.projectSlug, target.flowSlug)}`, {
       timeout: 10_000,
     });
-    // Target's DemoView mounts. The back-arrow appears once a previous
+    // Target's FlowView mounts. The back-arrow appears once a previous
     // entry exists on the stack — its absence on the source page is the
     // depth-1 invariant; presence here is the depth-2 invariant.
     const backButton = page.locator('[data-testid="flow-back-button"]');
@@ -147,7 +147,7 @@ test.describe('canvas — linkflow (US-009)', () => {
     await expect(backButton).toHaveCount(0);
 
     // Marker is visible again and at the SAME position (the source's
-    // DemoView never unmounted; xyflow's viewport state survived).
+    // FlowView never unmounted; xyflow's viewport state survived).
     await expect(marker).toBeVisible();
     const after = await marker.boundingBox();
     if (!after) throw new Error('marker has no bounding box after navigation');

@@ -294,7 +294,7 @@ whenever the entity matches the shape's semantics:
 Placement rules that don't live in the schema:
 
 - **`user` shape** belongs only when the human action is itself part
-  of the demo (UX click-through, support-agent workflow, consent
+  of the flow (UX click-through, support-agent workflow, consent
   capture). Never as a generic "start" for backend / pipeline /
   worker / cron / webhook flows. Web UI / Mobile App / SDK consumers
   are *software* — model them as `rectangle` with `data.icon:

@@ -21,7 +21,7 @@ export type ImageNodeRuntimeData = ImageNodeData & {
   /** US-005: alignment-guide integration injected by the canvas in edit mode. */
   resizeAlignment?: ResizeAlignmentHooks;
   /**
-   * US-004: project id injected into every node's runtime data by demo-canvas
+   * US-004: project id injected into every node's runtime data by seeflow-canvas
    * so the renderer can build a project-scoped file URL. Not persisted to disk
    * — `path` is the only on-disk field.
    */
@@ -37,7 +37,7 @@ export type ImageNodeRuntimeData = ImageNodeData & {
   fileBaseUrl?: string;
   /**
    * US-008: click-to-retry callback dispatched when the user clicks the
-   * 'Upload failed' placeholder. Injected by demo-canvas's `sourceNodes`
+   * 'Upload failed' placeholder. Injected by seeflow-canvas's `sourceNodes`
    * builder. Absent → the placeholder still renders, but clicking is inert.
    */
   onRetryUpload?: (nodeId: string) => void;

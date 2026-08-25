@@ -6,14 +6,14 @@ The phase branches on `$inputClass` (set in Phase 0's input-source gate). Each b
 
 **Single message, two `Task` calls.** Serial launch roughly doubles wall-clock for zero benefit. Follow the wrong/right pattern in `../../SKILL.md` § "Parallelism is the default".
 
-- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `learnContext`. Out: `inputClass: "code"`, `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
+- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingFlow`, `learnContext`. Out: `inputClass: "code"`, `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingFlow`.
 - `seeflow-system-analyzer` — in: `projectRoot`, `inputClass: "code"`, `learnContext`. Out: `runtimeProfile` + a `learnUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact the analyzer learns about how to start / set up the local environment MUST land in `learnUpdates`.**
 
 Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `../../agents/seeflow-code-analyzer.md`, `../../agents/seeflow-system-analyzer.md`, `../learn-format.md`. Unparseable output: retry that single agent once, then surface (`<agent> returned unparseable JSON after retry`) and stop. The same rule applies to every sub-agent in Phases 2 and 4.
 
 ## `inputClass === "conversation"` — orchestrator builds brief inline
 
-Skip the code-analyzer. Build the same envelope it would have produced from the in-session conversation: extract `userIntent`, `audienceFraming`, `scope.{rootEntities,outOfScope}`, `codePointers[]` (file paths discussed with one-line `why`), `knownEndpoints[]` (any HTTP / queue / event surfaces named), `techStack[]`, `existingDemo`. Set `inputClass: "conversation"` on the brief.
+Skip the code-analyzer. Build the same envelope it would have produced from the in-session conversation: extract `userIntent`, `audienceFraming`, `scope.{rootEntities,outOfScope}`, `codePointers[]` (file paths discussed with one-line `why`), `knownEndpoints[]` (any HTTP / queue / event surfaces named), `techStack[]`, `existingFlow`. Set `inputClass: "conversation"` on the brief.
 
 System-analyzer still runs when the flow touches a runtime AND the conversation hasn't already covered dev setup. Skip it (no Task call) when the conversation already named the dev command, ports, fixtures — those facts come into the brief from `$learnPath` and the conversation directly. When skipped, set `runtimeProfile: null` on the brief.
 
@@ -30,7 +30,7 @@ Build the brief inline from the user's prompt + any document text in the convers
   "codePointers":   [],
   "knownEndpoints": [],
   "techStack":      [],
-  "existingDemo":   null,
+  "existingFlow":   null,
   "runtimeProfile": null
 }
 ```

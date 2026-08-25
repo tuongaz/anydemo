@@ -167,7 +167,7 @@ export function InlineEdit({
     // Stop the keystroke from bubbling to the canvas — Backspace/Delete on the
     // canvas would otherwise trigger node deletion (US-027). React's
     // stopPropagation only halts React's synthetic event tree; window-level
-    // listeners (e.g. demo-view.tsx's Delete/Backspace shortcut) listen for
+    // listeners (e.g. flow-view.tsx's Delete/Backspace shortcut) listen for
     // the NATIVE event and need a separate stop. Without this, a Backspace
     // press whose default action emptied the editor could still bubble to
     // window and delete the focused connector (US-018 delete-on-empty bug).

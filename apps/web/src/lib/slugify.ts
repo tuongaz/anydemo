@@ -6,9 +6,9 @@
 //   - lowercase
 //   - any run of non-alphanumeric characters collapses to a single dash
 //   - leading + trailing dashes are stripped
-//   - empty result returns '' (NOT the studio's 'demo' sentinel — the dialog
+//   - empty result returns '' (NOT the studio's 'flow' sentinel — the dialog
 //     wants an empty hint when the user has typed only punctuation, so the
-//     name input doesn't auto-fill the id with the literal string 'demo')
+//     name input doesn't auto-fill the id with the literal string 'flow')
 export function slugify(name: string): string {
   return name
     .toLowerCase()

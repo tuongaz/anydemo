@@ -49,7 +49,7 @@ The launching prompt will give you:
    `"code" | "conversation" | "document"`), `userIntent`,
    `audienceFraming`, `depth` (one of `overview` / `walkthrough` /
    `deep-architectural`), `scope.{rootEntities,outOfScope}`,
-   `codePointers[]`, `knownEndpoints[]`, `techStack`, `existingDemo`.
+   `codePointers[]`, `knownEndpoints[]`, `techStack`, `existingFlow`.
    May also include
    `runtimeProfile` once the system-analyzer has returned. **Branch on
    `inputClass` when picking node types** — see §"Picking node `type`
@@ -64,7 +64,7 @@ The launching prompt will give you:
     absent from your launching prompt, do not emit `type:'component'`
     — fall back to `html` for information-display content and surface
     the gap in `rationales`.
-2. **(optional) `editTarget`** — when `contextBrief.existingDemo.diffTarget`
+2. **(optional) `editTarget`** — when `contextBrief.existingFlow.diffTarget`
    is `true`, the orchestrator also passes the parsed contents of the
    existing `flow.json`. Use it to keep stable node ids/slugs for entities
    that survive the edit.
@@ -89,7 +89,7 @@ these five top-level keys — all required, all non-empty:
 
 ```json
 {
-  "name":        "<Title Case demo title>",
+  "name":        "<Title Case flow title>",
   "slug":        "<kebab-case-identifier>",
   "nodes":       [ /* conforming to $SEEFLOW schema node */ ],
   "connectors":  [ /* conforming to $SEEFLOW schema connector */ ],
@@ -106,7 +106,7 @@ inside it.
 
 Field-by-field:
 
-- `name` — human-readable demo title (Title Case noun phrase mirroring
+- `name` — human-readable flow title (Title Case noun phrase mirroring
   `userIntent`; e.g. `"Checkout Flow"`, `"Order Pipeline"`).
 - `slug` — kebab-case identifier used only for the seeflow project's directory name (`<host>/.seeflow/<slug>/`).
   It is **advisory, not the addressing key**: `projects:create` derives the registry slug from `--name` (`slugify(name)`), and that response value — not this field — is what every follow-up `--project` call uses. To avoid a mismatch, emit `slug` as the kebab-case of `name` (e.g. `name: "Checkout Flow"` → `slug: "checkout-flow"`); do not abbreviate or drop words.
@@ -155,7 +155,7 @@ behavioural sub-type — pick the SEMANTIC shape that matches the entity.
   glyph. Prefer these whenever the entity matches — an actual database
   is `type:'database'`, NOT `rectangle + data.icon: "database"`.
 - **`user`** — human-actor shape. Allowed ONLY when the human action is
-  itself part of the demo (UX click-through, support-agent workflow,
+  itself part of the flow (UX click-through, support-agent workflow,
   consent capture). Backend / system / data-pipeline / worker / cron /
   webhook-driven flows MUST NOT add a `user` shape just to give the
   canvas a starting point.
@@ -311,7 +311,7 @@ lands as data moves through the system. **Never omit them.**
 
 **The rule:** if a service touches one of these resources, the resource gets
 its own node and a connector pointing to it. The audience watching the
-demo should be able to see data land in the database, events flow through the
+flow should be able to see data land in the database, events flow through the
 bus, jobs queue up — not just see the service that caused it.
 
 Do NOT skip a resource node because:
@@ -390,7 +390,7 @@ their own.
    - `overview` — collapse aggressively; one node per top-level system,
      resource nodes still mandatory. Skip Exception 1 (pipeline stages
      internal to one workflow) unless the audience cannot understand
-     the demo without them.
+     the flow without them.
    - `walkthrough` — default. Follow the abstraction rules as written.
    - `deep-architectural` — invoke Exception 4 freely when a service has
      independent state machines; surface internal pipeline stages
@@ -465,7 +465,7 @@ their own.
 
 ## Edit case
 
-If `contextBrief.existingDemo.diffTarget === true`:
+If `contextBrief.existingFlow.diffTarget === true`:
 
 - Reuse the existing `slug`.
 - Reuse existing node `id`s for entities that persist (match by

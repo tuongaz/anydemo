@@ -52,7 +52,7 @@ export interface McpAppEnv {
    *  value is effectively cosmetic — kept on widgetState so the iframe code
    *  paths that conditionally attach the header are still exercised. */
   token: string;
-  /** Pre-registered demo flow with 2 nodes used by every test. */
+  /** Pre-registered flow with 2 nodes used by every test. */
   flow: RegisteredFlow;
   /** Stable id of the first node — used by navigate-mode nodeId focus. */
   primaryNodeId: string;
@@ -95,16 +95,16 @@ function bootBundleServer(port: number): BundleServer {
 
 const FLOW_FIXTURE = {
   version: 2 as const,
-  name: 'MCP App Demo',
+  name: 'MCP App Flow',
   nodes: [
     {
-      id: 'mcp-demo-source',
+      id: 'mcp-flow-source',
       type: 'rectangle' as const,
       position: { x: 80, y: 120 },
       data: { name: 'Source' },
     },
     {
-      id: 'mcp-demo-sink',
+      id: 'mcp-flow-sink',
       type: 'rectangle' as const,
       position: { x: 360, y: 120 },
       data: { name: 'Sink' },
@@ -113,8 +113,8 @@ const FLOW_FIXTURE = {
   connectors: [],
 };
 
-async function registerDemoFlow(studio: StudioHandle): Promise<RegisteredFlow> {
-  const slug = 'mcp-app-demo';
+async function registerFixtureFlow(studio: StudioHandle): Promise<RegisteredFlow> {
+  const slug = 'mcp-app-flow';
   const repoPath = join(studio.home, slug);
   mkdirSync(repoPath, { recursive: true });
   const resolved = ResolvedFlowSchema.parse(FLOW_FIXTURE);
@@ -129,7 +129,7 @@ async function registerDemoFlow(studio: StudioHandle): Promise<RegisteredFlow> {
   });
   if (res.status !== 200) {
     const detail = await res.text();
-    throw new Error(`Failed to register mcp-app demo: ${res.status} ${detail}`);
+    throw new Error(`Failed to register mcp-app flow: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as { id: string; slug: string };
   // Legacy /api/flows/register always produces `${projectSlug}/${flowSlug}`
@@ -153,7 +153,7 @@ export const test = base.extend<EmptyTestArgs, WorkerFixtures>({
       const bundlePort = await getFreePort();
       const server = bootBundleServer(bundlePort);
       try {
-        const flow = await registerDemoFlow(studio);
+        const flow = await registerFixtureFlow(studio);
         const [first] = FLOW_FIXTURE.nodes;
         if (!first)
           throw new Error('FLOW_FIXTURE.nodes is empty — fixture must seed at least one node');

@@ -1,7 +1,7 @@
 // Pure helpers for the canvas keyboard shortcuts (US-024). Kept ref-free so
 // they can be unit-tested without DOM/React: each takes the bare event fields
 // the dispatcher reads and returns the resolved action (or null for unrelated
-// keys). Wiring lives in `demo-view.tsx`.
+// keys). Wiring lives in `flow-view.tsx`.
 
 import type { GeometricNodeType } from '../types.ts';
 
@@ -107,11 +107,11 @@ export type CommandContext = {
   canUndo: boolean;
   canRedo: boolean;
   hasClipboard: boolean;
-  // True when there's an open demo backing the export commands. The palette
-  // renders inside DemoView (so the demo is always set in practice), but the
-  // dispatcher noops if the demo isn't ready yet — surface that here so the
+  // True when there's an open flow backing the export commands. The palette
+  // renders inside FlowView (so the flow is always set in practice), but the
+  // dispatcher noops if the flow isn't ready yet — surface that here so the
   // palette greys the rows instead of letting Enter do nothing.
-  canExportDemo: boolean;
+  canExportFlow: boolean;
 };
 
 export type CommandDef = {
@@ -123,7 +123,7 @@ export type CommandDef = {
   enabled?: (ctx: CommandContext) => boolean;
 };
 
-// Single source of truth: dispatcher (`runCommand` in demo-view.tsx) and UI
+// Single source of truth: dispatcher (`runCommand` in flow-view.tsx) and UI
 // (command palette, toolbar tooltips) both read from this array so a label or
 // shortcut change propagates everywhere without hunting through call sites.
 export const COMMANDS: readonly CommandDef[] = [
@@ -394,14 +394,14 @@ export const COMMANDS: readonly CommandDef[] = [
     label: 'Export to PDF',
     description: 'Download the current canvas as a PDF',
     category: 'File',
-    enabled: (ctx) => ctx.canExportDemo,
+    enabled: (ctx) => ctx.canExportFlow,
   },
   {
     id: 'export.png',
     label: 'Export as image',
     description: 'Download the current canvas as a PNG',
     category: 'File',
-    enabled: (ctx) => ctx.canExportDemo,
+    enabled: (ctx) => ctx.canExportFlow,
   },
 ];
 
@@ -506,7 +506,7 @@ export const applyNudge = (
 };
 
 // US-020: clipboard-chord resolver. Pure inputs → action so the wiring in
-// demo-view.tsx is a thin dispatcher and the chord rules stay unit-testable.
+// flow-view.tsx is a thin dispatcher and the chord rules stay unit-testable.
 // Modifier rule: requires Cmd OR Ctrl; rejects Shift/Alt so the chord doesn't
 // shadow browser-native chords like Cmd+Shift+C (devtools) or Cmd+Alt+V.
 // `isEditableActive` short-circuits to noop so native browser copy/paste keeps

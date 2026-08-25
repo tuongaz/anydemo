@@ -122,10 +122,9 @@ const okResult = (value: unknown, meta?: Record<string, unknown>): CallToolResul
   return result;
 };
 
-// Error payloads (e.g. 'unknown demo', 'Failed to write demo file') still say
-// "demo" so the strings match the REST handlers in api.ts byte-for-byte.
-// Renaming requires updating api.ts + ~18 test assertions in lockstep — a
-// separate refactor from this MCP review.
+// Error payloads (e.g. 'unknown flow', 'Failed to write flow file') match the
+// REST handlers in api.ts byte-for-byte. Keep the two in lockstep so MCP and
+// REST clients read identical error text.
 const errorResult = (text: string): CallToolResult => ({
   isError: true,
   content: [{ type: 'text', text }],
@@ -668,7 +667,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true, id: result.data.id, node: result.data.node });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -676,7 +675,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'badSchema':
           return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -700,7 +699,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
             connectors: result.data.connectors,
           });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -714,7 +713,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
             `${result.collection === 'nodes' ? 'Node' : 'Connector'} id already exists: ${result.id}`,
           );
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -733,7 +732,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -743,7 +742,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -762,7 +761,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true, position: result.data.position });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -772,7 +771,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -792,7 +791,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -802,7 +801,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -828,7 +827,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -838,7 +837,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -860,7 +859,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true, id: result.data.id });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -868,7 +867,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'badSchema':
           return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -890,7 +889,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -900,7 +899,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownConnector':
           return errorResult(`Unknown connectorId: ${connectorId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },
@@ -921,7 +920,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'ok':
           return okResult({ ok: true });
         case 'flowNotFound':
-          return errorResult('unknown demo');
+          return errorResult('unknown flow');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -931,7 +930,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         case 'unknownConnector':
           return errorResult(`Unknown connectorId: ${connectorId}`);
         case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
+          return errorResult(`Failed to write flow file: ${result.message}`);
       }
     },
   },

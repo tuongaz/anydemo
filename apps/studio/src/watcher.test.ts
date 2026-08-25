@@ -6,7 +6,7 @@ import { type StudioEvent, createEventBus } from './events.ts';
 import { createRegistry } from './registry.ts';
 import { createWatcher } from './watcher.ts';
 
-const VALID_DEMO = {
+const VALID_FLOW = {
   version: 2,
   name: 'Watch Me',
   nodes: [
@@ -21,9 +21,9 @@ const VALID_DEMO = {
   connectors: [],
 };
 
-const tmpRepo = (demo: unknown = VALID_DEMO) => {
+const tmpRepo = (flow: unknown = VALID_FLOW) => {
   const dir = mkdtempSync(join(tmpdir(), 'watcher-repo-'));
-  writeFileSync(join(dir, 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(dir, 'flow.json'), JSON.stringify(flow));
   return dir;
 };
 
@@ -88,7 +88,7 @@ describe('createWatcher', () => {
     expect((last?.payload as { error: string }).error).toContain('Invalid JSON');
 
     // Repair the file. Should flip back to valid:true and broadcast a new event.
-    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_FLOW));
     await wait(150);
 
     const finalEvent = received.at(-1);
@@ -96,7 +96,7 @@ describe('createWatcher', () => {
     watcher.closeAll();
   });
 
-  it('keeps the last-good demo on snapshot when current parse is invalid', () => {
+  it('keeps the last-good flow on snapshot when current parse is invalid', () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo();
     const entry = reg.upsert({
@@ -124,7 +124,7 @@ describe('createWatcher', () => {
   it('reports schema validation errors with usable path detail', () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     // Missing top-level `name` field.
-    const repoPath = tmpRepo({ ...VALID_DEMO, name: undefined });
+    const repoPath = tmpRepo({ ...VALID_FLOW, name: undefined });
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
@@ -169,7 +169,7 @@ describe('createWatcher', () => {
     watcher.unwatch(entry.id);
     expect(watcher.snapshot(entry.id)).toBeNull();
 
-    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_FLOW));
     await wait(80);
     expect(count).toBe(0);
     watcher.closeAll();
@@ -179,11 +179,11 @@ describe('createWatcher', () => {
   // US-002: referenced-file watch set + `file:changed` SSE broadcast
   // ---------------------------------------------------------------------------
 
-  // Build a demo with one rectangle that also carries a forward-compatible
+  // Build a flow with one rectangle that also carries a forward-compatible
   // `path` on its data (image-style path, the only field
   // collectReferencedPaths still cares about — html content rides on the
   // file:// resolver now).
-  const demoWithImagePath = (imgPath: string) => ({
+  const flowWithImagePath = (imgPath: string) => ({
     version: 2,
     name: 'Watch Files',
     nodes: [
@@ -201,7 +201,7 @@ describe('createWatcher', () => {
 
   it('emits file:changed when an image-referenced path file is edited', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
-    const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
+    const repoPath = tmpRepo(flowWithImagePath('assets/logo.png'));
     mkdirSync(join(repoPath, 'assets'));
     const imgPath = join(repoPath, 'assets', 'logo.png');
     writeFileSync(imgPath, 'placeholder-v1');
@@ -234,7 +234,7 @@ describe('createWatcher', () => {
     watcher.closeAll();
   });
 
-  it('adds newly-referenced paths to the watch set on demo edit', async () => {
+  it('adds newly-referenced paths to the watch set on flow edit', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo();
     const entry = reg.upsert({
@@ -255,7 +255,7 @@ describe('createWatcher', () => {
     writeFileSync(join(repoPath, 'assets', 'logo.png'), 'placeholder');
     writeFileSync(
       join(repoPath, 'flow.json'),
-      JSON.stringify(demoWithImagePath('assets/logo.png')),
+      JSON.stringify(flowWithImagePath('assets/logo.png')),
     );
     await wait(120);
 
@@ -265,7 +265,7 @@ describe('createWatcher', () => {
 
   it('removes paths from the watch set when a referencing node is removed', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
-    const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
+    const repoPath = tmpRepo(flowWithImagePath('assets/logo.png'));
     mkdirSync(join(repoPath, 'assets'));
     const imgPath = join(repoPath, 'assets', 'logo.png');
     writeFileSync(imgPath, 'placeholder-v1');
@@ -289,8 +289,8 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     expect(watcher.referencedPaths(entry.id)).toEqual(['assets/logo.png']);
 
-    // Drop the referencing node from the demo via a write to flow.json.
-    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
+    // Drop the referencing node from the flow via a write to flow.json.
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_FLOW));
     await wait(120);
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
@@ -304,7 +304,7 @@ describe('createWatcher', () => {
   it('ignores absolute paths, traversal, and data: URLs', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo({
-      ...VALID_DEMO,
+      ...VALID_FLOW,
       nodes: [
         {
           id: 'abs',
@@ -359,7 +359,7 @@ describe('createWatcher', () => {
     mkdirSync(join(repoPath, 'nodes', 'n1'), { recursive: true });
     writeFileSync(join(repoPath, 'nodes', 'n1', 'detail.md'), '# Resolved content');
 
-    const nestedDemo = {
+    const nestedFlow = {
       version: 2,
       name: 'Nested Flow',
       nodes: [
@@ -374,7 +374,7 @@ describe('createWatcher', () => {
       ],
       connectors: [],
     };
-    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(nestedDemo));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(nestedFlow));
 
     const entry = reg.upsert({
       name: 'Nested Flow',
@@ -440,7 +440,7 @@ describe('createWatcher', () => {
     watcher.notifyWritten(
       entry.id,
       { flow, valid: true, error: null, filePath: snap?.filePath ?? '', parsedAt: Date.now() },
-      JSON.stringify(VALID_DEMO),
+      JSON.stringify(VALID_FLOW),
       '',
     );
 
@@ -474,8 +474,8 @@ describe('createWatcher', () => {
     received.length = 0;
 
     // Simulate a server-side write: change the file AND record the hash via notifyWritten.
-    const nextDemo = { ...VALID_DEMO, name: 'Renamed' };
-    const nextContent = JSON.stringify(nextDemo);
+    const nextFlow = { ...VALID_FLOW, name: 'Renamed' };
+    const nextContent = JSON.stringify(nextFlow);
     writeFileSync(join(repoPath, 'flow.json'), nextContent);
     const snap = watcher.reparse(entry.id);
     expect(snap?.valid).toBe(true);
@@ -514,13 +514,13 @@ describe('createWatcher', () => {
     // Server says "I wrote A" but the on-disk content is actually B (e.g. the
     // user saved over it from their editor between our write and the fs
     // callback). The fs-watcher echo must NOT be suppressed.
-    const serverContent = JSON.stringify({ ...VALID_DEMO, name: 'Server' });
+    const serverContent = JSON.stringify({ ...VALID_FLOW, name: 'Server' });
     const snap = watcher.snapshot(entry.id);
     if (!snap) throw new Error('expected snap');
     watcher.notifyWritten(entry.id, snap, serverContent, '');
     received.length = 0;
 
-    const externalContent = JSON.stringify({ ...VALID_DEMO, name: 'External' });
+    const externalContent = JSON.stringify({ ...VALID_FLOW, name: 'External' });
     writeFileSync(join(repoPath, 'flow.json'), externalContent);
     await wait(150);
 
@@ -625,7 +625,7 @@ describe('createWatcher', () => {
 
     // Four back-to-back writes — each gets recorded; each fs echo gets suppressed.
     for (let i = 0; i < 4; i++) {
-      const content = JSON.stringify({ ...VALID_DEMO, name: `v${i}` });
+      const content = JSON.stringify({ ...VALID_FLOW, name: `v${i}` });
       writeFileSync(join(repoPath, 'flow.json'), content);
       const snap = watcher.reparse(entry.id);
       if (!snap) throw new Error('expected snap');

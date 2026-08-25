@@ -307,7 +307,7 @@ export interface CanvasIconsAdapter {
 
 /**
  * CanvasAdapter — the surface @seeflow/canvas calls when it needs to persist a
- * change. One adapter is bound to one demo/project at construction. Embedders
+ * change. One adapter is bound to one flow/project at construction. Embedders
  * (the studio today, library consumers tomorrow) implement this against their
  * own backend; the canvas package never imports REST URLs directly.
  */

@@ -1406,7 +1406,7 @@ export function createApi(options: ApiOptions): Hono {
         }
         return c.json({ ok: true as const });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1443,7 +1443,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true, position: result.data.position });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1453,11 +1453,11 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
-  // PATCH the z-order position of a single node within demo.nodes[]. React
+  // PATCH the z-order position of a single node within flow.nodes[]. React
   // Flow's painter renders nodes in array order, so moving a node to a later
   // index brings it visually forward (later nodes paint over earlier ones).
   // Five ops are supported: forward / backward (single-step swap), toFront /
@@ -1486,7 +1486,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1496,7 +1496,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
@@ -1504,7 +1504,7 @@ export function createApi(options: ApiOptions): Hono {
   // fields, or geometric-only fields. Every UI-driven node edit (other than
   // the high-frequency drag fast-path above) flows through here. The mutation
   // is performed against the raw parsed JSON (so unknown v2 fields the schema
-  // doesn't yet recognize survive round-trips) and the WHOLE resulting demo
+  // doesn't yet recognize survive round-trips) and the WHOLE resulting flow
   // is re-validated through ResolvedFlowSchema before commit, preventing partial
   // writes from breaking invariants like the connector→node superRefine.
   api.patch('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
@@ -1529,7 +1529,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1539,11 +1539,11 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
-  // POST a new node into the demo. Body is the node payload (id auto-generated
+  // POST a new node into the flow. Body is the node payload (id auto-generated
   // server-side if absent). Atomicity + final-ResolvedFlowSchema validation match the
   // PATCH path above, so a malformed node never produces a half-written file.
   api.post('/projects/:project/flows/:flow/nodes', async (c) => {
@@ -1566,7 +1566,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true, id: result.data.id, node: result.data.node });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1574,7 +1574,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'badSchema':
         return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
@@ -1610,7 +1610,7 @@ export function createApi(options: ApiOptions): Hono {
           connectors: result.data.connectors,
         });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1627,7 +1627,7 @@ export function createApi(options: ApiOptions): Hono {
           400,
         );
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
@@ -1647,7 +1647,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1657,13 +1657,13 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
   // PATCH a single connector — partial update of label/style/color/direction
   // and (optionally) kind + per-kind payload fields. When `kind` changes,
-  // stale kind-specific fields are dropped before the merge. The whole demo
+  // stale kind-specific fields are dropped before the merge. The whole flow
   // is re-validated through ResolvedFlowSchema before commit so the discriminated
   // union catches missing-required-fields (e.g. kind='event' without
   // eventName) and the superRefine still gates source/target referential
@@ -1690,7 +1690,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1700,7 +1700,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownConnector':
         return c.json({ error: `Unknown connectorId: ${connId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
@@ -1728,7 +1728,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true, id: result.data.id });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1736,11 +1736,11 @@ export function createApi(options: ApiOptions): Hono {
       case 'badSchema':
         return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 
-  // DELETE a connector. Just removes the entry from demo.connectors — node
+  // DELETE a connector. Just removes the entry from flow.connectors — node
   // deletion is what cascades, not connector deletion.
   api.delete('/projects/:project/flows/:flow/connectors/:connId', async (c) => {
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
@@ -1753,7 +1753,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'ok':
         return c.json({ ok: true });
       case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
+        return c.json({ error: 'unknown flow' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
@@ -1763,7 +1763,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'unknownConnector':
         return c.json({ error: `Unknown connectorId: ${connId}` }, 404);
       case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
+        return c.json({ error: `Failed to write flow file: ${result.message}` }, 500);
     }
   });
 

@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { type CapturedImage, captureViewportPng, downloadDataUrl } from '../lib/export-image.ts';
 
 export interface UseCanvasExportInput {
-  /** Project / demo id used to seed the download filename. */
+  /** Project / flow id used to seed the download filename. */
   projectId?: string | null;
   /** Returns the live React Flow instance (or null if not yet mounted). */
   getReactFlow: () => ReactFlowInstance | null;
@@ -27,7 +27,7 @@ const exportFileName = (projectId: string | null | undefined, ext: 'pdf' | 'png'
 /**
  * Hook that owns the canvas export workflow — fit-view + viewport capture +
  * filename derivation + dynamic-import of jspdf for PDF output. Mirrors the
- * orchestration that previously lived in `apps/web/src/pages/demo-view.tsx`
+ * orchestration that previously lived in `apps/web/src/pages/flow-view.tsx`
  * so every consumer of `<SeeflowCanvas>` gets PDF / PNG export for free.
  *
  * jspdf is `await import()`-ed on click (not at module top-level) to keep the

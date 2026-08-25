@@ -14,14 +14,14 @@ export interface DerivedEdge {
   source: string;
   target: string;
   // Handle ids on the source/target nodes (US-013). Absent → React Flow
-  // attaches to the first matching handle (back-compat for pre-handle demos).
+  // attaches to the first matching handle (back-compat for pre-handle flows).
   sourceHandle?: string;
   targetHandle?: string;
   type: 'editableEdge';
   label?: string;
   animated: boolean;
   // Per-edge runtime callbacks (e.g. onLabelChange) are injected by
-  // DemoCanvas at render time so they don't churn the connectorToEdge memo.
+  // SeeflowCanvas at render time so they don't churn the connectorToEdge memo.
   // `path` belongs in `data` (not `style`) because it changes the SVG `d`
   // attribute generation, not stroke styling — see EditableEdge for the
   // bezier vs smoothstep branch.

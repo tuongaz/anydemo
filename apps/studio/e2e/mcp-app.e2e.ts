@@ -7,7 +7,7 @@
 // established convention (see playwright.config.ts comment block).
 //
 // The fixture (support/mcp-app-fixture.ts) spawns a studio + a tiny bundle
-// server + registers a 2-node demo flow once per worker. Each test installs a
+// server + registers a 2-node flow once per worker. Each test installs a
 // fresh `window.openai` shim and navigates the bundle URL with a per-test
 // widgetState. The shim captures every sendMessage / updateModelContext call
 // into `window.__seeflowOpenAiCalls` for assertion.

@@ -37,7 +37,7 @@ export interface CreateAppOptions {
   watcher?: FlowWatcher;
   /** Inject a registry-watcher; defaults to one wired to the registry + event bus. */
   registryWatcher?: RegistryWatcher;
-  /** Skip starting fs.watch on registered demos. Useful for tests. */
+  /** Skip starting fs.watch on registered flows. Useful for tests. */
   watchAllOnBoot?: boolean;
   /** Disable file watching entirely (no fs handles leaked). Useful for tests. */
   disableWatcher?: boolean;

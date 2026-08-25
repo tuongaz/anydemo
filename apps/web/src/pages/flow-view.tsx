@@ -149,27 +149,27 @@ export const applyReorderOpToIds = (
   }
 };
 
-export interface DemoViewProps {
+export interface FlowViewProps {
   /** US-010: project slug parsed from `/projects/:project/flows/:flow`. */
   project: string;
   /** US-010: flow slug parsed from `/projects/:project/flows/:flow`. */
   flow: string;
   slug: string;
-  demos: FlowSummary[];
+  flows: FlowSummary[];
   detail: FlowDetail | null;
   loading: boolean;
   /**
    * Monotonic counter bumped by App on every genuine `flow:reload` (watcher
    * file-change). Drives the undo-history stale-clear so it keys off real
-   * reloads rather than every `detail`/`demoNodes` identity change — a routine
+   * reloads rather than every `detail`/`flowNodes` identity change — a routine
    * SSE reconnect refetch must NOT wipe a populated undo stack.
    */
   externalReloadSignal: number;
-  /** US-031: refresh the global demos list. Called after flow CRUD so the
-   *  navigation lands on a page that resolves through `demos.find(...)`. */
+  /** US-031: refresh the global flows list. Called after flow CRUD so the
+   *  navigation lands on a page that resolves through `flows.find(...)`. */
   refreshFlows: () => Promise<void> | void;
   /**
-   * Push a freshly-fetched flow detail straight into the demo-data cache
+   * Push a freshly-fetched flow detail straight into the flow-data cache
    * (same channel as the SSE `flow:reload` echo). Used by the paste error path
    * to reconcile against server truth without waiting for an SSE round-trip —
    * see {@link reconcilePasteFailure}.
@@ -177,26 +177,26 @@ export interface DemoViewProps {
   applyDetail: (next: FlowDetail) => void;
   /**
    * Imperative handle on the canvas's export workflow, owned by App.tsx so
-   * the studio header's Share button reaches the same instance. DemoView
+   * the studio header's Share button reaches the same instance. FlowView
    * forwards it into `<SeeflowCanvas ref>` and uses it for the command-palette
    * PDF/PNG entries.
    */
   canvasRef: RefObject<SeeflowCanvasHandle>;
 }
 
-export function DemoView({
+export function FlowView({
   project,
   flow,
   slug,
-  demos,
+  flows,
   detail,
   loading,
   externalReloadSignal,
   refreshFlows,
   applyDetail,
   canvasRef,
-}: DemoViewProps) {
-  const summary = demos.find((d) => d.slug === slug);
+}: FlowViewProps) {
+  const summary = flows.find((d) => d.slug === slug);
   // US-024: per-project flow list powers the Figma-style switcher popover
   // anchored top-left on the canvas page. Refetches when `project` changes;
   // null preserves the popover's idle state during the URL → props handoff.
@@ -250,7 +250,7 @@ export function DemoView({
   const connectorDeletions = usePendingDeletions();
   // Optimistic z-order override (US-006). Holds the displayed node-id order
   // while a `reorderNode` PATCH is in flight; cleared once the server's
-  // demoNodes order matches it (SSE echo of the file rewrite). Per-id
+  // flowNodes order matches it (SSE echo of the file rewrite). Per-id
   // overrides aren't a fit because the entire array order is what changes.
   const [nodeOrderOverride, setNodeOrderOverride] = useState<string[] | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
@@ -314,7 +314,7 @@ export function DemoView({
   const { reset: resetNodeDeletions } = nodeDeletions;
   const { reset: resetConnectorDeletions } = connectorDeletions;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on demo id change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on flow id change.
   useEffect(() => {
     setSelectedIds([]);
     setSelectedConnectorIds([]);
@@ -328,7 +328,7 @@ export function DemoView({
     clipboardRef.current = null;
     setHasClipboard(false);
     // US-008: drop any in-flight upload retry entries — they're scoped to the
-    // previous demo's optimistic nodes which have already been reset above.
+    // previous flow's optimistic nodes which have already been reset above.
     imageRetryRef.current.clear();
     // History stack is per-flow — the `useMemo` keyed on `[rawAdapter,
     // detail?.id]` rebuilds the wrapper on flow switch so a fresh empty
@@ -350,8 +350,8 @@ export function DemoView({
   // and closes on pane-click (which clears the selection) without a separate
   // panel-target state.
 
-  const demoNodes = detail?.flow?.nodes;
-  const demoConnectors = detail?.flow?.connectors;
+  const flowNodes = detail?.flow?.nodes;
+  const flowConnectors = detail?.flow?.connectors;
 
   // Host-owned first-open fit (the canvas runs with `autoFitView={false}`).
   // Frame a flow exactly once, when its initial load settles AND it has
@@ -359,13 +359,13 @@ export function DemoView({
   // re-evaluated when the user creates its first node (which would otherwise
   // hard-zoom onto that single node). Reloads / node-creates that arrive after
   // the flow is framed are skipped here, so the viewport stays put.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reads demoNodes/rf refs at settle time; keyed on the load-settle signals.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads flowNodes/rf refs at settle time; keyed on the load-settle signals.
   useEffect(() => {
     const decision = decideFirstOpenFit({
       alreadyFitted: fittedFlowsRef.current.has(flowKey),
       loading,
       hasDetail: !!detail,
-      nodeCount: demoNodes?.length ?? 0,
+      nodeCount: flowNodes?.length ?? 0,
       rfReady: !!rfInstanceRef.current,
     });
     if (decision === 'skip') return;
@@ -385,19 +385,19 @@ export function DemoView({
   // change reordered nodes), keep the override so the user's last pick stays
   // pinned on screen — until the next echo either matches or supersedes it.
   useEffect(() => {
-    if (!demoNodes || !nodeOrderOverride) return;
-    if (demoNodes.length !== nodeOrderOverride.length) return;
-    for (let i = 0; i < demoNodes.length; i++) {
-      const serverNode = demoNodes[i];
+    if (!flowNodes || !nodeOrderOverride) return;
+    if (flowNodes.length !== nodeOrderOverride.length) return;
+    for (let i = 0; i < flowNodes.length; i++) {
+      const serverNode = flowNodes[i];
       const overrideId = nodeOrderOverride[i];
       if (!serverNode || serverNode.id !== overrideId) return;
     }
     setNodeOrderOverride(null);
-  }, [demoNodes, nodeOrderOverride]);
+  }, [flowNodes, nodeOrderOverride]);
 
   const flowId = detail?.id ?? null;
   // US-010: persistence adapter is built directly from the URL slugs threaded
-  // through DemoViewProps. Bound to one (project, flow) for its lifetime;
+  // through FlowViewProps. Bound to one (project, flow) for its lifetime;
   // rebuilt on flow switch. Every REST mutation in this file (and the prop
   // threaded to <SeeflowCanvas>) now routes through this adapter.
   const rawAdapter = useMemo(
@@ -423,10 +423,10 @@ export function DemoView({
   });
   useEffect(() => {
     flowStateRef.current = {
-      nodes: demoNodes ?? [],
-      connectors: demoConnectors ?? [],
+      nodes: flowNodes ?? [],
+      connectors: flowConnectors ?? [],
     };
-  }, [demoNodes, demoConnectors]);
+  }, [flowNodes, flowConnectors]);
   // One wrapper per flow id — the wrapper's internal history clears naturally
   // when the wrapper is discarded on flow switch.
   // biome-ignore lint/correctness/useExhaustiveDependencies: flowId intentionally re-creates the wrapper per flow
@@ -435,31 +435,31 @@ export function DemoView({
     [rawAdapter, flowId],
   );
 
-  // After every demo reload, drop override fields whose values already match
-  // the on-disk demo. Reconciling here (not skipping the broadcast on the
+  // After every flow reload, drop override fields whose values already match
+  // the on-disk flow. Reconciling here (not skipping the broadcast on the
   // server) means an editor-driven change still lands cleanly: the matching
   // overrides clear, and the next render uses the server value.
   //
-  // NOTE: this effect runs on EVERY `demoNodes` identity change — including
+  // NOTE: this effect runs on EVERY `flowNodes` identity change — including
   // reconnect catch-up refetches (`onHello` → `refreshDetail`). It must NOT
   // touch the undo history; the stale-clear lives in its own effect below,
   // keyed on `externalReloadSignal`, so routine reconnects can't wipe undo.
   useEffect(() => {
-    if (demoNodes) {
-      pruneNodeOverrides(demoNodes);
+    if (flowNodes) {
+      pruneNodeOverrides(flowNodes);
       // US-016: drop optimistic-delete ids the server has confirmed gone.
       // If a node is still in the snapshot the delete is in flight and the
       // suppression must stay until SSE catches up.
-      pruneNodeDeletions(demoNodes);
+      pruneNodeDeletions(flowNodes);
     }
-  }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions]);
+  }, [flowNodes, pruneNodeOverrides, pruneNodeDeletions]);
 
   useEffect(() => {
-    if (demoConnectors) {
-      pruneConnectorOverrides(demoConnectors);
-      pruneConnectorDeletions(demoConnectors);
+    if (flowConnectors) {
+      pruneConnectorOverrides(flowConnectors);
+      pruneConnectorDeletions(flowConnectors);
     }
-  }, [demoConnectors, pruneConnectorOverrides, pruneConnectorDeletions]);
+  }, [flowConnectors, pruneConnectorOverrides, pruneConnectorDeletions]);
 
   // Warn before a reload/navigation discards optimistic edits the server hasn't
   // confirmed. The override (or pending-deletion mark) is the ONLY record of an
@@ -563,7 +563,7 @@ export function DemoView({
       if (updates.length === 0) return;
       const targets = updates
         .map((u) => {
-          const node = demoNodes?.find((n) => n.id === u.id);
+          const node = flowNodes?.find((n) => n.id === u.id);
           if (!node) return null;
           return { id: u.id, next: u.position };
         })
@@ -589,7 +589,7 @@ export function DemoView({
           console.error('updateNodePosition batch failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
+    [flowId, adapter, history, flowNodes, setNodeOverride, dropNodeOverride],
   );
 
   // Per-tick resize callback. Fires on every mouse-move during the gesture.
@@ -691,7 +691,7 @@ export function DemoView({
       type Target = { id: string; next: DimsPatch };
       const targets: Target[] = [];
       for (const u of updates) {
-        const node = demoNodes?.find((n) => n.id === u.id);
+        const node = flowNodes?.find((n) => n.id === u.id);
         if (!node) continue;
         const next: DimsPatch = { position: u.position };
         if (u.width !== undefined) next.width = u.width;
@@ -745,7 +745,7 @@ export function DemoView({
           console.error(`updateNode ${label} batch failed`, err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
+    [flowId, adapter, history, flowNodes, setNodeOverride, dropNodeOverride],
   );
 
   // Canvas grouping M4: create a group from a loose multi-selection. Filters via
@@ -760,7 +760,7 @@ export function DemoView({
   const onCreateGroup = useCallback(
     (nodeIds: string[]) => {
       if (!flowId || !adapter) return;
-      const live = demoNodes ?? [];
+      const live = flowNodes ?? [];
       const ids = selectGroupableSet(live, nodeIds);
       if (ids.length < 2) return; // reasoned no-op (mixed/already-grouped/<2)
       const overrides = nodePending.overrides;
@@ -820,7 +820,7 @@ export function DemoView({
           console.error('createNode (group) failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, nodePending.overrides, setNodeOverride, dropNodeOverride],
+    [flowId, adapter, history, flowNodes, nodePending.overrides, setNodeOverride, dropNodeOverride],
   );
 
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
@@ -883,7 +883,7 @@ export function DemoView({
       // Remember the user's pick on the batch path too — the single-node
       // `onStyleNode` does the same.
       rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
-      const targetIds = nodeIds.filter((id) => demoNodes?.some((n) => n.id === id));
+      const targetIds = nodeIds.filter((id) => flowNodes?.some((n) => n.id === id));
       if (targetIds.length === 0) return;
       for (const id of targetIds) {
         setNodeOverride(id, { data: patch } as Partial<FlowNode>);
@@ -904,7 +904,7 @@ export function DemoView({
           console.error('updateNode style-nodes batch failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
+    [flowId, adapter, history, flowNodes, setNodeOverride, dropNodeOverride],
   );
 
   // Style-tab edit on a connector: color, edge style, direction.
@@ -942,7 +942,7 @@ export function DemoView({
   const onUngroup = useCallback(
     (groupId: string) => {
       if (!flowId || !adapter) return;
-      const live = demoNodes ?? [];
+      const live = flowNodes ?? [];
       const group = live.find((n) => n.id === groupId);
       if (!group || group.type !== 'group') return;
       const memberIds = [...group.data.childIds];
@@ -962,13 +962,13 @@ export function DemoView({
           console.error('deleteNode (ungroup) failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, markNodeDeleted, unmarkNodeDeleted],
+    [flowId, adapter, history, flowNodes, markNodeDeleted, unmarkNodeDeleted],
   );
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
+      const node = flowNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       // Canvas grouping M9 (design §9.3, §12.9): if this node is a MEMBER of a
       // surviving group, deleting it standalone would leave the group's childIds
@@ -977,7 +977,7 @@ export function DemoView({
       // via the ref bridge) which prunes the owning group's childIds FIRST. A
       // GROUP itself, or a loose node, deletes directly below (no prune needed —
       // a group's childIds die with it; a loose node has no owner).
-      const live = demoNodes ?? [];
+      const live = flowNodes ?? [];
       const ownedBySurvivingGroup = live.some(
         (n) =>
           n.type === 'group' &&
@@ -985,7 +985,7 @@ export function DemoView({
           (n.data.childIds as string[] | undefined)?.includes(nodeId),
       );
       if (ownedBySurvivingGroup && onDeleteSelectionRef.current) {
-        const cascaded = (demoConnectors ?? [])
+        const cascaded = (flowConnectors ?? [])
           .filter((c) => c.source === nodeId || c.target === nodeId)
           .map((c) => c.id);
         onDeleteSelectionRef.current([nodeId], cascaded);
@@ -997,7 +997,7 @@ export function DemoView({
       // wrapper itself ALSO snapshots cascaded connectors in its
       // `deleteNode` undo — this list is purely for the failure-path
       // unmark, not for restore.
-      const cascadedIds = (demoConnectors ?? [])
+      const cascadedIds = (flowConnectors ?? [])
         .filter((c) => c.source === nodeId || c.target === nodeId)
         .map((c) => c.id);
       const cascadedIdSet = new Set(cascadedIds);
@@ -1023,8 +1023,8 @@ export function DemoView({
     [
       flowId,
       adapter,
-      demoNodes,
-      demoConnectors,
+      flowNodes,
+      flowConnectors,
       markNodeDeleted,
       markConnectorsDeleted,
       unmarkNodeDeleted,
@@ -1042,8 +1042,8 @@ export function DemoView({
   // invert from the middle of the array).
   const onReorderNode = useCallback(
     (nodeId: string, op: ReorderOp) => {
-      if (!flowId || !adapter || !demoNodes) return;
-      const currentIds = nodeOrderOverride ?? demoNodes.map((n) => n.id);
+      if (!flowId || !adapter || !flowNodes) return;
+      const currentIds = nodeOrderOverride ?? flowNodes.map((n) => n.id);
       const newIds = applyReorderOpToIds(currentIds, nodeId, op);
       if (!newIds) return;
       setNodeOrderOverride(newIds);
@@ -1056,7 +1056,7 @@ export function DemoView({
         console.error('reorderNode failed', err);
       });
     },
-    [flowId, adapter, demoNodes, nodeOrderOverride],
+    [flowId, adapter, flowNodes, nodeOrderOverride],
   );
 
   // US-013: atomic multi-target delete. Snapshots every doomed node + every
@@ -1070,12 +1070,12 @@ export function DemoView({
       if (nodeIds.length === 0 && connectorIds.length === 0) return;
       const cascadingNodeIdSet = new Set(nodeIds);
       const nodeSnapshots = nodeIds
-        .map((id) => demoNodes?.find((n) => n.id === id))
+        .map((id) => flowNodes?.find((n) => n.id === id))
         .filter((n): n is FlowNode => !!n);
       // Cascaded connectors: any connector whose source/target is in the
       // doomed node set. The server cascades these as part of deleteNode;
       // mirror it locally so undo can restore them all.
-      const cascadedConnectors = (demoConnectors ?? []).filter(
+      const cascadedConnectors = (flowConnectors ?? []).filter(
         (c) => cascadingNodeIdSet.has(c.source) || cascadingNodeIdSet.has(c.target),
       );
       // Explicit connector deletes: only ids NOT covered by a node cascade.
@@ -1083,7 +1083,7 @@ export function DemoView({
       // connector that's already gone.
       const cascadedConnIdSet = new Set(cascadedConnectors.map((c) => c.id));
       const explicitConnSnapshots = connectorIds
-        .map((id) => demoConnectors?.find((c) => c.id === id))
+        .map((id) => flowConnectors?.find((c) => c.id === id))
         .filter((c): c is Connector => !!c)
         .filter((c) => !cascadedConnIdSet.has(c.id));
       if (
@@ -1097,7 +1097,7 @@ export function DemoView({
       // US-016: optimistic batch delete. Hide every doomed node + every
       // explicit/cascaded connector from the canvas immediately. The server
       // replay cascades; the SSE echo eventually drops everything from the
-      // demo snapshot, at which point pruneAgainst clears the suppressions.
+      // flow snapshot, at which point pruneAgainst clears the suppressions.
       const allDoomedNodeIds = nodeSnapshots.map((n) => n.id);
       const allDoomedConnIds = [
         ...cascadedConnectors.map((c) => c.id),
@@ -1128,10 +1128,10 @@ export function DemoView({
       // them first inside the batch so the reverse-order undo (recreate member →
       // restore childIds) is also valid at each step. NOTE: the group is NOT in
       // the doomed set here (only its member is), so it is never marked deleted.
-      const deletionPlan = planGroupAwareDeletion(demoNodes ?? [], nodeIds);
+      const deletionPlan = planGroupAwareDeletion(flowNodes ?? [], nodeIds);
       const childIdsPrunes = deletionPlan.childIdsPrunes.filter(
         // Defensive: a prune for a group that is ITSELF doomed is moot (the
-        // oracle already drops these, but guard against a stale demoNodes).
+        // oracle already drops these, but guard against a stale flowNodes).
         (p) => !cascadingNodeIdSet.has(p.groupId),
       );
       // Optimistically reflect the pruned membership so the overlay / isolation
@@ -1190,8 +1190,8 @@ export function DemoView({
       flowId,
       adapter,
       history,
-      demoNodes,
-      demoConnectors,
+      flowNodes,
+      flowConnectors,
       markNodesDeleted,
       markConnectorsDeleted,
       unmarkNodesDeleted,
@@ -1704,7 +1704,7 @@ export function DemoView({
           // server cap. SVG/GIF/decode-failures pass through untouched.
           upload: async (_projectId, nodeId, file, filename) =>
             adapter.uploadImage(nodeId, await downscaleImageFile(file), filename),
-          createNode: async (_demoId, body) => {
+          createNode: async (_flowId, body) => {
             const { id } = await adapter.createNode(body);
             return { id };
           },
@@ -1768,9 +1768,9 @@ export function DemoView({
     [runImageUpload],
   );
 
-  // US-015: icon-picker state slice. Lives here (not in demo-canvas) so the
+  // US-015: icon-picker state slice. Lives here (not in seeflow-canvas) so the
   // detail panel's "Change icon…" button can dispatch openIconPicker('replace',
-  // nodeId) without going through SeeflowCanvas. demo-canvas is a transparent
+  // nodeId) without going through SeeflowCanvas. seeflow-canvas is a transparent
   // pass-through for the toolbar's controlled-open chrome. `mode='replace'`
   // pairs with `nodeId` to tell handleIconPicked which existing node to swap.
   const [iconPicker, setIconPicker] = useState<{
@@ -1973,11 +1973,11 @@ export function DemoView({
   );
 
   // In-app clipboard for node copy/paste (US-011). Kept in a ref so we don't
-  // leak demo internals into the OS clipboard and don't have to deal with
+  // leak flow internals into the OS clipboard and don't have to deal with
   // async ClipboardEvent permission prompts. The paired `hasClipboard` state
   // mirrors whether the ref is non-null so the right-click menu's Paste item
   // can subscribe to it (refs don't trigger re-renders). Both reset on
-  // demo-id change via the same effect that clears selection state.
+  // flow-id change via the same effect that clears selection state.
   const clipboardRef = useRef<{ nodes: FlowNode[]; connectors: Connector[] } | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
   // Mirror the history wrapper's {canUndo, canRedo} into React state so the
@@ -2004,7 +2004,7 @@ export function DemoView({
       // ONE place copy is group-aware and it only GROWS the id set — exactly
       // like the clipboard already auto-includes a connector when both its
       // endpoints are copied. A member copied WITHOUT its group is untouched.
-      const expandedIds = expandSelectionWithGroupMembers(demoNodes ?? [], nodeIds);
+      const expandedIds = expandSelectionWithGroupMembers(flowNodes ?? [], nodeIds);
       // Source from the LIVE view (server snapshot merged with optimistic
       // overrides) rather than the raw server nodes. A just-created node that
       // only exists as an override — or a node with pending edits the SSE echo
@@ -2012,9 +2012,9 @@ export function DemoView({
       // produced an empty clipboard and the follow-up paste silently no-opped.
       const { nodes, connectors } = collectCopyTargets({
         selectedIds: expandedIds,
-        serverNodes: demoNodes ?? [],
+        serverNodes: flowNodes ?? [],
         nodeOverrides: nodePending.overrides,
-        serverConnectors: demoConnectors ?? [],
+        serverConnectors: flowConnectors ?? [],
         connectorOverrides: connectorPending.overrides,
       });
       if (nodes.length === 0) return null;
@@ -2031,7 +2031,7 @@ export function DemoView({
       // only exists as an override must round-trip cross-tab too).
       return payload;
     },
-    [demoNodes, demoConnectors, nodePending.overrides, connectorPending.overrides],
+    [flowNodes, flowConnectors, nodePending.overrides, connectorPending.overrides],
   );
 
   const onPasteNodes = useCallback(
@@ -2172,8 +2172,8 @@ export function DemoView({
       const action = resolveClipboardChord({
         event: e,
         isEditableActive: isEditableElement(document.activeElement),
-        hasNodes: !!demoNodes && demoNodes.length > 0,
-        hasConnectors: !!demoConnectors && demoConnectors.length > 0,
+        hasNodes: !!flowNodes && flowNodes.length > 0,
+        hasConnectors: !!flowConnectors && flowConnectors.length > 0,
         selectedIds: selectedIdsRef.current,
         hasClipboard: !!clipboardRef.current,
       });
@@ -2183,8 +2183,8 @@ export function DemoView({
       if (action.type === 'copy' || action.type === 'paste') return;
       e.preventDefault();
       if (action.type === 'selectAll') {
-        setSelectedIds((demoNodes ?? []).map((n) => n.id));
-        setSelectedConnectorIds((demoConnectors ?? []).map((c) => c.id));
+        setSelectedIds((flowNodes ?? []).map((n) => n.id));
+        setSelectedConnectorIds((flowConnectors ?? []).map((c) => c.id));
         return;
       }
       // duplicate (Cmd+D) — chain copy+paste in one keystroke.
@@ -2193,7 +2193,7 @@ export function DemoView({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [demoNodes, demoConnectors, onCopyNodes, onPasteNodes]);
+  }, [flowNodes, flowConnectors, onCopyNodes, onPasteNodes]);
 
   // US-022/US-008: native `copy` / `paste` DOM events own Cmd/Ctrl+C/V. The
   // canvas keydown chord for C/V is disabled (onCopySelection/onPasteSelection
@@ -2266,7 +2266,7 @@ export function DemoView({
       // burst keeps stacking on the in-flight position rather than the stale
       // server snapshot.
       const overrides = nodePending.overrides;
-      const liveNodes = (demoNodes ?? []).map((n) => {
+      const liveNodes = (flowNodes ?? []).map((n) => {
         const pos = overrides[n.id]?.position ?? n.position;
         return { id: n.id, position: pos };
       });
@@ -2282,7 +2282,7 @@ export function DemoView({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [demoNodes, nodePending.overrides, onNodePositionChange, onNodePositionsChange]);
+  }, [flowNodes, nodePending.overrides, onNodePositionChange, onNodePositionsChange]);
 
   // US-024: zoom chords. Cmd+0 → fitView, Cmd+= (and Cmd+Shift+=) → zoomIn,
   // Cmd+- → zoomOut. preventDefault fires even when the rfInstance isn't
@@ -2314,17 +2314,17 @@ export function DemoView({
   // (then 200×120) when the canvas hasn't reported a size yet.
   const onTidy = useCallback(
     async (scope: 'all' | 'selection') => {
-      if (!flowId || !adapter || !demoNodes) return;
+      if (!flowId || !adapter || !flowNodes) return;
       if (!adapter.computeLayout) return;
       const overrides = nodePending.overrides;
       const inst = rfInstanceRef.current;
       const selectedSet = scope === 'selection' ? new Set(selectedIdsRef.current) : null;
       const includedNodes = selectedSet
-        ? demoNodes.filter((n) => selectedSet.has(n.id))
-        : demoNodes;
+        ? flowNodes.filter((n) => selectedSet.has(n.id))
+        : flowNodes;
       if (includedNodes.length < 2) return;
       const includedIdSet = new Set(includedNodes.map((n) => n.id));
-      const includedConnectors = (demoConnectors ?? []).filter(
+      const includedConnectors = (flowConnectors ?? []).filter(
         (c) => includedIdSet.has(c.source) && includedIdSet.has(c.target),
       );
 
@@ -2413,8 +2413,8 @@ export function DemoView({
       flowId,
       adapter,
       history,
-      demoNodes,
-      demoConnectors,
+      flowNodes,
+      flowConnectors,
       nodePending.overrides,
       setNodeOverride,
       dropNodeOverride,
@@ -2443,7 +2443,7 @@ export function DemoView({
 
   // Toolbar button click: same scope rule as the chord (selection-empty →
   // 'all'). Handed to <SeeflowCanvas> below; CanvasToolbar disables the button
-  // when no demo is loaded (onTidy unset).
+  // when no flow is loaded (onTidy unset).
   const onToolbarTidy = useCallback(() => {
     const scope = selectedIdsRef.current.length > 0 ? 'selection' : 'all';
     onTidy(scope);
@@ -2626,8 +2626,8 @@ export function DemoView({
           return;
         }
         case 'edit.selectAll':
-          setSelectedIds((demoNodes ?? []).map((n) => n.id));
-          setSelectedConnectorIds((demoConnectors ?? []).map((c) => c.id));
+          setSelectedIds((flowNodes ?? []).map((n) => n.id));
+          setSelectedConnectorIds((flowConnectors ?? []).map((c) => c.id));
           return;
         case 'view.fit': {
           const inst = rfInstanceRef.current;
@@ -2698,8 +2698,8 @@ export function DemoView({
       onCopyNodes,
       onPasteNodes,
       onDeleteSelection,
-      demoNodes,
-      demoConnectors,
+      flowNodes,
+      flowConnectors,
       onTidy,
       canvasRef,
     ],
@@ -2814,7 +2814,7 @@ export function DemoView({
   const onUnpinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target') => {
       if (!flowId || !adapter) return;
-      const conn = demoConnectors?.find((c) => c.id === connId);
+      const conn = flowConnectors?.find((c) => c.id === connId);
       const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       if (!prevPin) return; // Nothing to unpin.
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
@@ -2827,14 +2827,14 @@ export function DemoView({
         console.error('updateConnector unpin failed', err);
       });
     },
-    [flowId, adapter, demoConnectors, setConnectorOverride, dropConnectorOverride],
+    [flowId, adapter, flowConnectors, setConnectorOverride, dropConnectorOverride],
   );
 
   // Merge pending overrides onto the selected entity so Style-tab controls
   // (active swatches, selected dropdown option) reflect the in-flight edit
   // immediately rather than waiting for the SSE echo. Defined here (above the
   // early returns below) so React's hook order is stable across renders.
-  const demo = detail?.flow;
+  const resolvedFlow = detail?.flow;
   const nodeOverrides = nodePending.overrides;
   const connectorOverrides = connectorPending.overrides;
   const deletedNodeIds = nodeDeletions.ids;
@@ -2848,8 +2848,8 @@ export function DemoView({
   // Style-strip arrays: every selected entity (with optimistic overrides
   // merged) so the strip can fan out edits across the multi-selection.
   const selectedNodes = useMemo<FlowNode[]>(() => {
-    if (!demo || selectedIds.length === 0) return [];
-    const byId = new Map(demo.nodes.map((n) => [n.id, n]));
+    if (!resolvedFlow || selectedIds.length === 0) return [];
+    const byId = new Map(resolvedFlow.nodes.map((n) => [n.id, n]));
     const out: FlowNode[] = [];
     for (const id of selectedIds) {
       const found = byId.get(id);
@@ -2863,10 +2863,10 @@ export function DemoView({
       out.push({ ...found, ...ov, data } as FlowNode);
     }
     return out;
-  }, [demo, selectedIds, nodeOverrides]);
+  }, [resolvedFlow, selectedIds, nodeOverrides]);
   const selectedConnectorsList = useMemo<Connector[]>(() => {
-    if (!demo || selectedConnectorIds.length === 0) return [];
-    const byId = new Map(demo.connectors.map((c) => [c.id, c]));
+    if (!resolvedFlow || selectedConnectorIds.length === 0) return [];
+    const byId = new Map(resolvedFlow.connectors.map((c) => [c.id, c]));
     const out: Connector[] = [];
     for (const id of selectedConnectorIds) {
       const found = byId.get(id);
@@ -2875,16 +2875,16 @@ export function DemoView({
       out.push(ov ? ({ ...found, ...ov } as Connector) : found);
     }
     return out;
-  }, [demo, selectedConnectorIds, connectorOverrides]);
+  }, [resolvedFlow, selectedConnectorIds, connectorOverrides]);
 
   // Reorder server nodes according to the optimistic z-order override
   // (US-006). Nodes not in the override (e.g. just-pasted ones whose echo
   // arrived after the reorder) are appended at the end so they render on top
   // until the next echo subsumes the override.
   const orderedNodes = useMemo<FlowNode[] | null>(() => {
-    if (!demo) return null;
-    if (!nodeOrderOverride) return demo.nodes;
-    const byId = new Map(demo.nodes.map((n) => [n.id, n]));
+    if (!resolvedFlow) return null;
+    if (!nodeOrderOverride) return resolvedFlow.nodes;
+    const byId = new Map(resolvedFlow.nodes.map((n) => [n.id, n]));
     const ordered: FlowNode[] = [];
     const seen = new Set<string>();
     for (const id of nodeOrderOverride) {
@@ -2894,24 +2894,24 @@ export function DemoView({
         seen.add(id);
       }
     }
-    for (const n of demo.nodes) {
+    for (const n of resolvedFlow.nodes) {
       if (!seen.has(n.id)) ordered.push(n);
     }
     return ordered;
-  }, [demo, nodeOrderOverride]);
+  }, [resolvedFlow, nodeOrderOverride]);
 
   // US-016: hide optimistically-deleted nodes/connectors before the canvas
   // sees them. A pending node delete also suppresses every connector touching
   // it (cascade), so the user never sees a dangling edge mid-flight even if
   // the connector wasn't explicitly marked.
   const visibleNodes = useMemo<FlowNode[] | null>(() => {
-    const base = orderedNodes ?? demo?.nodes ?? null;
+    const base = orderedNodes ?? resolvedFlow?.nodes ?? null;
     if (!base) return null;
     if (deletedNodeIds.size === 0) return base;
     return base.filter((n) => !deletedNodeIds.has(n.id));
-  }, [orderedNodes, demo, deletedNodeIds]);
+  }, [orderedNodes, resolvedFlow, deletedNodeIds]);
   const visibleConnectors = useMemo<Connector[] | null>(() => {
-    const base = demo?.connectors ?? null;
+    const base = resolvedFlow?.connectors ?? null;
     if (!base) return null;
     if (deletedConnectorIds.size === 0 && deletedNodeIds.size === 0) return base;
     return base.filter(
@@ -2920,7 +2920,7 @@ export function DemoView({
         !deletedNodeIds.has(c.source) &&
         !deletedNodeIds.has(c.target),
     );
-  }, [demo, deletedConnectorIds, deletedNodeIds]);
+  }, [resolvedFlow, deletedConnectorIds, deletedNodeIds]);
 
   // US-004: inject `onOpenPicker` runtime callback onto every linkflow node so
   // the renderer's three buttons (unlinked CTA / pencil / broken body) can
@@ -2932,7 +2932,7 @@ export function DemoView({
   // US-007: `onFollow` is the linked-healthy body click handler — pushes the
   // node's target onto the navigation stack so `popBack()` (browser back +
   // header back arrow) returns here with viewport + canvas state preserved
-  // (the stacked DemoView for this entry stays mounted, hidden via display:none).
+  // (the stacked FlowView for this entry stays mounted, hidden via display:none).
   // Only injected when the node has a target set; the renderer never fires
   // onFollow on the unlinked or broken states, so the `target` guard is
   // belt-and-braces.
@@ -2941,7 +2941,7 @@ export function DemoView({
   }, []);
   // US-008: `_resolvedTarget` is injected here so the renderer can flip between
   // linked-healthy and broken without reaching across the package boundary
-  // into apps/web's `useDemos()`. The lookup runs against the latest `demos`
+  // into apps/web's `useFlows()`. The lookup runs against the latest `flows`
   // prop, which App refreshes on the `registry:reload` SSE channel — so
   // renames / deletes / project unregisters propagate without new wiring.
   const linkflowDecoratedNodes = useMemo<FlowNode[] | null>(() => {
@@ -2954,7 +2954,7 @@ export function DemoView({
       const onFollow = target
         ? () => pushLink({ project: target.project, flow: target.flow })
         : undefined;
-      const resolvedTarget = target ? resolveLinkflowTarget(target, demos) : undefined;
+      const resolvedTarget = target ? resolveLinkflowTarget(target, flows) : undefined;
       return {
         ...n,
         data: {
@@ -2966,11 +2966,11 @@ export function DemoView({
       } as FlowNode;
     });
     return touched ? out : visibleNodes;
-  }, [visibleNodes, openLinkflowPicker, demos]);
+  }, [visibleNodes, openLinkflowPicker, flows]);
 
   // US-031: when projectFlows is still resolving OR contains the active
   // flow (e.g. just created via the switcher), show the loading state
-  // instead of "Unknown demo". The global demos cache is eventually-
+  // instead of "Unknown flow". The global flows cache is eventually-
   // consistent with the per-project flows list; favor the per-project
   // signal here so a freshly-created flow's brief race window doesn't
   // surface as an error page.
@@ -2979,7 +2979,7 @@ export function DemoView({
   if (!summary && !projectKnowsActiveFlow && !projectStillLoading) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background p-6 text-center">
-        <p className="text-sm font-medium">Unknown demo: {slug}</p>
+        <p className="text-sm font-medium">Unknown flow: {slug}</p>
         <p className="text-xs text-muted-foreground">
           The slug may have been removed. Re-register from the project repo to bring it back.
         </p>
@@ -2990,7 +2990,7 @@ export function DemoView({
   if (!summary || (loading && !detail)) {
     return (
       <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-        Loading demo…
+        Loading flow…
       </div>
     );
   }
@@ -2999,10 +2999,10 @@ export function DemoView({
     <div className="relative h-full w-full">
       {detail && !detail.valid ? (
         <div
-          data-testid="demo-error-banner"
+          data-testid="flow-error-banner"
           className="absolute inset-x-0 top-0 z-10 border-b border-rose-500/40 bg-rose-50 px-4 py-2 text-xs text-rose-900 shadow-xs dark:bg-rose-950/40 dark:text-rose-100"
         >
-          <span className="font-medium uppercase tracking-wide">Invalid demo: </span>
+          <span className="font-medium uppercase tracking-wide">Invalid flow: </span>
           <span className="font-mono">{detail.error}</span>
         </div>
       ) : null}
@@ -3060,7 +3060,7 @@ export function DemoView({
         }}
       />
 
-      {demo && adapter ? (
+      {resolvedFlow && adapter ? (
         <SeeflowCanvas
           // US-026: keying on `${project}/${flow}` forces SeeflowCanvas (and
           // the React Flow root it owns) to remount whenever the user switches
@@ -3073,7 +3073,7 @@ export function DemoView({
           // The FlowSwitcher rides inside the canvas's top-right Panel,
           // sitting to the LEFT of the ShareMenu in the same `sf:flex
           // sf:items-center sf:gap-1` row. Dialog siblings remain in
-          // demo-view because Radix portals them to document.body.
+          // flow-view because Radix portals them to document.body.
           topRightSlot={
             <FlowSwitcher
               project={project}
@@ -3113,8 +3113,8 @@ export function DemoView({
           // component still exists for embedders consuming @seeflow/canvas
           // directly — we just don't render the in-canvas chrome here.
           showShareMenu={false}
-          nodes={linkflowDecoratedNodes ?? demo.nodes}
-          connectors={visibleConnectors ?? demo.connectors}
+          nodes={linkflowDecoratedNodes ?? resolvedFlow.nodes}
+          connectors={visibleConnectors ?? resolvedFlow.connectors}
           selectedNodeIds={selectedIds}
           selectedConnectorIds={selectedConnectorIds}
           onSelectionChange={onSelectionChange}
@@ -3176,7 +3176,7 @@ export function DemoView({
           onStyleConnector={onStyleConnector}
           onStyleConnectorPreview={onStyleConnectorPreview}
           onRfInit={onRfInit}
-          onTidy={demoNodes ? onToolbarTidy : undefined}
+          onTidy={flowNodes ? onToolbarTidy : undefined}
           onCreateAndConnectFromPane={onCreateAndConnectFromPane}
           pendingEditNodeId={pendingEditNodeId}
           canvasMode={canvasMode}
@@ -3192,7 +3192,7 @@ export function DemoView({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-          No demo data yet.
+          No flow data yet.
         </div>
       )}
 
@@ -3225,9 +3225,9 @@ export function DemoView({
           canUndo: historyState.canUndo,
           canRedo: historyState.canRedo,
           hasClipboard,
-          // Export commands need a backing demo. flowId is non-null whenever
+          // Export commands need a backing flow. flowId is non-null whenever
           // the canvas can render.
-          canExportDemo: Boolean(flowId),
+          canExportFlow: Boolean(flowId),
         }}
       />
 
@@ -3241,12 +3241,12 @@ export function DemoView({
           if (!open) setLinkflowPicker(null);
         }}
         mode={linkflowPicker?.mode ?? 'link'}
-        demos={demos}
+        flows={flows}
         currentSlug={slug}
         initialTarget={
           linkflowPicker?.mode === 'edit'
             ? (() => {
-                const node = demoNodes?.find((n) => n.id === linkflowPicker.nodeId);
+                const node = flowNodes?.find((n) => n.id === linkflowPicker.nodeId);
                 if (!node || node.type !== 'linkflow') return null;
                 const t = (node.data as { target?: { project: string; flow: string } }).target;
                 return t ?? null;

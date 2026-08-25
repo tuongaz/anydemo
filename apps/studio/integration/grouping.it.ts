@@ -7,7 +7,7 @@ import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
 
 // Canvas grouping M9 — server-contract integration tests (design §9.3, §9.8,
 // §12.9). The clipboard id-remap + delete-prune LOGIC lives in the web host
-// (apps/web/src/pages/demo-view.tsx) and is unit-tested as pure functions in
+// (apps/web/src/pages/flow-view.tsx) and is unit-tested as pure functions in
 // packages/canvas/src/lib/group-ops.test.ts. What integration MUST prove is the
 // SERVER side those host ops depend on:
 //   1. a group node + childIds round-trips through flow.json / style.json,
@@ -99,10 +99,9 @@ async function deleteNode(slug: string, nodeId: string): Promise<Response> {
 }
 
 /**
- * Seed a flow with a group `grp` containing two rectangle members `a`,`b` —
- * mirrors the `grouping-demo` fixture (a group + members). Uses ONE transactional
- * bulk write carrying the group with its final childIds (the §12.7 atomic-create
- * shape the host's `onCreateGroup` uses).
+ * Seed a flow with a group `grp` containing two rectangle members `a`,`b`. Uses
+ * ONE transactional bulk write carrying the group with its final childIds (the
+ * §12.7 atomic-create shape the host's `onCreateGroup` uses).
  */
 async function seedGroupWithMembers(slug: string): Promise<void> {
   const res = await postJson(`${flowApi(slug)}/bulk`, {

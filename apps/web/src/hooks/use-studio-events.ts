@@ -23,7 +23,7 @@ export type FlowReloadPayload = { valid: true; flow: Flow } | { valid: false; er
 export interface UseStudioEventsOptions {
   /**
    * Catch-up signal. Fires on the initial `hello` event and on every
-   * reconnect. Use this to refetch the flow detail + demos list — anything
+   * reconnect. Use this to refetch the flow detail + flows list — anything
    * that might have gone stale during a disconnect window.
    */
   onHello?: () => void;

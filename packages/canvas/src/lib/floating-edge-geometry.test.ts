@@ -326,7 +326,7 @@ describe('resolveEdgeEndpoints', () => {
 
     it('honors no-pin case (geometry byte-identical to today)', () => {
       // Explicitly omit the pin field and confirm both endpoints still
-      // float — this is the back-compat invariant for existing demo files.
+      // float — this is the back-compat invariant for existing flow files.
       const out = resolveEdgeEndpoints(
         { box: aBox, autoPicked: undefined, fallback: aFallback },
         { box: bBox, autoPicked: undefined, fallback: bFallback },

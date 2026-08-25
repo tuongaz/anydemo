@@ -16,7 +16,7 @@ import { createEventBus } from './events.ts';
 import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
 
-const VALID_DEMO = {
+const VALID_FLOW = {
   version: 2,
   name: 'Checkout Flow',
   nodes: [
@@ -36,9 +36,9 @@ const tmpRegistry = () => {
   return join(dir, 'registry.json');
 };
 
-const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
+const tmpRepoWithFlow = (flow: unknown = VALID_FLOW) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-api-repo-'));
-  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(flow));
   return repoDir;
 };
 
@@ -90,9 +90,9 @@ const flowApi = (slug: string, suffix = ''): string => {
 };
 
 describe('POST /api/flows/register', () => {
-  it('registers a valid demo and returns id + slug + skipped sdk for request-only demo', async () => {
+  it('registers a valid flow and returns id + slug + skipped sdk for request-only flow', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
 
     const res = await post(app, '/api/flows/register', {
       name: 'Checkout Flow',
@@ -110,12 +110,12 @@ describe('POST /api/flows/register', () => {
     expect(registry.list()[0]?.id).toBe(json.id);
   });
 
-  it('returns 400 with Zod issues when the demo file fails schema validation', async () => {
+  it('returns 400 with Zod issues when the flow file fails schema validation', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo({ version: 1 });
+    const repoPath = tmpRepoWithFlow({ version: 1 });
 
     const res = await post(app, '/api/flows/register', {
-      name: 'Bad demo',
+      name: 'Bad flow',
       repoPath,
       flowPath: 'flow.json',
     });
@@ -127,7 +127,7 @@ describe('POST /api/flows/register', () => {
     expect(registry.list()).toHaveLength(0);
   });
 
-  it('returns 400 when the demo file does not exist', async () => {
+  it('returns 400 when the flow file does not exist', async () => {
     const { app } = buildApp();
     const res = await post(app, '/api/flows/register', {
       name: 'Missing',
@@ -139,7 +139,7 @@ describe('POST /api/flows/register', () => {
 
   it('re-registering the same repoPath updates in place (same id, same slug)', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
 
     const first = await (
       await post(app, '/api/flows/register', {
@@ -166,11 +166,11 @@ describe('POST /api/flows/register', () => {
     mkdirSync(join(repoPath, 'refund'), { recursive: true });
     writeFileSync(
       join(repoPath, 'checkout', 'flow.json'),
-      JSON.stringify({ ...VALID_DEMO, name: 'Checkout' }),
+      JSON.stringify({ ...VALID_FLOW, name: 'Checkout' }),
     );
     writeFileSync(
       join(repoPath, 'refund', 'flow.json'),
-      JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
+      JSON.stringify({ ...VALID_FLOW, name: 'Refund' }),
     );
 
     const a = (await (
@@ -212,7 +212,7 @@ describe('POST /api/flows/register', () => {
 describe('POST /api/layout', () => {
   const sampleFlow = {
     version: 2,
-    name: 'Layout Demo',
+    name: 'Layout Flow',
     nodes: [
       {
         id: 'api',
@@ -357,9 +357,9 @@ describe('POST /api/projects/:project/flows/:flow/layout', () => {
 
   const registerLayoutFlow = async (
     app: ReturnType<typeof buildLayoutApp>['app'],
-    demo: unknown = layoutFlow,
+    flow: unknown = layoutFlow,
   ) => {
-    const repoPath = tmpRepoWithDemo(demo);
+    const repoPath = tmpRepoWithFlow(flow);
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string; slug: string };
@@ -776,7 +776,7 @@ describe('GET /api/ids/:type/:count', () => {
 describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' });
 
     const res = await app.request('/api/flows');
@@ -795,9 +795,9 @@ describe('GET /api/flows', () => {
     expect(list[0]?.valid).toBe(true);
   });
 
-  it('flags entries whose demo file no longer exists as valid:false', async () => {
+  it('flags entries whose flow file no longer exists as valid:false', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' });
 
     rmSync(join(repoPath, 'flow.json'));
@@ -807,10 +807,10 @@ describe('GET /api/flows', () => {
     expect(list[0]?.valid).toBe(false);
   });
 
-  it('rehydrates registered demos after the registry is rebuilt from disk', async () => {
+  it('rehydrates registered flows after the registry is rebuilt from disk', async () => {
     const registryPath = tmpRegistry();
-    const repoA = tmpRepoWithDemo();
-    const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Other Flow' });
+    const repoA = tmpRepoWithFlow();
+    const repoB = tmpRepoWithFlow({ ...VALID_FLOW, name: 'Other Flow' });
 
     const reg1 = createRegistry({ path: registryPath });
     const app1 = createApp({
@@ -1327,9 +1327,9 @@ describe('PATCH /api/projects/:project/flows/:flow', () => {
 });
 
 describe('GET /api/projects/:project/flows/:flow', () => {
-  it('returns the validated demo + filePath when watcher is disabled (sync read fallback)', async () => {
+  it('returns the validated flow + filePath when watcher is disabled (sync read fallback)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1363,7 +1363,7 @@ describe('GET /api/projects/:project/flows/:flow', () => {
 
   it('reports valid:false + error when on-disk JSON is malformed', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1445,9 +1445,9 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
       body: JSON.stringify(body),
     });
 
-  it('updates the node position and rewrites the demo file', async () => {
+  it('updates the node position and rewrites the flow file', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1478,7 +1478,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
 
   it('preserves 2-space indent and trailing newline (clean editor diffs)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1486,14 +1486,14 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     await patch(
       app,
       `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/position`,
       { x: 1, y: 2 },
     );
 
-    const text = readFileSync(demoFile, 'utf8');
+    const text = readFileSync(flowFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
     // Top-level "version" line should be indented with 2 spaces.
     expect(text).toMatch(/^\{\n {2}"version": 2,/);
@@ -1507,7 +1507,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
 
   it('returns 404 for unknown nodeId', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1524,7 +1524,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
 
   it('returns 400 when x or y is non-numeric', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1544,7 +1544,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
 
   it('writes via tempfile + rename (no .tmp residue, preserves content on success)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1565,7 +1565,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () =
 });
 
 describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/order', () => {
-  const VALID_DEMO_THREE_NODES = {
+  const VALID_FLOW_THREE_NODES = {
     version: 2,
     name: 'Three Nodes',
     nodes: [
@@ -1602,65 +1602,65 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/order', () => {
 
   const setup = async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_THREE_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_THREE_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
         flowPath: 'flow.json',
       })
     ).json()) as { id: string; slug: string };
-    const demoFile = join(repoPath, 'flow.json');
-    return { app, demoFile, slug: reg.slug };
+    const flowFile = join(repoPath, 'flow.json');
+    return { app, flowFile, slug: reg.slug };
   };
 
   it("op:'forward' swaps with the next neighbour", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'forward' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['b', 'a', 'c']);
+    expect(ids(flowFile)).toEqual(['b', 'a', 'c']);
   });
 
   it("op:'forward' on the topmost node is a no-op", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'forward' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
+    expect(ids(flowFile)).toEqual(['a', 'b', 'c']);
   });
 
   it("op:'backward' swaps with the previous neighbour", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'backward' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['a', 'c', 'b']);
+    expect(ids(flowFile)).toEqual(['a', 'c', 'b']);
   });
 
   it("op:'backward' on the bottommost node is a no-op", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'backward' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
+    expect(ids(flowFile)).toEqual(['a', 'b', 'c']);
   });
 
   it("op:'toFront' moves to the end of the array", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'toFront' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['b', 'c', 'a']);
+    expect(ids(flowFile)).toEqual(['b', 'c', 'a']);
   });
 
   it("op:'toBack' moves to the start of the array", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'toBack' });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['c', 'a', 'b']);
+    expect(ids(flowFile)).toEqual(['c', 'a', 'b']);
   });
 
   it("op:'toIndex' pins to an absolute index (used by undo)", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     // Move 'a' (idx 0) to idx 2 — same as toFront on a 3-node array.
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'toIndex', index: 2 });
     expect(res.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['b', 'c', 'a']);
+    expect(ids(flowFile)).toEqual(['b', 'c', 'a']);
 
     // Then pin it back to idx 0 — exact inverse.
     const res2 = await patch(app, flowApi(slug, '/nodes/a/order'), {
@@ -1668,25 +1668,25 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/order', () => {
       index: 0,
     });
     expect(res2.status).toBe(200);
-    expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
+    expect(ids(flowFile)).toEqual(['a', 'b', 'c']);
   });
 
   it("op:'toIndex' clamps out-of-range indices", async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), {
       op: 'toIndex',
       index: 99,
     });
     expect(res.status).toBe(200);
     // Clamped to length-1 = 2 → same as toFront.
-    expect(ids(demoFile)).toEqual(['b', 'c', 'a']);
+    expect(ids(flowFile)).toEqual(['b', 'c', 'a']);
   });
 
   it('returns 400 for an unknown op', async () => {
-    const { app, demoFile, slug } = await setup();
+    const { app, flowFile, slug } = await setup();
     const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'noSuchOp' });
     expect(res.status).toBe(400);
-    expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
+    expect(ids(flowFile)).toEqual(['a', 'b', 'c']);
   });
 
   it('returns 404 for unknown nodeId', async () => {
@@ -1710,9 +1710,9 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       body: JSON.stringify(body),
     });
 
-  it('merges a partial update into node.data and rewrites the demo file', async () => {
+  it('merges a partial update into node.data and rewrites the flow file', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1720,7 +1720,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const styleFile = join(repoPath, 'style.json');
 
     const res = await patch(
@@ -1737,7 +1737,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const arch = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { name: string } }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
@@ -1757,7 +1757,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('updates node.position when included in the patch body', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1781,9 +1781,9 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     expect(style.nodes['api-checkout']?.position).toEqual({ x: 42, y: 84 });
   });
 
-  it('returns 400 with issues when the patched demo would fail schema validation', async () => {
+  it('returns 400 with issues when the patched flow would fail schema validation', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1791,8 +1791,8 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     // borderColor token outside the enum — the body schema itself should reject this.
     const res = await patch(
@@ -1807,12 +1807,12 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     expect(body.error).toBeTruthy();
 
     // The file must NOT have been touched on validation failure.
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
-  it('returns 400 when the resulting demo violates FlowSchema (retype to image without path)', async () => {
+  it('returns 400 when the resulting flow violates FlowSchema (retype to image without path)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1820,8 +1820,8 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     // Under the flat schema, `name` is optional on every type, so the legacy
     // "empty name" rejection no longer applies. The schema-fence test now
@@ -1837,12 +1837,12 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toContain('schema');
 
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('returns 400 when the body has an unknown top-level key', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1868,7 +1868,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('returns 404 for unknown nodeId', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1885,7 +1885,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('preserves 2-space indent + trailing newline on rewrite', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1893,12 +1893,12 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     await patch(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`, {
       name: 'Renamed',
     });
 
-    const text = readFileSync(demoFile, 'utf8');
+    const text = readFileSync(flowFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
     expect(text).toMatch(/^\{\n {2}"version": 2,/);
   });
@@ -1906,11 +1906,11 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   // Three-field consolidation: description (short body) + detail (long form)
   // land at the top level of node.data and round-trip through FlowSchema
   // unchanged. Empty string on either field is the documented clear-on-
-  // serialize signal — mergeNodeUpdates strips the key so the on-disk demo
+  // serialize signal — mergeNodeUpdates strips the key so the on-disk flow
   // stays compact.
   it('persists description inline + externalizes detail to nodes/<id>/detail.md', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1918,7 +1918,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const res = await patch(
       app,
       `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
@@ -1929,7 +1929,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     );
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { description?: string; detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
@@ -1942,7 +1942,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('strips description on empty; empties detail.md but keeps the file:// ref', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1950,7 +1950,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     // First set both fields, then clear them with empty strings.
     await patch(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`, {
       description: 'tmp',
@@ -1966,7 +1966,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     );
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
@@ -1982,7 +1982,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   // detail empty-string).
   it('persists icon name then strips it on disk when null is patched', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -1990,7 +1990,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const setRes = await patch(
       app,
       `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
@@ -1999,7 +1999,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       },
     );
     expect(setRes.status).toBe(200);
-    let onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    let onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'api-checkout')?.data.icon).toBe('database');
@@ -2012,7 +2012,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       },
     );
     expect(clearRes.status).toBe(200);
-    onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
@@ -2022,7 +2022,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('patches html on an html by writing nodes/<id>/view.html', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2057,7 +2057,7 @@ describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 describe('POST /api/projects/:project/flows/:flow/nodes', () => {
   it('appends a new node and auto-generates an id when absent', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2065,7 +2065,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
 
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       type: 'rectangle',
@@ -2076,7 +2076,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^node-/);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; type: string }>;
     };
     expect(onDisk.nodes).toHaveLength(2);
@@ -2086,7 +2086,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
   it('honors a caller-provided id when given', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2106,7 +2106,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
   it('returns 400 with schema issues when the new node is malformed', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2114,8 +2114,8 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     // type 'image' requires a `path` field anchored under `nodes/<id>/`;
     // omitting it surfaces as a post-merge ResolvedFlowSchema reparse
@@ -2128,7 +2128,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toContain('schema');
 
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('returns 404 for unknown flowId', async () => {
@@ -2142,7 +2142,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
   it('externalizes detail to nodes/<id>/detail.md when provided', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2150,7 +2150,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'with-detail',
       type: 'rectangle',
@@ -2158,7 +2158,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
     });
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
@@ -2170,7 +2170,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
   it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2178,14 +2178,14 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'no-detail',
       type: 'rectangle',
       data: {},
     });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
@@ -2198,7 +2198,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
   describe('html html externalization', () => {
     it('writes nodes/<id>/view.html (empty) and persists file:// ref when html is omitted', async () => {
       const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
+      const repoPath = tmpRepoWithFlow();
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
@@ -2223,7 +2223,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
     it('writes nodes/<id>/view.html with content when html is provided', async () => {
       const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
+      const repoPath = tmpRepoWithFlow();
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
@@ -2250,7 +2250,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 
     it('preserves other data fields when externalizing html', async () => {
       const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
+      const repoPath = tmpRepoWithFlow();
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
@@ -2279,7 +2279,7 @@ describe('POST /api/projects/:project/flows/:flow/nodes', () => {
 describe('POST /api/projects/:project/flows/:flow/bulk', () => {
   it('creates every node + connector atomically in one call and returns ids in order', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2311,7 +2311,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
       nodes: Array<{ id: string; data: { detail?: string; html?: string } }>;
       connectors: Array<{ id: string }>;
     };
-    // Pre-existing demo had 1 node, bulk added 3.
+    // Pre-existing flow had 1 node, bulk added 3.
     expect(onDisk.nodes).toHaveLength(4);
     expect(onDisk.connectors).toHaveLength(1);
     const b2 = onDisk.nodes.find((n) => n.id === 'b2');
@@ -2324,7 +2324,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('accepts a nodes-only body (no connectors field)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2343,7 +2343,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('rolls back BOTH arrays when a connector dangles against the merged graph', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2351,8 +2351,8 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
@@ -2362,7 +2362,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
       connectors: [{ source: 'good-a', target: 'never-added' }],
     });
     expect(res.status).toBe(400);
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
     // Per-node folders cleaned up.
     expect(existsSync(join(repoPath, 'nodes', 'good-a'))).toBe(false);
     expect(existsSync(join(repoPath, 'nodes', 'good-b'))).toBe(false);
@@ -2370,7 +2370,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('rolls back the whole batch when one node is malformed', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2378,8 +2378,8 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
@@ -2393,14 +2393,14 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('schema');
 
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
     expect(existsSync(join(repoPath, 'nodes', 'ok-1'))).toBe(false);
     expect(existsSync(join(repoPath, 'nodes', 'bad'))).toBe(false);
   });
 
   it('reports intra-batch duplicate node id with collection=nodes', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2422,7 +2422,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('reports intra-batch duplicate connector id with collection=connectors', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2444,7 +2444,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('reports an id collision with an existing node', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2468,7 +2468,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('rejects an empty body (no nodes, no connectors)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2484,7 +2484,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('rejects both-empty-arrays body via the refine', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2501,7 +2501,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 
   it('rejects a batch over the 100-node-item cap', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2529,7 +2529,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk', () => {
 });
 
 describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
-  const VALID_DEMO_TWO_NODES = {
+  const VALID_FLOW_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
     nodes: [
@@ -2556,7 +2556,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('removes the node and cascades adjacent connectors in one write', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2564,7 +2564,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
 
     const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/a`, {
       method: 'DELETE',
@@ -2572,7 +2572,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string }>;
       connectors: Array<{ id: string; source: string; target: string }>;
     };
@@ -2582,10 +2582,10 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   });
 
   it('leaves connectors that do not reference the deleted node untouched', async () => {
-    const demo = {
-      ...VALID_DEMO_TWO_NODES,
+    const flow = {
+      ...VALID_FLOW_TWO_NODES,
       nodes: [
-        ...VALID_DEMO_TWO_NODES.nodes,
+        ...VALID_FLOW_TWO_NODES.nodes,
         {
           id: 'c',
           type: 'rectangle',
@@ -2600,7 +2600,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       ],
     };
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(demo);
+    const repoPath = tmpRepoWithFlow(flow);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2608,13 +2608,13 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/a`, {
       method: 'DELETE',
     });
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       nodes: Array<{ id: string }>;
       connectors: Array<{ id: string }>;
     };
@@ -2631,7 +2631,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('returns 404 for unknown nodeId', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2647,7 +2647,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('cascades the nodes/<id>/ folder along with the node row', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2673,7 +2673,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   describe('html per-node folder cascade', () => {
     it('removes nodes/<id>/view.html and the whole folder on delete', async () => {
       const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
+      const repoPath = tmpRepoWithFlow();
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
@@ -2710,7 +2710,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
     it('does not touch other html folders when an unrelated node is deleted', async () => {
       const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
+      const repoPath = tmpRepoWithFlow();
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
@@ -2749,7 +2749,7 @@ describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 });
 
 describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
-  const VALID_DEMO_WITH_CONN = {
+  const VALID_FLOW_WITH_CONN = {
     version: 2,
     name: 'Two Nodes',
     nodes: [
@@ -2778,9 +2778,9 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
       body: JSON.stringify(body),
     });
 
-  it('merges visual fields into the connector and rewrites the demo', async () => {
+  it('merges visual fields into the connector and rewrites the flow', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2788,7 +2788,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const styleFile = join(repoPath, 'style.json');
     const res = await patch(
       app,
@@ -2803,7 +2803,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const arch = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; label?: string }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
@@ -2819,7 +2819,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it('returns 400 when the body has an unknown top-level key', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2842,7 +2842,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
   // is a stranded endpoint at render time, so the API rejects it.
   it("accepts a valid sourceHandle ('r') / targetHandle ('t')", async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2870,7 +2870,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it("rejects an invalid sourceHandle ('top-bogus') with a 400", async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2878,8 +2878,8 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     const res = await patch(
       app,
@@ -2896,12 +2896,12 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
     const flat = JSON.stringify(body);
     expect(flat).toContain('sourceHandle');
     // File must not have been touched on validation failure.
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it("rejects a target-only handle id on sourceHandle ('t' on source) with a 400", async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2923,7 +2923,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it("rejects an invalid targetHandle ('r' on target) with a 400", async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2949,7 +2949,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it('returns 404 for unknown connectorId', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -2969,7 +2969,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
   // clearing path from US-025).
   it('persists sourcePin / targetPin on PATCH and clears them with null (US-007)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3013,7 +3013,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it('rejects a sourcePin with an out-of-range t (US-007)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_CONN);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3033,7 +3033,7 @@ describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
 });
 
 describe('POST /api/projects/:project/flows/:flow/connectors', () => {
-  const VALID_DEMO_TWO_NODES = {
+  const VALID_FLOW_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
     nodes: [
@@ -3057,7 +3057,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 
   it('creates a connector and auto-generates id', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3065,7 +3065,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'a',
       target: 'b',
@@ -3075,7 +3075,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^conn-/);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string; source: string; target: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
@@ -3087,7 +3087,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 
   it('honors a caller-provided id and persists optional metadata', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3108,7 +3108,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 
   it('returns 400 with schema issues when source references an unknown node', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3116,8 +3116,8 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'ghost',
@@ -3126,13 +3126,13 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toContain('schema');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   // US-022: post-merge FlowSchema parse rejects invalid handle ids on POST too.
   it('returns 400 when posting a connector with an invalid sourceHandle id', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3140,8 +3140,8 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
+    const flowFile = join(repoPath, 'flow.json');
+    const before = readFileSync(flowFile, 'utf8');
 
     const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'a',
@@ -3149,7 +3149,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
       sourceHandle: 'top-bogus',
     });
     expect(res.status).toBe(400);
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    expect(readFileSync(flowFile, 'utf8')).toBe(before);
   });
 
   it('returns 404 for unknown flowId', async () => {
@@ -3169,7 +3169,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
   // server-shaped, but a REST round-trip is the cheapest regression fence).
   it('accepts a connector pointing AT an icon (US-023)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo({
+    const repoPath = tmpRepoWithFlow({
       version: 2,
       name: 'Icon target',
       nodes: [
@@ -3210,7 +3210,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 
   it('accepts a connector pointing FROM an icon (US-023)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo({
+    const repoPath = tmpRepoWithFlow({
       version: 2,
       name: 'Icon source',
       nodes: [
@@ -3249,7 +3249,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 
   it('accepts a connector between two iconNodes (US-023)', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo({
+    const repoPath = tmpRepoWithFlow({
       version: 2,
       name: 'Icon-to-icon',
       nodes: [
@@ -3287,7 +3287,7 @@ describe('POST /api/projects/:project/flows/:flow/connectors', () => {
 });
 
 describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existing-graph cases)', () => {
-  const VALID_DEMO_TWO_NODES = {
+  const VALID_FLOW_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
     nodes: [
@@ -3311,7 +3311,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existi
 
   it('connectors-only body wires existing nodes and defaults id/kind', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3345,7 +3345,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existi
 
   it('rejects an id collision with an existing connector', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_TWO_NODES);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3369,7 +3369,7 @@ describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existi
 });
 
 describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
-  const VALID_DEMO_WITH_TWO_CONNS = {
+  const VALID_FLOW_WITH_TWO_CONNS = {
     version: 2,
     name: 'Two Nodes',
     nodes: [
@@ -3396,7 +3396,7 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it('removes only the targeted connector and leaves the rest', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_TWO_CONNS);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_TWO_CONNS);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3404,7 +3404,7 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const demoFile = join(repoPath, 'flow.json');
+    const flowFile = join(repoPath, 'flow.json');
     const res = await app.request(
       `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
       { method: 'DELETE' },
@@ -3412,7 +3412,7 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(flowFile, 'utf8')) as {
       connectors: Array<{ id: string }>;
     };
     expect(onDisk.connectors.map((c) => c.id)).toEqual(['b-to-a']);
@@ -3428,7 +3428,7 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
 
   it('returns 404 for unknown connectorId', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_TWO_CONNS);
+    const repoPath = tmpRepoWithFlow(VALID_FLOW_WITH_TWO_CONNS);
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
@@ -3863,8 +3863,8 @@ describe('POST /api/projects', () => {
     const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-create-legacy-'));
     const projectPath = join(baseDir, 'legacy-project');
     mkdirSync(projectPath, { recursive: true });
-    const legacyDemo = { version: 2, name: 'Legacy', nodes: [], connectors: [] };
-    writeFileSync(join(projectPath, 'flow.json'), JSON.stringify(legacyDemo));
+    const legacyFlow = { version: 2, name: 'Legacy', nodes: [], connectors: [] };
+    writeFileSync(join(projectPath, 'flow.json'), JSON.stringify(legacyFlow));
 
     const registry = createRegistry({ path: tmpRegistry() });
     const app = createApp({
@@ -3973,8 +3973,8 @@ describe('POST /api/validate', () => {
 describe('GET /api/flows/summary', () => {
   it('returns id, name, description for each registered flow', async () => {
     const { app } = buildApp();
-    const repoA = tmpRepoWithDemo({ ...VALID_DEMO, description: 'main checkout flow' });
-    const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund', description: undefined });
+    const repoA = tmpRepoWithFlow({ ...VALID_FLOW, description: 'main checkout flow' });
+    const repoB = tmpRepoWithFlow({ ...VALID_FLOW, name: 'Refund', description: undefined });
     await post(app, '/api/flows/register', { repoPath: repoA, flowPath: 'flow.json' });
     await post(app, '/api/flows/register', { repoPath: repoB, flowPath: 'flow.json' });
 
@@ -3993,7 +3993,7 @@ describe('GET /api/flows/summary', () => {
 
   it('returns each summary with only id, name and description keys', async () => {
     const { app } = buildApp();
-    const repo = tmpRepoWithDemo({ ...VALID_DEMO, description: 'doc' });
+    const repo = tmpRepoWithFlow({ ...VALID_FLOW, description: 'doc' });
     await post(app, '/api/flows/register', { repoPath: repo, flowPath: 'flow.json' });
 
     const list = (await (await app.request('/api/flows/summary')).json()) as Array<object>;
@@ -4005,11 +4005,11 @@ describe('GET /api/flows/summary', () => {
 describe('GET /api/projects/:project/flows/:flow/graph', () => {
   it('returns nodes and connectors with detail/html stripped, description preserved', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo({
-      ...VALID_DEMO,
-      description: 'demo flow',
+    const repoPath = tmpRepoWithFlow({
+      ...VALID_FLOW,
+      description: 'sample flow',
       nodes: [
-        ...VALID_DEMO.nodes,
+        ...VALID_FLOW.nodes,
         {
           id: 'shape-1',
           type: 'rectangle',
@@ -4036,7 +4036,7 @@ describe('GET /api/projects/:project/flows/:flow/graph', () => {
       connectors: unknown[];
     };
     expect(body.id).toBe(reg.id);
-    expect(body.description).toBe('demo flow');
+    expect(body.description).toBe('sample flow');
     const shape = body.nodes.find((n) => n.id === 'shape-1');
     const html = body.nodes.find((n) => n.id === 'html-1');
     expect(shape?.data.detail).toBeUndefined();
@@ -4053,7 +4053,7 @@ describe('GET /api/projects/:project/flows/:flow/graph', () => {
 
   it('returns 404 when flow.json was removed from disk', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string; slug: string };
@@ -4067,14 +4067,14 @@ describe('GET /api/projects/:project/flows/:flow/graph', () => {
 describe('GET /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   it('returns a single node with detail content inlined', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string; slug: string };
 
     // Add a node via the existing add endpoint so detail.md is externalized
     // through the canonical write path. Pin the id so we can fetch the same
-    // node by id below (the seed VALID_DEMO already carries an `api-checkout`
+    // node by id below (the seed VALID_FLOW already carries an `api-checkout`
     // rectangle — finding "the rectangle" by type would return the seed).
     await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'with-detail',
@@ -4106,7 +4106,7 @@ describe('GET /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
 
   it('returns 404 for an unknown nodeId in a known flow', async () => {
     const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
+    const repoPath = tmpRepoWithFlow();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string; slug: string };

@@ -113,11 +113,14 @@ export function scanProject(repoPath: string): ScanResult {
     });
   }
 
-  // Prefer the manifest name. If slugify falls back to its `'demo'` sentinel
-  // (i.e. manifest.name had no alphanumeric content), fall back to the
-  // directory basename — which itself slugifies through to a stable identifier.
+  // Prefer the manifest name. When it carries no alphanumeric content there is
+  // nothing to slugify, so fall back to the directory basename — which itself
+  // slugifies through to a stable identifier. Test the input directly rather
+  // than comparing against slugify's fallback string: that sentinel is a real
+  // slug a real project can produce, so a name-equals-sentinel check would
+  // silently divert a legitimately named project down the basename path.
   const nameSlug = slugify(manifest.name);
-  const projectSlug = nameSlug === 'demo' ? slugify(basename(repoPath)) : nameSlug;
+  const projectSlug = /[a-z0-9]/i.test(manifest.name) ? nameSlug : slugify(basename(repoPath));
 
   return { kind: 'ok', projectSlug, manifest, flows };
 }

@@ -69,22 +69,22 @@ describe('createBridge — sendMessage coalescing', () => {
 
     bridge.sendMessage({
       event: 'node-added',
-      projectSlug: 'demo-project',
-      flowSlug: 'demo',
+      projectSlug: 'sample-project',
+      flowSlug: 'main',
       payload: { id: 'a' },
     });
     timers.advance(50);
     bridge.sendMessage({
       event: 'node-added',
-      projectSlug: 'demo-project',
-      flowSlug: 'demo',
+      projectSlug: 'sample-project',
+      flowSlug: 'main',
       payload: { id: 'b' },
     });
     timers.advance(50);
     bridge.sendMessage({
       event: 'connector-added',
-      projectSlug: 'demo-project',
-      flowSlug: 'demo',
+      projectSlug: 'sample-project',
+      flowSlug: 'main',
       payload: { id: 'c' },
     });
 
@@ -97,20 +97,20 @@ describe('createBridge — sendMessage coalescing', () => {
       events: [
         {
           event: 'node-added',
-          projectSlug: 'demo-project',
-          flowSlug: 'demo',
+          projectSlug: 'sample-project',
+          flowSlug: 'main',
           payload: { id: 'a' },
         },
         {
           event: 'node-added',
-          projectSlug: 'demo-project',
-          flowSlug: 'demo',
+          projectSlug: 'sample-project',
+          flowSlug: 'main',
           payload: { id: 'b' },
         },
         {
           event: 'connector-added',
-          projectSlug: 'demo-project',
-          flowSlug: 'demo',
+          projectSlug: 'sample-project',
+          flowSlug: 'main',
           payload: { id: 'c' },
         },
       ],

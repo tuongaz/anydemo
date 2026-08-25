@@ -29,7 +29,7 @@ const SMOOTHSTEP_BORDER_RADIUS = 8;
 // US-011 / US-024: shift in flow units applied to the EdgeAnchor circle's
 // cx/cy (mirrors xyflow's `shiftX/shiftY(centerX, radius, position)` with
 // radius = the `reconnectRadius` prop on <ReactFlow>, which is 10 in
-// demo-canvas.tsx). Keep in lock-step so the visible reconnect dot's
+// seeflow-canvas.tsx). Keep in lock-step so the visible reconnect dot's
 // center sits half a diameter outside the floating endpoint — same offset
 // xyflow uses for its (default) anchor placement.
 const RECONNECT_ANCHOR_SHIFT = 10;
@@ -107,7 +107,7 @@ export type EditableEdgeData = {
   fontFamily?: FontFamilyToken;
   /**
    * US-018: register a stable handle that enters inline label edit mode.
-   * demo-canvas calls the registered `enter()` from its onEdgeDoubleClick
+   * seeflow-canvas calls the registered `enter()` from its onEdgeDoubleClick
    * callback so double-click anywhere on the edge body opens the editor.
    */
   registerEditHandle?: (id: string, enter: () => void) => () => void;

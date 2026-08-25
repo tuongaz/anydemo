@@ -26,7 +26,7 @@ async function waitForAutoFit(node: Locator): Promise<void> {
 // action mutates the canvas runtime's state synchronously.
 
 const E2E_DIR = resolve(import.meta.dir);
-const FIXTURE_DIR = join(E2E_DIR, 'fixtures/component-demo');
+const FIXTURE_DIR = join(E2E_DIR, 'fixtures/component-flow');
 
 // Disable transitions/animations so the visual baseline snapshot stays stable.
 const DISABLE_MOTION_CSS = `
@@ -46,7 +46,7 @@ interface SeedOptions {
 // from a sidecar at nodes/<id>/spec.json. The cleanest path is to copy the
 // on-disk fixture tree as-is into the worker-scoped studio's home and POST
 // /api/flows/register against the resulting flow.json.
-async function seedComponentDemo(
+async function seedComponentFlow(
   studio: { baseURL: string; home: string },
   opts: SeedOptions,
 ): Promise<RegisteredFlow> {
@@ -66,14 +66,14 @@ async function seedComponentDemo(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      name: opts.name ?? 'Component Demo',
+      name: opts.name ?? 'Component Flow',
       repoPath,
       flowPath: 'flows/main/flow.json',
     }),
   });
   if (res.status !== 200) {
     const detail = await res.text();
-    throw new Error(`Failed to register component-demo fixture: ${res.status} ${detail}`);
+    throw new Error(`Failed to register component-flow fixture: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as { id: string; slug: string };
   const idx = registeredSlug.indexOf('/');
@@ -85,7 +85,7 @@ async function seedComponentDemo(
 
 test.describe('canvas — component node (US-015)', () => {
   test('Reset button mutates state via set action', async ({ page, studio }) => {
-    const registered = await seedComponentDemo(studio.studio, { slug: 'component-demo-reset' });
+    const registered = await seedComponentFlow(studio.studio, { slug: 'component-flow-reset' });
 
     await page.goto(
       `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,

@@ -147,6 +147,43 @@ describe('seeflow skill <-> CLI contract', () => {
     }
   });
 
+  it('no source file uses the retired "demo" vocabulary', () => {
+    // CONTEXT.md defines Flow as the core artifact and lists Demo as a dead
+    // legacy term to scrub on sight. Without a guard the rename decays: the
+    // next agent-authored identifier, test id, or UI string reintroduces it and
+    // every other gate stays green.
+    //
+    // Scoped to the source trees, not GUARDED_FILES: CONTEXT.md states the rule
+    // itself, and design/design.html's `.demo` / `.edge-demo` classes are
+    // token-showcase markup — "a demonstration", not the artifact.
+    //
+    // Per-file exemptions below are the same distinction: "demo" meaning a
+    // demonstration is legal; "demo" standing in for a flow is not.
+    const exempt = new Map([
+      [
+        join(REPO_ROOT, 'apps/studio/src/cli.ts'),
+        'the --host comment cites "a LAN demo" — a demonstration, not a flow',
+      ],
+      [
+        join(REPO_ROOT, 'apps/web/src/lib/router.test.ts'),
+        'pins the retired `/demos/` URL segment as a negative-match datum',
+      ],
+    ]);
+    const pattern = /\bdemos?\b/i;
+    for (const { path, body } of GUARDED_TREES.flatMap((rel) =>
+      readAllSource(join(REPO_ROOT, rel)),
+    )) {
+      if (exempt.has(path)) continue;
+      const match = pattern.exec(body);
+      if (match) {
+        const line = body.slice(0, match.index).split('\n').length;
+        throw new Error(
+          `${path}:${line} uses the retired "demo" vocabulary ("${match[0]}") — say "flow"`,
+        );
+      }
+    }
+  });
+
   it('the Play/Status designer agent prompts are deleted', () => {
     for (const stale of ['seeflow-play-designer.md', 'seeflow-status-designer.md']) {
       expect(existsSync(join(AGENTS_DIR, stale))).toBe(false);

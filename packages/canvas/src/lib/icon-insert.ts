@@ -38,7 +38,7 @@ export function computeIconInsertPosition(
 /**
  * Build the full type:'icon' create payload (type + position + data) for the
  * toolbar's insert-mode pick. Separates the math + shape construction from any
- * particular dispatcher, so the same payload is shared by demo-view's icon
+ * particular dispatcher, so the same payload is shared by flow-view's icon
  * insert call site and by the unit test.
  */
 export function buildIconInsertPayload(args: {

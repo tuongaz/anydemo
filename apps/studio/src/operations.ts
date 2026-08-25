@@ -79,7 +79,7 @@ export const PositionBodySchema = z.object({
 });
 export type PositionBody = z.infer<typeof PositionBodySchema>;
 
-// Reorder a node within `demo.nodes[]`. The four ops mirror the typical
+// Reorder a node within `flow.nodes[]`. The four ops mirror the typical
 // "send backward / bring forward / to back / to front" actions; `toIndex`
 // pins the node back to a captured absolute index so undo for `forward` /
 // `backward` from the middle is faithful even under concurrent edits.
@@ -94,7 +94,7 @@ export type ReorderBody = z.infer<typeof ReorderBodySchema>;
 
 // Partial node update body. Top-level `position` lands on node.position; every
 // other key lands inside node.data. Final validity is enforced by re-parsing
-// the whole demo through ResolvedFlowSchema after the merge — this body schema just
+// the whole flow through ResolvedFlowSchema after the merge — this body schema just
 // rejects unknown top-level keys to catch typos.
 export const NodePatchBodySchema = z
   .object({
@@ -360,7 +360,7 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
       continue;
     }
     // Explicit null is the clear signal for every nullable key (style/visual
-    // tokens + US-009's `icon`): strip the key from disk so a re-parsed demo
+    // tokens + US-009's `icon`): strip the key from disk so a re-parsed flow
     // doesn't reintroduce it, and so an undo can restore a field to its
     // pre-edit "unset" default. Only keys declared `.nullable()` in
     // NodePatchBodySchema can reach here carrying null.
@@ -637,7 +637,7 @@ export type PatchNodeOutcome =
 
 // Partial connector update body. Strict at the top level so client typos
 // surface as 400. Field shape invariants are enforced post-merge by
-// re-parsing the whole demo through ResolvedFlowSchema.
+// re-parsing the whole flow through ResolvedFlowSchema.
 export const ConnectorPatchBodySchema = z
   .object({
     label: z.string().optional(),
@@ -764,7 +764,7 @@ export type DeleteConnectorOutcome =
 export const resolveFilePath = (repoPath: string, flowPath: string): string =>
   isAbsolute(flowPath) ? flowPath : join(repoPath, flowPath);
 
-// Per-demo serialization: read-modify-write of the demo file isn't atomic
+// Per-flow serialization: read-modify-write of the flow file isn't atomic
 // across multiple PATCHes, so two concurrent drags would race (later writer's
 // older read clobbers the earlier writer's update). We chain writes per
 // flowId so the read+write sequence is effectively serialized.
@@ -1034,7 +1034,7 @@ export const reorderNodes = (
   }
 };
 
-export function listDemosImpl(deps: OperationsDeps): ListFlowsOutcome {
+export function listFlowsImpl(deps: OperationsDeps): ListFlowsOutcome {
   const data = deps.registry.list().map((e) => {
     const fullPath = resolveFilePath(e.repoPath, e.flowPath);
     const fileExists = existsSync(fullPath);
@@ -1400,7 +1400,7 @@ export async function createProjectImpl(
   };
 }
 
-// Append a new node to the demo. Auto-generates an id when absent; ResolvedFlowSchema
+// Append a new node to the flow. Auto-generates an id when absent; ResolvedFlowSchema
 // is re-run on the post-mutation raw object before commit so a malformed
 // payload never produces a half-written file.
 export async function addNodeImpl(
@@ -1747,7 +1747,7 @@ export async function moveNodeImpl(
 
 // Apply a partial PATCH body to a single node. Mutation runs against the
 // raw parsed JSON (so unknown forward-compat fields survive a round-trip),
-// and the whole demo is re-validated through ResolvedFlowSchema before commit so
+// and the whole flow is re-validated through ResolvedFlowSchema before commit so
 // partial writes can't break invariants like the connector→node superRefine.
 export async function patchNodeImpl(
   deps: OperationsDeps,
@@ -1825,7 +1825,7 @@ export async function patchNodeImpl(
   });
 }
 
-// Reorder a node within demo.nodes[] (changes paint order in the canvas).
+// Reorder a node within flow.nodes[] (changes paint order in the canvas).
 // A no-op reorder (e.g. forward on the topmost node) returns ok without
 // writing so we don't trigger a watcher echo for nothing.
 export async function reorderNodeImpl(
@@ -1857,7 +1857,7 @@ export async function reorderNodeImpl(
   return result as ReorderNodeOutcome;
 }
 
-// Append a new connector to demo.connectors. `id` is auto-generated when
+// Append a new connector to flow.connectors. `id` is auto-generated when
 // absent and `kind` defaults to 'default' (the no-semantics user-drawn
 // variant). Source/target referential integrity is enforced by ResolvedFlowSchema's
 // superRefine on the post-mutation parse.
@@ -1890,7 +1890,7 @@ export async function addConnectorImpl(
 // Apply a partial PATCH body to a single connector. Mutation runs against
 // the raw parsed JSON (so unknown forward-compat fields survive a round-trip).
 // Explicit `null` in the patch clears the field on disk (used by
-// reconnect-to-body to drop a pinned handle id). The whole demo is
+// reconnect-to-body to drop a pinned handle id). The whole flow is
 // re-validated through ResolvedFlowSchema before commit so the superRefine
 // gates source/target referential integrity + handle role invariants.
 export async function patchConnectorImpl(
@@ -2108,7 +2108,7 @@ export async function applyLayoutImpl(
 // ---------------------------------------------------------------------------
 
 export interface Operations {
-  listFlows(): ReturnType<typeof listDemosImpl>;
+  listFlows(): ReturnType<typeof listFlowsImpl>;
   listFlowsSummary(): ReturnType<typeof listFlowsSummaryImpl>;
   listProjects(): ReturnType<typeof listProjectsImpl>;
   listFlowsByProject(projectSlug: string): ReturnType<typeof listFlowsByProjectImpl>;
@@ -2157,7 +2157,7 @@ export interface Operations {
 
 export function createOperations(deps: OperationsDeps): Operations {
   return {
-    listFlows: () => listDemosImpl(deps),
+    listFlows: () => listFlowsImpl(deps),
     listFlowsSummary: () => listFlowsSummaryImpl(deps),
     listProjects: () => listProjectsImpl(deps),
     listFlowsByProject: (projectSlug) => listFlowsByProjectImpl(deps, projectSlug),

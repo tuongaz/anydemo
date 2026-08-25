@@ -205,7 +205,7 @@ describe('deleteFlow', () => {
 
 describe('useProjectFlows (hook contract)', () => {
   // The hook is a thin wrapper around fetchProjectFlows that mirrors the
-  // useDemos / useDemoData pattern. We exercise it by stepping through its
+  // useFlows / useFlowData pattern. We exercise it by stepping through its
   // observable state transitions with a mocked fetch — no React renderer
   // needed.
   it('idle when project is null — no fetch, flows stays null', async () => {
@@ -232,7 +232,7 @@ describe('useProjectFlows (hook contract)', () => {
 
   it('exports the mutation surface via the same factory', async () => {
     // US-025: the hook module is the single source of truth for the mutation
-    // surface as well — the dialog wiring in demo-view.tsx pulls all three
+    // surface as well — the dialog wiring in flow-view.tsx pulls all three
     // mutation handlers out of one destructure.
     const mod = await import('@/hooks/use-project-flows');
     // Tested above through the underlying api.ts helpers; this is the export

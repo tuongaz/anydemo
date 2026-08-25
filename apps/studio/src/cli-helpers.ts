@@ -127,7 +127,7 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
     case 'alreadyExists':
       return `Project already exists at ${String(outcome.path ?? '')}`;
     case 'writeFailed':
-      return `Failed to write demo file: ${String(outcome.message ?? '')}`;
+      return `Failed to write flow file: ${String(outcome.message ?? '')}`;
     case 'scaffoldFailed':
       return `Failed to scaffold project: ${String(outcome.message ?? '')}`;
     default:

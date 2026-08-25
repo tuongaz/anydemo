@@ -113,7 +113,7 @@ export interface StyleStripProps {
   /**
    * US-022: open the icon picker in replace mode against the selected
    * type:'icon' node. Same callback the icon node's double-click handler
-   * invokes (US-016). Plumbed from demo-view via demo-canvas. Absent → the
+   * invokes (US-016). Plumbed from flow-view via seeflow-canvas. Absent → the
    * Change-icon button hides.
    */
   onRequestIconReplace?: (nodeId: string) => void;

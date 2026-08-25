@@ -36,7 +36,7 @@ export function EmptyState({ onProjectCreated }: EmptyStateProps) {
         </div>
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            No demos registered yet
+            No projects registered yet
           </h1>
           <p className="text-sm text-muted-foreground">
             Point SeeFlow at any folder containing a{' '}

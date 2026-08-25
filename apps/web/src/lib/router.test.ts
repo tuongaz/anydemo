@@ -33,7 +33,10 @@ describe('matchProjectFlow', () => {
 
   it('returns null when the segment names do not match the grammar', () => {
     expect(matchProjectFlow('/flows/f')).toBeNull();
+    // `demos` is the retired legacy segment name; pinned here so the current
+    // grammar keeps rejecting it.
     expect(matchProjectFlow('/projects/p/demos/f')).toBeNull();
+    expect(matchProjectFlow('/projects/p/pages/f')).toBeNull();
   });
 });
 

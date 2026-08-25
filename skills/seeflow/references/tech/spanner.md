@@ -20,7 +20,7 @@ category: storage
 ## What it is
 
 GCP's globally-distributed, strongly-consistent relational DB. Local
-demos talk to the Spanner emulator over gRPC (`:9010`) with a REST
+apps talk to the Spanner emulator over gRPC (`:9010`) with a REST
 shim (`:9020`) that `gcloud spanner` drives.
 
 ## How to run it

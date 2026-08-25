@@ -2,7 +2,7 @@
 // Exercises the full CRUD lifecycle in the browser:
 //   1. Project boots with a single flow (`main`).
 //   2. Operator opens the switcher and creates a new `retry` flow via the
-//      dialog. URL transitions to `/projects/component-demo/flows/retry`.
+//      dialog. URL transitions to `/projects/component-flow/flows/retry`.
 //   3. Operator renames `retry`'s display name via the per-row pencil button.
 //      The slimmed rename dialog locks the flow id, so the URL stays at
 //      `/flows/retry`; only the trigger label changes.
@@ -34,21 +34,21 @@ const DISABLE_MOTION_CSS = `
 test.describe('flow switcher CRUD (US-027)', () => {
   test('create, rename, and delete flows from the popover', async ({ page, studio }) => {
     // The worker-scoped studio is shared with component-node.e2e.ts, whose
-    // seedComponentDemo registers a flow named 'Component Demo' via the legacy
+    // seedComponentFlow registers a flow named 'Component Flow' via the legacy
     // /api/flows/register endpoint. That endpoint synthesises projectSlug from
-    // slugify(name) → `component-demo` and pins flowSlug=`main` — colliding
+    // slugify(name) → `component-flow` and pins flowSlug=`main` — colliding
     // with anything we'd register here under the same name. Pick a name whose
     // slug is unique so /api/projects/:project/flows returns only OUR flow.
     const project = await registerManifestProject(studio.studio, {
-      projectDirName: 'multi-flow-demo',
-      name: 'Multi Flow Demo',
+      projectDirName: 'multi-flow-fixture',
+      name: 'Multi Flow Fixture',
       defaultFlow: 'main',
       flows: [{ id: 'main', name: 'Main' }],
     });
 
     // Sanity check: registerManifestProject synthesises projectSlug via
-    // slugify(name). 'Multi Flow Demo' → 'multi-flow-demo' — the AC pins this.
-    expect(project.projectSlug).toBe('multi-flow-demo');
+    // slugify(name). 'Multi Flow Fixture' → 'multi-flow-fixture' — the AC pins this.
+    expect(project.projectSlug).toBe('multi-flow-fixture');
     expect(project.flowSlug).toBe('main');
 
     await page.goto(
@@ -75,7 +75,7 @@ test.describe('flow switcher CRUD (US-027)', () => {
     await page.locator('[data-testid="flow-create-name-input"]').fill('Retry');
     await page.locator('[data-testid="flow-create-submit"]').click();
 
-    // demo-view.tsx navigates to the just-created flow on success.
+    // flow-view.tsx navigates to the just-created flow on success.
     await page.waitForURL(`**${projectFlowPath(project.projectSlug, 'retry')}`, {
       timeout: 10_000,
     });
@@ -118,7 +118,7 @@ test.describe('flow switcher CRUD (US-027)', () => {
     await expect(page.locator('[data-testid="flow-delete-new-default-select"]')).toHaveCount(0);
     await page.locator('[data-testid="flow-delete-submit"]').click();
 
-    // demo-view.tsx navigates away from a deleted active flow to the project
+    // flow-view.tsx navigates away from a deleted active flow to the project
     // default. The manifest default is `main`, so that's where we land.
     await page.waitForURL(`**${projectFlowPath(project.projectSlug, 'main')}`, { timeout: 10_000 });
     await expect(deleteDialog).toHaveCount(0);

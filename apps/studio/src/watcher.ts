@@ -70,11 +70,11 @@ export interface WatcherDeps {
 }
 
 export interface FlowWatcher {
-  /** Read the current snapshot for a demo, or null if unknown. */
+  /** Read the current snapshot for a flow, or null if unknown. */
   snapshot(flowId: string): FlowSnapshot | null;
-  /** Begin watching the file backing the given demo id. Idempotent. */
+  /** Begin watching the file backing the given flow id. Idempotent. */
   watch(flowId: string): void;
-  /** Stop watching a single demo. */
+  /** Stop watching a single flow. */
   unwatch(flowId: string): void;
   /** Start watchers for every entry currently in the registry. */
   watchAll(): void;
@@ -414,7 +414,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
           cur.timers.set(changed, timer);
         });
       } catch (err) {
-        console.error(`[watcher] failed to watch ${dir} for demo ${flowId}:`, err);
+        console.error(`[watcher] failed to watch ${dir} for flow ${flowId}:`, err);
         continue;
       }
 

@@ -7,10 +7,10 @@ import {
 } from './support/studio-fixture.ts';
 
 // Phase C: end-to-end coverage for the OS-clipboard copy/paste pipeline wired
-// up in apps/web/src/pages/demo-view.tsx. The studio canvas page mounts in
+// up in apps/web/src/pages/flow-view.tsx. The studio canvas page mounts in
 // edit mode, where the native `copy` / `paste` window listeners own
 // Cmd/Ctrl+C/V (the canvas keydown chord is disabled for C/V — see the
-// US-022 comment in demo-view.tsx).
+// US-022 comment in flow-view.tsx).
 //
 // Two paths are exercised:
 //   1. Node paste — a `paste` ClipboardEvent carrying the seeflow envelope
@@ -18,7 +18,7 @@ import {
 //      produced by encodeClipboard in apps/web/src/lib/clipboard.ts) lands a
 //      fresh copy of the encoded node. We assert the node count grew by one.
 //   2. Image paste — a `paste` ClipboardEvent whose `clipboardData.items`
-//      includes an image File. demo-view routes that through the canvas drop
+//      includes an image File. flow-view routes that through the canvas drop
 //      pipeline (pasteImageFromClipboard), which creates a type:'image' node.
 //
 // Both events are synthesised in-page with a real DataTransfer +
@@ -93,7 +93,7 @@ test.describe('canvas — OS clipboard (Phase C)', () => {
     })()`);
 
     // The paste rewrites ids + offsets the position, so a second rectangle
-    // appears. demo-view's onPasteNodes posts the new node through the
+    // appears. flow-view's onPasteNodes posts the new node through the
     // adapter; the optimistic override lands it on the canvas immediately.
     await expect(page.locator('.react-flow__node')).toHaveCount(2, { timeout: 5_000 });
     await expect(page.locator('[data-node-type="rectangle"]')).toHaveCount(2);
@@ -117,7 +117,7 @@ test.describe('canvas — OS clipboard (Phase C)', () => {
     await expect(page.locator('[data-node-type="image"]')).toHaveCount(0);
 
     // Dispatch a `paste` ClipboardEvent whose clipboardData carries a tiny
-    // 1x1 PNG File. demo-view inspects `clipboardData.items` for a
+    // 1x1 PNG File. flow-view inspects `clipboardData.items` for a
     // kind:'file' image/* entry (decidePasteAction) and routes it to the
     // canvas drop pipeline, which creates a type:'image' node.
     //

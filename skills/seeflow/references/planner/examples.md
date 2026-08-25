@@ -69,7 +69,7 @@ contextBrief:
     { "path": "src/workers.ts", "why": "inventory-worker and shipping-worker" },
     { "path": "src/store.ts", "why": "Order state mutations" }
   ],
-  "existingDemo": null
+  "existingFlow": null
 }
 editTarget: null
 ```

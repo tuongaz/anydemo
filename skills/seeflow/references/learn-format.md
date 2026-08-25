@@ -166,7 +166,7 @@ genuinely project-specific — empty subsections are noise.
 
 | Project / Flow | Purpose | Last updated |
 |---|---|---|
-| `checkout/main` | end-to-end /checkout demo | 2026-04-12 |
+| `checkout/main` | end-to-end /checkout flow | 2026-04-12 |
 | `order-pipeline/main` | event-driven order lifecycle | 2026-05-01 |
 | `order-pipeline/retry` | failed-order replay subflow | 2026-05-26 |
 ```

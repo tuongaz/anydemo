@@ -132,7 +132,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     name: 'register',
     synopsis: 'seeflow register [--path <dir>] [--flow <file>]',
     description:
-      'Register a demo repo with the studio. Manifest-aware: when <repoPath>/seeflow.json ' +
+      'Register a project with the studio. Manifest-aware: when <repoPath>/seeflow.json ' +
       'exists, scans every declared flow under flows/<id>/flow.json and upserts one entry ' +
       'per flow. Otherwise reads <repoPath>/<flow> (defaulting to ./flow.json) as a ' +
       'single-flow project. Writes to ~/.seeflow/registry.json. Alias of flows:register.',
@@ -161,7 +161,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   {
     name: 'flows:register',
     synopsis: 'seeflow flows:register [--path <dir>] [--flow <file>]',
-    description: 'Register a demo repo. Identical behaviour to `register` (manifest-aware).',
+    description: 'Register a project. Identical behaviour to `register` (manifest-aware).',
     category: 'flows',
     args: [],
     flags: [
@@ -1245,7 +1245,7 @@ export function renderCommandList(): string {
     byCategory.set(entry.category, arr);
   }
   const lines: string[] = [];
-  lines.push('seeflow — local studio for file-defined interactive demos');
+  lines.push('seeflow — localhost studio for file-defined, Zod-validated flows');
   lines.push('');
   lines.push('Run `seeflow help <command>` for full detail on any command below.');
   lines.push('');

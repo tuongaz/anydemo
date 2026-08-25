@@ -1,7 +1,7 @@
 // Regression coverage for the undo-history stale-clear bug.
 //
 // Symptom: Cmd+Z did "nothing at all" for text / color / move edits. Root
-// cause: the host called `history.markExternalChange()` on EVERY `demoNodes`
+// cause: the host called `history.markExternalChange()` on EVERY `flowNodes`
 // identity change — including benign SSE reconnect catch-ups (`hello` →
 // `refreshDetail`). Because the wrapper's stale-clear uses a 2s wall-clock
 // window, any reconnect landing >2s after the last edit wiped the entire undo
@@ -74,7 +74,7 @@ test.describe('undo history survives SSE reconnect', () => {
     // ── Reproduce the failure condition ──────────────────────────────────
     // Wait past the 2s stale-mutation window, then abort the live SSE once so
     // the browser's EventSource reconnects (→ hello → refreshDetail → a
-    // demoNodes identity change). Pre-fix this fired markExternalChange and
+    // flowNodes identity change). Pre-fix this fired markExternalChange and
     // wiped the undo stack; the fix keys the stale-clear on real flow:reloads
     // only, so the stack must survive.
     await page.waitForTimeout(2200);

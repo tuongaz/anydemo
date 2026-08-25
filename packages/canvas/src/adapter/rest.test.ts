@@ -65,7 +65,7 @@ describe('createRestAdapter (US-009)', () => {
     );
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -79,7 +79,7 @@ describe('createRestAdapter (US-009)', () => {
     expect(result.id).toBe('server-id');
     expect(result.node).toEqual({ id: 'server-id', type: 'rectangle', position: { x: 10, y: 20 } });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/nodes');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/nodes');
     expect(calls[0]?.method).toBe('POST');
     expect(calls[0]?.headers?.['content-type']).toBe('application/json');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({
@@ -93,7 +93,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -101,7 +101,7 @@ describe('createRestAdapter (US-009)', () => {
     await adapter.updateNode('node-a', { name: 'Renamed', borderColor: 'blue' });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/nodes/node-a');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/nodes/node-a');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ name: 'Renamed', borderColor: 'blue' });
   });
@@ -110,7 +110,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, position: { x: 50, y: 60 } }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -118,7 +118,7 @@ describe('createRestAdapter (US-009)', () => {
     const result = await adapter.updateNodePosition('node-a', { x: 50, y: 60 });
 
     expect(result).toEqual({ ok: true, position: { x: 50, y: 60 } });
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/nodes/node-a/position');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/nodes/node-a/position');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ x: 50, y: 60 });
   });
@@ -127,14 +127,14 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
 
     await adapter.deleteNode('node-a');
 
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/nodes/node-a');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/nodes/node-a');
     expect(calls[0]?.method).toBe('DELETE');
     expect(calls[0]?.body).toBeNull();
   });
@@ -143,7 +143,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, id: 'conn-1' }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -151,7 +151,7 @@ describe('createRestAdapter (US-009)', () => {
     const result = await adapter.createConnector({ source: 'a', target: 'b' });
 
     expect(result).toEqual({ id: 'conn-1' });
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/connectors');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/connectors');
     expect(calls[0]?.method).toBe('POST');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ source: 'a', target: 'b' });
   });
@@ -160,14 +160,14 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
 
     await adapter.reorderNode('node-a', { op: 'toFront' });
 
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/flows/main/nodes/node-a/order');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/flows/main/nodes/node-a/order');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ op: 'toFront' });
   });
@@ -203,7 +203,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl } = stubFetch(() => stubResponse({ error: 'node not found' }, 404));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -215,61 +215,61 @@ describe('createRestAdapter (US-009)', () => {
     const { impl } = stubFetch(() => stubResponse({}, 500));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
 
     await expect(adapter.updateNode('node-a', { name: 'x' })).rejects.toThrow(
-      'PATCH /api/projects/demo-42/flows/main/nodes/node-a → 500',
+      'PATCH /api/projects/project-42/flows/main/nodes/node-a → 500',
     );
   });
 
   it('openFile POSTs the path to /api/projects/:project/files/open (project-scoped)', async () => {
     const { impl, calls } = stubFetch(() =>
-      stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
+      stubResponse({ ok: true, absPath: '/abs/flows/main/state.ts' }),
     );
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
 
-    await adapter.openFile?.('flows/demo/state.ts');
+    await adapter.openFile?.('flows/main/state.ts');
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/files/open');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/files/open');
     expect(calls[0]?.method).toBe('POST');
     expect(calls[0]?.headers?.['content-type']).toBe('application/json');
-    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/demo/state.ts' });
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/main/state.ts' });
   });
 
   it('revealFile POSTs the path to /api/projects/:project/files/reveal (project-scoped)', async () => {
     const { impl, calls } = stubFetch(() =>
-      stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
+      stubResponse({ ok: true, absPath: '/abs/flows/main/state.ts' }),
     );
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
 
-    await adapter.revealFile?.('flows/demo/state.ts');
+    await adapter.revealFile?.('flows/main/state.ts');
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/projects/demo-42/files/reveal');
+    expect(calls[0]?.url).toBe('/api/projects/project-42/files/reveal');
     expect(calls[0]?.method).toBe('POST');
     expect(calls[0]?.headers?.['content-type']).toBe('application/json');
-    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/demo/state.ts' });
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/main/state.ts' });
   });
 
   it('openFile and revealFile URL-encode the project slug in the projects path', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, absPath: '/abs/x' }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo with space',
+      project: 'project with space',
       flow: 'main',
       fetch: impl,
     });
@@ -277,15 +277,15 @@ describe('createRestAdapter (US-009)', () => {
     await adapter.openFile?.('a.ts');
     await adapter.revealFile?.('a.ts');
 
-    expect(calls[0]?.url).toBe('/api/projects/demo%20with%20space/files/open');
-    expect(calls[1]?.url).toBe('/api/projects/demo%20with%20space/files/reveal');
+    expect(calls[0]?.url).toBe('/api/projects/project%20with%20space/files/open');
+    expect(calls[1]?.url).toBe('/api/projects/project%20with%20space/files/reveal');
   });
 
   it('URL-encodes the project and flow slugs in flow-scoped routes', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo with space',
+      project: 'project with space',
       flow: 'flow/with slash',
       fetch: impl,
     });
@@ -293,7 +293,7 @@ describe('createRestAdapter (US-009)', () => {
     await adapter.updateNode('node-a', { name: 'x' });
 
     expect(calls[0]?.url).toBe(
-      '/api/projects/demo%20with%20space/flows/flow%2Fwith%20slash/nodes/node-a',
+      '/api/projects/project%20with%20space/flows/flow%2Fwith%20slash/nodes/node-a',
     );
   });
 
@@ -301,7 +301,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
       headers: { 'X-Seeflow-Token': 'tok-abc' },
@@ -342,7 +342,7 @@ describe('createRestAdapter (US-009)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: 'https://studio.example.com',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -350,7 +350,7 @@ describe('createRestAdapter (US-009)', () => {
     await adapter.updateNode('node-a', { name: 'x' });
 
     expect(calls[0]?.url).toBe(
-      'https://studio.example.com/api/projects/demo-42/flows/main/nodes/node-a',
+      'https://studio.example.com/api/projects/project-42/flows/main/nodes/node-a',
     );
   });
 });
@@ -371,7 +371,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ packs }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -387,7 +387,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ jobId: 'job-123' }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -408,7 +408,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ jobId: 'job-456' }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -427,7 +427,7 @@ describe('createRestAdapter icons (US-018)', () => {
     );
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -441,7 +441,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ removed: 'aws' }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -464,7 +464,7 @@ describe('createRestAdapter icons (US-018)', () => {
     );
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
     });
@@ -500,7 +500,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: '',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
       EventSource: FakeEventSource as unknown as typeof EventSource,
@@ -544,7 +544,7 @@ describe('createRestAdapter icons (US-018)', () => {
     const { impl } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: 'https://studio.example.com',
-      project: 'demo-42',
+      project: 'project-42',
       flow: 'main',
       fetch: impl,
       EventSource: FakeEventSource as unknown as typeof EventSource,

@@ -161,8 +161,8 @@ import '@xyflow/react/dist/style.css';
  * still hides the share menu or the detail panel).
  *
  * `storageKey` is a pass-through for future canvas-side persistence (e.g. a
- * future viewport memory). It is currently unused inside demo-canvas; the
- * studio's last-used-style namespace lives in `demo-view.tsx` via
+ * future viewport memory). It is currently unused inside seeflow-canvas; the
+ * studio's last-used-style namespace lives in `flow-view.tsx` via
  * `DEFAULT_STORAGE_PREFIX` and is unaffected by this prop.
  */
 export interface CanvasFeatureOverrides {
@@ -273,7 +273,7 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
  * US-027: resolve the effective flag set by layering the caller's overrides
  * over {@link EDIT_DEFAULTS}. Pure so it's trivially unit-testable. The
  * function does NOT inspect any SeeflowCanvas prop other than the override
- * fields — keeping the contract narrow lets demo-canvas pass exactly the slice
+ * fields — keeping the contract narrow lets seeflow-canvas pass exactly the slice
  * it needs and makes the helper safe to import standalone.
  */
 export function resolveFlags(
@@ -302,7 +302,7 @@ export function resolveFlags(
 }
 
 /**
- * US-027: every demo-canvas prop OTHER than `adapter`. Extracted so the props
+ * US-027: every seeflow-canvas prop OTHER than `adapter`. Extracted so the props
  * type below can attach the adapter requirement without duplicating ~50 prop
  * definitions.
  */
@@ -655,7 +655,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     },
   ) => void;
   /**
-   * Reorder a node within demo.nodes[]. Wiring this enables the right-click
+   * Reorder a node within flow.nodes[]. Wiring this enables the right-click
    * context-menu z-order actions (Bring to front, Bring forward, Send backward,
    * Send to back). The parent owns the optimistic + persistence wiring; the
    * canvas just translates the menu pick into this callback.
@@ -730,8 +730,8 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   onRfInit?: (instance: ReactFlowInstance) => void;
   /**
    * Run the auto-layout (Tidy) action against the canvas (US-026). When
-   * omitted, the toolbar's Tidy button renders disabled (no demo loaded).
-   * Scope is decided by the caller (selection-aware in `demo-view`).
+   * omitted, the toolbar's Tidy button renders disabled (no flow loaded).
+   * Scope is decided by the caller (selection-aware in `flow-view`).
    */
   onTidy?: () => void;
   /**
@@ -778,7 +778,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * US-013/015 (icon picker): controlled-open state for the toolbar's Insert
    * icon popover. Wired through to `<CanvasToolbar>` unchanged. The parent
-   * (demo-view) owns the state slice + pick handler so the detail panel,
+   * (flow-view) owns the state slice + pick handler so the detail panel,
    * the right-click "Change icon" menu item (US-003) can all dispatch into
    * the same picker.
    */
@@ -822,7 +822,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   onUnpinEndpoint?: (connectorId: string, kind: 'source' | 'target') => void;
   /**
    * Canvas interaction mode, lifted to the parent so the page-level keyboard
-   * handler (`resolveToolShortcut` in demo-view.tsx) and the command palette
+   * handler (`resolveToolShortcut` in flow-view.tsx) and the command palette
    * can drive tool switches without the canvas owning the state. Controls
    * Select/Hand/Draw tool state. Modes: `select` (neutral default;
    * click/marquee selects, pane-drag pans), `hand` (locks node interaction;
@@ -885,7 +885,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   autoFitViewSignal?: number;
   /**
    * US-004: host-registered custom icon components reachable by name from
-   * JSON-defined demos. The map is exposed to every <Icon> descendant via
+   * JSON-defined flows. The map is exposed to every <Icon> descendant via
    * {@link IconRegistryProvider}; resolution order inside <Icon> is
    * `as` prop → this map → built-in {@link ICON_REGISTRY} → fallback. Absent
    * → only built-in lucide icons resolve.
@@ -1532,7 +1532,7 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
     );
     const data = reconnectingEdge?.data as EditableEdgeData | undefined;
     // New-connection preview: the committed connector inherits the host's
-    // last-used connector style — demo-view's onCreateConnector spreads the
+    // last-used connector style — flow-view's onCreateConnector spreads the
     // SAME `getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector` over every new
     // connector. Read it here so the in-flight preview renders the SAME path
     // type (curve vs step), stroke color, dash, width, and arrow ends the
@@ -2014,7 +2014,7 @@ const isEditableTarget = (el: Element | null): boolean => {
 /**
  * US-022: Cmd/Ctrl + C and Cmd/Ctrl + V keyboard handler. Pure function that
  * consumes a KeyboardEvent-shape, decides on a copy / paste action, and
- * dispatches to the provided callbacks. Exported so demo-canvas.test.tsx can
+ * dispatches to the provided callbacks. Exported so seeflow-canvas.test.tsx can
  * drive the gesture without a real DOM, and the production wiring is a thin
  * `useEffect` whose body forwards into this helper. Returns `true` when the
  * event was handled (preventDefault called + a callback fired), `false` for
@@ -2292,7 +2292,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // US-006: handle to the React Flow store (registered by <StoreApiBridge>).
   // Used to call `cancelConnection` when ESC cancels an in-flight connection.
   const storeApiRef = useRef<StoreApi | null>(null);
-  // Canvas mode is owned by the parent (demo-view.tsx) so the page-level
+  // Canvas mode is owned by the parent (flow-view.tsx) so the page-level
   // keyboard handler and command palette can drive tool switches. Derive the
   // legacy `drawShape` view (the armed shape, or null when not drawing) so
   // existing gesture/cursor code keeps reading the same value. `handMode` is
@@ -2317,7 +2317,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
   // US-018: per-edge imperative handle map. Each EditableEdge registers its
-  // `enter inline-edit` callback on mount; demo-canvas calls the registered
+  // `enter inline-edit` callback on mount; seeflow-canvas calls the registered
   // handle from onEdgeDoubleClick so a double-click anywhere on the edge body
   // (not just the label button) opens the inline editor. Map (not React
   // state) so registering/unregistering doesn't churn re-renders.
@@ -2384,10 +2384,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     /** Source node id for the connector wired into the new node. */
     sourceNodeId: string;
   } | null>(null);
-  // US-013/015 (icon picker): the state slice + pick handlers live in demo-view
+  // US-013/015 (icon picker): the state slice + pick handlers live in flow-view
   // so the detail panel's "Change icon…" button (US-015) and the type:'icon'
   // double-click (US-016) can dispatch openIconPicker('replace', nodeId)
-  // without going through this component. demo-canvas is a transparent
+  // without going through this component. seeflow-canvas is a transparent
   // pass-through for the toolbar's controlled-open chrome only.
   // Mirror into a ref so cross-handler closures (ESC chain, viewport-change
   // dismissal) read the live value without re-binding.
@@ -2478,7 +2478,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const id = nodeEl?.getAttribute('data-id') ?? null;
       // The source node should not also be highlighted as a target — dropping
       // back on the source is rejected by both onConnect (same-node guard at
-      // demo-canvas:1241) and the body-drop fallback (lines 1307, 1452, 1465),
+      // seeflow-canvas:1241) and the body-drop fallback (lines 1307, 1452, 1465),
       // so showing it as a candidate would mislead the user.
       if (id && id === connectSourceNodeIdRef.current) {
         setConnectTarget(null);
@@ -5396,7 +5396,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // CanvasAdapter doesn't expose its bound flowId on the type, so we route via
   // the existing `projectId` prop (which the studio already passes — identical
   // value, no new wiring at the host).
-  const sidebarDemoId = projectId ?? null;
+  const sidebarFlowId = projectId ?? null;
   const sidebarEnabled = flags.showDetailPanel && !disableSidebar;
   // Keep DetailPanel mounted while the sidebar feature is enabled and let
   // its `open` prop drive the Radix Sheet's slide-in / slide-out animation.
@@ -6296,7 +6296,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             </div>
             {shouldRenderSidebar ? (
               <DetailPanel
-                flowId={sidebarDemoId}
+                flowId={sidebarFlowId}
                 node={sidebarNode}
                 connector={null}
                 adapter={adapter}

@@ -28,9 +28,9 @@ export type IconNodeRuntimeData = IconNodeData & {
   /** US-005: alignment-guide integration injected by the canvas in edit mode. */
   resizeAlignment?: ResizeAlignmentHooks;
   // Persist the inline-edited name (PATCH /nodes/:id { name }).
-  // Mirrors the shape-node name-edit path; demo-view's onNodeNameChange
+  // Mirrors the shape-node name-edit path; flow-view's onNodeNameChange
   // pushes a single coalesced undo entry per edit session (500ms window).
-  // Absent → dblclick is a no-op (the no-demo / readonly contexts where
+  // Absent → dblclick is a no-op (the no-flow / readonly contexts where
   // name edits aren't wired).
   onNameChange?: (nodeId: string, name: string) => void;
 } & Record<string, unknown>;

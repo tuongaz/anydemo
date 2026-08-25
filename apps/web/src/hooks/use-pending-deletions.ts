@@ -17,7 +17,7 @@ export interface PendingDeletions {
    * has (delete still in flight, suppression still needed).
    */
   pruneAgainst: (items: readonly { id: string }[]) => void;
-  /** Clear every pending deletion (used when switching demos). */
+  /** Clear every pending deletion (used when switching flows). */
   reset: () => void;
 }
 

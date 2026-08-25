@@ -10,7 +10,7 @@ import { createApp } from './server.ts';
 
 const CLI_PATH = join(dirname(fileURLToPath(import.meta.url)), 'cli.ts');
 
-const VALID_DEMO = {
+const VALID_FLOW = {
   version: 2,
   name: 'Checkout',
   nodes: [
@@ -182,7 +182,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:get returns the flow keyed by --project + --flow', async () => {
     const studio = startTestStudio();
     try {
-      const { projectSlug } = seedProject(studio, 'demo-get', 'Demo Get', [
+      const { projectSlug } = seedProject(studio, 'flow-get', 'Flow Get', [
         { id: 'main', name: 'Main' },
       ]);
 
@@ -323,7 +323,7 @@ describe('seeflow CLI new subcommands', () => {
     try {
       const tmpDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-validate-'));
       const goodFile = join(tmpDir, 'good.json');
-      writeFileSync(goodFile, JSON.stringify(VALID_DEMO));
+      writeFileSync(goodFile, JSON.stringify(VALID_FLOW));
 
       const ok = await runCli(['validate', '--no-start', '--file', goodFile], studio.env);
       expect(ok.code).toBe(0);
@@ -389,10 +389,10 @@ describe('seeflow CLI new subcommands', () => {
       writeFileSync(
         join(repoPath, 'flows', 'main', 'flow.json'),
         JSON.stringify({
-          ...VALID_DEMO,
-          description: 'demo',
+          ...VALID_FLOW,
+          description: 'flow',
           nodes: [
-            ...VALID_DEMO.nodes,
+            ...VALID_FLOW.nodes,
             {
               id: 'shape-1',
               type: 'rectangle',
@@ -412,7 +412,7 @@ describe('seeflow CLI new subcommands', () => {
         description: string;
         nodes: Array<{ id: string; data: Record<string, unknown> }>;
       };
-      expect(parsed.description).toBe('demo');
+      expect(parsed.description).toBe('flow');
       const shape = parsed.nodes.find((n) => n.id === 'shape-1');
       expect(shape?.data.detail).toBeUndefined();
     } finally {
@@ -862,7 +862,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:create writes the new flow on disk and registers it', async () => {
     const studio = startTestStudio();
     try {
-      const { repoPath, projectSlug } = seedProject(studio, 'demo-create', 'Demo Create', [
+      const { repoPath, projectSlug } = seedProject(studio, 'flow-create', 'Flow Create', [
         { id: 'main', name: 'Main' },
       ]);
 
@@ -922,7 +922,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:rename updates the manifest name without touching the folder', async () => {
     const studio = startTestStudio();
     try {
-      const { repoPath, projectSlug } = seedProject(studio, 'demo-rename', 'Demo Rename', [
+      const { repoPath, projectSlug } = seedProject(studio, 'flow-rename', 'Flow Rename', [
         { id: 'main', name: 'Main' },
       ]);
 
@@ -963,7 +963,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:delete removes the flow folder + manifest entry + registry entry', async () => {
     const studio = startTestStudio();
     try {
-      const { repoPath, projectSlug } = seedProject(studio, 'demo-delete', 'Demo Delete', [
+      const { repoPath, projectSlug } = seedProject(studio, 'flow-delete', 'Flow Delete', [
         { id: 'main', name: 'Main' },
         { id: 'retry', name: 'Retry' },
       ]);

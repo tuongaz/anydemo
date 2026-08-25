@@ -180,4 +180,23 @@ describe('scanProject', () => {
     // will produce a stable string starting with that prefix.
     expect(result.projectSlug.startsWith('seeflow-scanner-')).toBe(true);
   });
+
+  it("keeps the manifest name when it slugifies to slugify's own fallback string", () => {
+    // 'Flow' slugifies to 'flow', which is also what slugify() returns for
+    // empty input. The basename fallback must key off the input having no
+    // alphanumerics, not off matching that string.
+    const dir = tmpProject(
+      {
+        version: 1,
+        name: 'Flow',
+        defaultFlow: 'main',
+        flows: [{ id: 'main', name: 'Main' }],
+      },
+      ['main'],
+    );
+    const result = scanProject(dir);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.projectSlug).toBe('flow');
+  });
 });

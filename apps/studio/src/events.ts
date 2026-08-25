@@ -1,6 +1,6 @@
 /**
  * In-memory pub/sub keyed by flowId. Subscribers receive every event published
- * for that demo until they unsubscribe; other demos are not notified.
+ * for that flow until they unsubscribe; other flows are not notified.
  */
 
 export type StudioEventType = 'flow:reload' | 'file:changed' | 'registry:reload';
@@ -17,11 +17,11 @@ export interface StudioEvent {
 export type Subscriber = (event: StudioEvent) => void;
 
 export interface EventBus {
-  /** Subscribe to events for a demo. Returns an unsubscribe fn. */
+  /** Subscribe to events for a flow. Returns an unsubscribe fn. */
   subscribe(flowId: string, fn: Subscriber): () => void;
   /** Broadcast an event to all subscribers of flowId. */
   broadcast(event: Omit<StudioEvent, 'ts'> & { ts?: number }): void;
-  /** Number of active subscribers for a demo (used in tests). */
+  /** Number of active subscribers for a flow (used in tests). */
   subscriberCount(flowId: string): number;
 }
 

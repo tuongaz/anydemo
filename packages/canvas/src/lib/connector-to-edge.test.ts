@@ -241,7 +241,7 @@ describe('connectorToEdge', () => {
   // US-023 regression guard: drag-direction is the canonical mapping for new
   // connectors, so a freshly-drawn connector (no explicit direction set)
   // MUST render its arrowhead on the target end. Pair this with the
-  // demo-canvas drag-direction normalization — together they guarantee the
+  // seeflow-canvas drag-direction normalization — together they guarantee the
   // arrow lands on the drop-end node, not the drag-start node.
   it('defaults a no-direction connector to markerEnd-only (US-023)', () => {
     const c: Connector = { id: 'c1', source: 'a', target: 'b' };

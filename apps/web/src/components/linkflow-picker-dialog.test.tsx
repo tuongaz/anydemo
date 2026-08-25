@@ -108,7 +108,7 @@ function findRows(tree: unknown): ReactElementLike[] {
   });
 }
 
-const DEMOS: readonly FlowSummary[] = [
+const FLOWS: readonly FlowSummary[] = [
   {
     id: 'a1',
     slug: 'order-pipeline/retry',
@@ -144,7 +144,7 @@ function renderDialog(
     open: true,
     onOpenChange: () => {},
     mode: 'link',
-    demos: DEMOS,
+    flows: FLOWS,
     onCommit: () => {},
     ...props,
   };
@@ -173,10 +173,10 @@ describe('LinkflowPickerDialog', () => {
     expect(title.props.children).toBe('Change linked flow');
   });
 
-  it('renders every demo row when query is empty', () => {
+  it('renders every flow row when query is empty', () => {
     const tree = renderDialog();
     const rows = findRows(tree);
-    expect(rows.length).toBe(DEMOS.length);
+    expect(rows.length).toBe(FLOWS.length);
   });
 
   it('filters the list to substring matches on project or flow name (case-insensitive)', () => {
@@ -243,13 +243,13 @@ describe('LinkflowPickerDialog', () => {
     // Slot 1 = selectedSlug. Expect first row's slug.
     const selCalls = setterCalls.filter((c) => c.slot === 1);
     expect(selCalls.length).toBe(1);
-    expect(selCalls[0]?.value).toBe(DEMOS[0]?.slug);
+    expect(selCalls[0]?.value).toBe(FLOWS[0]?.slug);
   });
 
   it('ArrowDown advances within the filtered list, wrapping at the end', () => {
     const setterCalls: SetterCall[] = [];
     // Seed: query empty, selectedSlug = the LAST row → ArrowDown should wrap to index 0.
-    const last = DEMOS[DEMOS.length - 1]?.slug;
+    const last = FLOWS[FLOWS.length - 1]?.slug;
     const tree = renderDialog({}, ['', last], setterCalls);
     const input = findByTestId(tree, 'linkflow-picker-search');
     if (!input) throw new Error('input missing');
@@ -265,7 +265,7 @@ describe('LinkflowPickerDialog', () => {
 
     const selCalls = setterCalls.filter((c) => c.slot === 1);
     expect(selCalls.length).toBe(1);
-    expect(selCalls[0]?.value).toBe(DEMOS[0]?.slug);
+    expect(selCalls[0]?.value).toBe(FLOWS[0]?.slug);
   });
 
   it('ArrowUp picks the last row when nothing is selected', () => {
@@ -285,7 +285,7 @@ describe('LinkflowPickerDialog', () => {
 
     const selCalls = setterCalls.filter((c) => c.slot === 1);
     expect(selCalls.length).toBe(1);
-    expect(selCalls[0]?.value).toBe(DEMOS[DEMOS.length - 1]?.slug);
+    expect(selCalls[0]?.value).toBe(FLOWS[FLOWS.length - 1]?.slug);
   });
 
   it('Enter commits the selected target and closes the dialog', () => {

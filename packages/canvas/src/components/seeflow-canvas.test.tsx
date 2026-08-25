@@ -209,7 +209,7 @@ function callSeeflowCanvas(
     connectors: [],
     selectedNodeIds: [],
     selectedConnectorIds: [],
-    // Canvas mode (Select/Hand/Draw) is lifted to demo-view; tests pass
+    // Canvas mode (Select/Hand/Draw) is lifted to flow-view; tests pass
     // `canvasMode` directly. Defaults keep the canvas in Select-mode so legacy
     // tests see the same behavior they did when drawShape was internal state.
     canvasMode: { kind: 'select' },
@@ -781,7 +781,7 @@ describe('SeeflowCanvas', () => {
     // handlers and drag-to-create silently breaks.
     it('disables xyflow gesture handling on the empty pane when in draw mode', () => {
       // Draw mode is driven via the `canvasMode` prop (state lives in
-      // demo-view), so the test patches the prop directly.
+      // flow-view), so the test patches the prop directly.
       const tree = callSeeflowCanvas({ canvasMode: { kind: 'draw', shape: 'rectangle' } });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
@@ -823,7 +823,7 @@ describe('SeeflowCanvas', () => {
 
     // Index-coupled ref capture so the test can pre-set drawShapeRef /
     // rfInstanceRef and observe drawing/start/current refs after the gesture.
-    // Indices correspond to useRef() call order in demo-canvas.tsx — if a new
+    // Indices correspond to useRef() call order in seeflow-canvas.tsx — if a new
     // useRef is added above any of these, the indices shift and this test
     // fails loudly with a clear "ref index drifted" assertion below.
     const REF = {
@@ -884,7 +884,7 @@ describe('SeeflowCanvas', () => {
       const tree = callSeeflowCanvas(
         { onCreateShapeNode, canvasMode: { kind: 'draw', shape: 'rectangle' } },
         {
-          // US-003: drawShape state lives in demo-view now, so we pass
+          // US-003: drawShape state lives in flow-view now, so we pass
           // `activeShape` via props. The gesture handler reads
           // `drawShapeRef` (a separate ref slot we mutate below) since the
           // handler doesn't depend on the state value directly.
@@ -1698,7 +1698,7 @@ describe('SeeflowCanvas', () => {
     // illustrative-shape visuals. The wrapper itself stays chrome-less
     // (shapeChromeStyle('database') already returns {} per US-009 / AC #4).
     //
-    // useState slot order (activeGroupId removed, US-003 lifted drawShape out of demo-canvas):
+    // useState slot order (activeGroupId removed, US-003 lifted drawShape out of seeflow-canvas):
     //   slot 2 = drawStart   slot 3 = drawCurrent
     // ghostRect is computed from drawStart + drawCurrent so both must be set
     // for the ghost JSX branch to render. activeShape comes in via props.
@@ -2780,7 +2780,7 @@ describe('SeeflowCanvas', () => {
 
     it('clicking Fit View calls fitView with padding 0.15, duration 300, includeHiddenNodes: false', () => {
       // The ControlButton closes over rfInstanceRef.current via the
-      // demo-canvas useCallback. We patch the ref directly via refSink to
+      // seeflow-canvas useCallback. We patch the ref directly via refSink to
       // capture the fitView args without needing a real ReactFlowInstance.
       const refSink: { current: unknown }[] = [];
       const fitViewCalls: unknown[] = [];
@@ -4124,7 +4124,7 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
   it('threads the exportApi callbacks into ShareMenu', () => {
     const tree = callSeeflowCanvas({
       adapter: noopAdapter,
-      projectId: 'demo-42',
+      projectId: 'project-42',
     });
     const menu = findShareMenu(tree);
     expect(menu).not.toBeNull();
@@ -4430,7 +4430,7 @@ describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
     data: { name: id, width: 160, height: 80 },
   });
 
-  // grouping-demo geometry: grp-1 box at (108,80); members node-a (120,120),
+  // grouping-flow geometry: grp-1 box at (108,80); members node-a (120,120),
   // node-b (380,120). Disambiguates equal x/y so a wrong delta is visible.
   const grp = () => makeGroup('grp-1', ['node-a', 'node-b'], { x: 108, y: 80 });
   const nodeA = () => makeMember('node-a', { x: 120, y: 120 });
@@ -4618,7 +4618,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     position: { x, y: 120 },
     data: { name: id, width: 160, height: 80 },
   });
-  // grouping-demo geometry: grp-1 box at (108,80); members node-a (120,120),
+  // grouping-flow geometry: grp-1 box at (108,80); members node-a (120,120),
   // node-b (340,120); a loose 'outsider' that is NOT a member.
   const grp = () => makeGroup('grp-1', ['node-a', 'node-b']);
   const nodeA = () => makeMember('node-a', 120);

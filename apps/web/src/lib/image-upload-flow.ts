@@ -9,7 +9,7 @@ import {
 
 /**
  * US-008: pure orchestration for the OS-image-drop upload flow. Sits between
- * demo-view's optimistic-override state and the upload + createNode API
+ * flow-view's optimistic-override state and the upload + createNode API
  * surface. Extracted into its own module so it can be unit-tested without
  * spinning up the React tree.
  *
@@ -25,7 +25,7 @@ import {
  *       node on the canvas for the user to retry. NEVER auto-delete.
  *
  * The exported function returns a Promise that resolves once the persisted
- * createNode succeeds, or rejects on upload/createNode error. demo-view's
+ * createNode succeeds, or rejects on upload/createNode error. flow-view's
  * caller ignores rejections in practice (the error UX is the retry
  * placeholder), but tests use the promise to await the full chain.
  */
