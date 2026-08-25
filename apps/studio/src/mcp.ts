@@ -296,10 +296,11 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       "node variant; name='action', subname='componentAction' → just the " +
       'componentAction shape). Use this to learn what a node, connector, action, ' +
       'component spec, or flow envelope looks like before authoring writes. ' +
-      'Categories: `flow`, `node` (16 flat variants — rectangle/ellipse/sticky/text/' +
-      'database/server/user/queue/cloud/diamond/hexagon/image/html/icon/component/' +
-      'linkflow; the linkflow variant carries an optional `target: { project, flow }` ' +
-      'slug pair that turns the node into a clickable cross-flow link), ' +
+      'Categories: `flow`, `node` (19 flat variants — rectangle/ellipse/sticky/text/' +
+      'database/server/user/queue/cloud/diamond/hexagon/triangle/parallelogram/' +
+      'document/image/html/icon/component/linkflow; the linkflow variant carries ' +
+      'an optional `target: { project, flow }` slug pair that turns the node into ' +
+      'a clickable cross-flow link), ' +
       '`connector`, `action` (componentAction), `componentSpec` (sidecar shape ' +
       "for type:'component' nodes), `style`.",
     inputSchema: {
@@ -314,9 +315,10 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           description:
             'Optional named schema within the category (requires `name`). For ' +
             "name='node': rectangle, ellipse, sticky, text, database, server, " +
-            'user, queue, cloud, diamond, hexagon, image, html, icon, component, ' +
-            "linkflow. For name='action': componentAction. For " +
-            "name='componentSpec': componentSpec, componentSpecElement.",
+            'user, queue, cloud, diamond, hexagon, triangle, parallelogram, ' +
+            'document, image, html, icon, component, linkflow. For ' +
+            "name='action': componentAction. For name='componentSpec': " +
+            'componentSpec, componentSpecElement.',
         },
       },
       additionalProperties: false,
@@ -653,7 +655,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   {
     name: 'seeflow_add_node',
     description:
-      "Append a new node to a flow (cascade-safe; id auto-generated when omitted). Pick `type` from one of the 16 flat variants — see seeflow_schema with name='node' for every shape. Text content fields (detail on every node; html on type:'html') are auto-externalized to <project>/nodes/<id>/ and stored as file:// refs in flow.json; reads inline the resolved content transparently. type:'linkflow' nodes accept an optional `data.target: { project, flow }` slug pair pointing at any registered flow (target is optional — omit it for a freshly-dropped link node and patch it in later).",
+      "Append a new node to a flow (cascade-safe; id auto-generated when omitted). Pick `type` from one of the 23 flat variants — seeflow_schema with name='node' publishes the 19 hand-authorable shapes (freehand / line / group / table are drawn in the studio). Text content fields (detail on every node; html on type:'html') are auto-externalized to <project>/nodes/<id>/ and stored as file:// refs in flow.json; reads inline the resolved content transparently. type:'linkflow' nodes accept an optional `data.target: { project, flow }` slug pair pointing at any registered flow (target is optional — omit it for a freshly-dropped link node and patch it in later).",
     inputSchema: inputSchemaFromZod(AddNodeInputSchema),
     handler: async (args) => {
       const parsed = AddNodeInputSchema.safeParse(args);

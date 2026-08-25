@@ -308,10 +308,9 @@ describe('integration: MCP — read-only tools', () => {
   });
 
   it('validate_seeflow returns { ok: true } for a minimal valid flow', async () => {
-    // The MCP tool wraps validateImpl directly (NOT the REST `/api/flows/validate`
-    // route — that one wraps it with its own `stats` + `warnings` envelope). On
-    // a clean parse validateImpl returns just `{ ok: true }`; on failure it
-    // returns `{ ok: false, issues: [...] }`.
+    // The MCP tool calls validateImpl directly rather than going through any
+    // HTTP route. On a clean parse validateImpl returns just `{ ok: true }`; on
+    // failure it returns `{ ok: false, issues: [...] }`.
     const flow = {
       version: 2,
       name: uniqueFlowId('mcp-validate'),

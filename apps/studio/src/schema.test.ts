@@ -19,23 +19,6 @@ const readFixture = async (name: string): Promise<unknown> =>
   await Bun.file(fixturePath(name)).json();
 
 describe('ResolvedFlowSchema', () => {
-  it('parses a valid demo fixture', async () => {
-    const data = await readFixture('valid-demo.json');
-    const result = ResolvedFlowSchema.safeParse(data);
-    if (!result.success) {
-      throw new Error(
-        `expected valid fixture to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`,
-      );
-    }
-    expect(result.data.version).toBe(2);
-    expect(result.data.name).toBe('Checkout flow');
-    expect(result.data.nodes).toHaveLength(2);
-    expect(result.data.connectors).toHaveLength(1);
-    const connector = result.data.connectors[0];
-    expect(connector?.eventName).toBe('checkout.created');
-    expect(connector?.label).toBe('publishes checkout.created');
-  });
-
   it('rejects an invalid demo fixture with a usable Zod error', async () => {
     const data = await readFixture('invalid-demo.json');
     const result = ResolvedFlowSchema.safeParse(data);
@@ -1377,25 +1360,6 @@ describe('ResolvedFlowSchema', () => {
     expect(serialized).toEqual(raw);
   });
 
-  it('treats data.handlerModule as optional and reserved (no runtime use yet)', () => {
-    const baseData = {
-      name: 'worker',
-    };
-    const baseDemo = (data: Record<string, unknown>) => ({
-      version: 2 as const,
-      name: 'minimal',
-      nodes: [{ id: 'n1', type: 'rectangle' as const, position: { x: 0, y: 0 }, data }],
-      connectors: [],
-    });
-
-    expect(ResolvedFlowSchema.safeParse(baseDemo(baseData)).success).toBe(true);
-    expect(
-      ResolvedFlowSchema.safeParse(
-        baseDemo({ ...baseData, handlerModule: 'src/workers/fulfillment.ts' }),
-      ).success,
-    ).toBe(true);
-  });
-
   // Three-field consolidation: every node variant exposes optional
   // `description` (short body text) and `detail` (long-form sidebar text)
   // alongside `name`. Both string-typed, both optional, both no length cap.
@@ -2131,12 +2095,12 @@ describe('flow description field', () => {
   });
 });
 
-// US-009: flat-node-types refactor — coverage that pins the 14-tag discriminator
-// surface, the per-type required fields, and the capability-on-every-type
-// invariant at the schema level. The flat schema's central claim is that
-// `handlerModule` is independent of `type` — these tests fence that claim
-// against drift.
-describe('US-009: flat node types — 17-tag matrix + capability invariants', () => {
+// US-009: flat-node-types refactor — coverage that pins the discriminator
+// surface, the per-type required fields, and the shared-semantic-base
+// invariant at the schema level. The flat schema's central claim is that the
+// fields on NodeSemanticBaseShape are independent of `type` — these tests
+// fence that claim against drift.
+describe('US-009: flat node types — 17-tag matrix + shared-field invariants', () => {
   const ALL_TYPES = [
     'rectangle',
     'ellipse',
@@ -2186,7 +2150,7 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
     }
   });
 
-  it('rejects an unknown type tag (only the 19 flat tags are valid)', () => {
+  it('rejects an unknown type tag (only the 23 flat tags are valid)', () => {
     const demo = {
       version: 2 as const,
       name: 'unknown-type',
@@ -2302,14 +2266,14 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
     expect(FlowSchema.safeParse(flow).success).toBe(false);
   });
 
-  // Core schema-level claim of the flat-types refactor: the `handlerModule`
-  // capability is independent of `type` and accepted on every variant.
-  it('every one of the 14 type tags accepts handlerModule in data', () => {
+  // Core schema-level claim of the flat-types refactor: the shared semantic
+  // base is independent of `type` and accepted on every variant.
+  it('every one of the 17 type tags accepts detail in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
         version: 2 as const,
-        name: `handler-${type}`,
+        name: `detail-${type}`,
         nodes: [
           {
             id,
@@ -2317,7 +2281,7 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
             position: { x: 0, y: 0 },
             data: {
               ...minimalData(type, id),
-              handlerModule: `${type}-handler`,
+              detail: `${type}-detail`,
             },
           },
         ],
@@ -2326,22 +2290,22 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
       const result = ResolvedFlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with detail to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
       const node = result.data.nodes[0];
       if (node?.type !== type) throw new Error(`expected ${type}`);
-      expect((node.data as { handlerModule?: unknown }).handlerModule).toBe(`${type}-handler`);
+      expect((node.data as { detail?: unknown }).detail).toBe(`${type}-detail`);
     }
   });
 
-  // FlowSchema (disk-side) variant of the capability-on-every-type claim —
+  // FlowSchema (disk-side) variant of the shared-base-on-every-type claim —
   // since the disk-side data schemas are `.strict()`, this is a stronger
-  // assertion than the ResolvedFlowSchema variant above: the capability field
+  // assertion than the ResolvedFlowSchema variant above: the semantic field
   // is explicitly enumerated in each variant's allowed-keys set.
-  it('FlowSchema accepts handlerModule on every one of the 14 types', () => {
+  it('FlowSchema accepts detail on every one of the 17 types', () => {
     const minimalFlowData = (type: (typeof ALL_TYPES)[number], id: string) => {
-      const base = { handlerModule: `${type}-handler` };
+      const base = { detail: `${type}-detail` };
       if (type === 'image') return { ...base, path: `nodes/${id}/pixel.png` };
       if (type === 'icon') return { ...base, icon: 'shopping-cart' };
       return base;
@@ -2351,14 +2315,14 @@ describe('US-009: flat node types — 17-tag matrix + capability invariants', ()
       const id = `n-${type}`;
       const flow = {
         version: 2 as const,
-        name: `caps-${type}`,
+        name: `detail-${type}`,
         nodes: [{ id, type, data: minimalFlowData(type, id) }],
         connectors: [],
       };
       const result = FlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with detail to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
     }
@@ -2673,7 +2637,7 @@ describe('canvas ↔ disk schema parity', () => {
     if (offenders.length > 0) {
       const list = offenders.map((f) => `'${f}'`).join(', ');
       throw new Error(
-        `Canvas field(s) ${list} are neither in the disk schema (FlowGeometricNodeData) nor in STRIPPED_VISUAL_FIELDS. Add to apps/studio/src/schema.ts (NodeCapabilitiesShape / NodeSemanticBaseShape) to persist, or to STRIPPED_VISUAL_FIELDS in this test if it is a visual stripped into style.json.`,
+        `Canvas field(s) ${list} are neither in the disk schema (FlowGeometricNodeData) nor in STRIPPED_VISUAL_FIELDS. Add to apps/studio/src/schema.ts (NodeSemanticBaseShape) to persist, or to STRIPPED_VISUAL_FIELDS in this test if it is a visual stripped into style.json.`,
       );
     }
   });

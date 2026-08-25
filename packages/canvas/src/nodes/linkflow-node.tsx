@@ -11,8 +11,8 @@ import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gestur
 
 /**
  * Runtime data carried on a linkflow node. The on-disk shape is
- * `LinkflowNodeData` (semantic + visual base + capabilities + optional
- * target). The host injects extra fields at mount:
+ * `LinkflowNodeData` (semantic + visual base + optional target). The host
+ * injects extra fields at mount:
  *
  *  - `_resolvedTarget` — what the host's resolver (see US-008 — useDemos
  *    lookup in apps/web) found for `data.target`. `undefined` means

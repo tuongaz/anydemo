@@ -42,7 +42,6 @@ export function mergeFlowAndStyle(flow: Flow, style: Style): ResolvedFlow {
 // the visual kind into `node.type` itself (no more nested data.shape / data.kind).
 const NODE_DATA_FLOW_KEYS = new Set([
   'name',
-  'handlerModule',
   'icon',
   'description',
   'detail',

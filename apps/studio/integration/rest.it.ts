@@ -47,13 +47,6 @@ interface RegisterResponse {
   slug: string;
 }
 
-interface ValidateReport {
-  ok: boolean;
-  stats: { tier: string; nodeCount: number; connectorCount: number };
-  issues: Array<{ kind: string; path?: string; message: string }>;
-  warnings: Array<{ kind: string; path?: string; message: string }>;
-}
-
 interface OnDiskFlow {
   version: number;
   name: string;
@@ -331,30 +324,6 @@ describe('integration: REST — flow lifecycle', () => {
       // Side effect: it's now listed by GET /api/flows.
       const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
       expect(list.find((f) => f.id === body.id)).toBeDefined();
-    });
-  });
-
-  describe('POST /api/flows/validate', () => {
-    // PRD listed `/api/flows/:id/validate`; the real route is `/api/flows/validate`
-    // and the body is `{ demo, tier? }` per ValidateRequestSchema in diagram.ts.
-    it('accepts a valid demo and returns ok: true with no issues', async () => {
-      const demo = {
-        version: 2,
-        name: uniqueFlowId('validate-demo'),
-        nodes: [],
-        connectors: [],
-      };
-      const res = await fetch(`${studio.baseURL}/api/flows/validate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ demo }),
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as ValidateReport;
-      expect(body.ok).toBe(true);
-      expect(body.issues).toEqual([]);
-      expect(body.stats.nodeCount).toBe(0);
-      expect(body.stats.connectorCount).toBe(0);
     });
   });
 

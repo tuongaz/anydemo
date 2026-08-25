@@ -257,7 +257,6 @@ const GEOMETRIC_SEMANTIC_KEYS: ReadonlySet<string> = new Set([
   'description',
   'detail',
   'icon',
-  'handlerModule',
 ]);
 
 const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<string>> = {
@@ -275,28 +274,28 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   triangle: GEOMETRIC_SEMANTIC_KEYS,
   parallelogram: GEOMETRIC_SEMANTIC_KEYS,
   document: GEOMETRIC_SEMANTIC_KEYS,
-  image: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'path', 'alt']),
-  html: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'html']),
-  icon: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'alt']),
+  image: new Set(['name', 'description', 'detail', 'icon', 'path', 'alt']),
+  html: new Set(['name', 'description', 'detail', 'icon', 'html']),
+  icon: new Set(['name', 'description', 'detail', 'icon', 'alt']),
   // Component nodes externalize `spec` to <project>/nodes/<id>/spec.json; the
-  // semantic-key set covers only the universal capability fields so retype
-  // never drags `spec` through `data`. (US-007 wires the sidecar writer.)
+  // semantic-key set covers only the universal semantic fields so retype
+  // never drags `spec` through `data`.
   component: GEOMETRIC_SEMANTIC_KEYS,
   // Linkflow nodes carry an optional `target` slug pair pointing at another
   // flow. Retype preserves it alongside the universal semantic keys; the
   // post-merge ResolvedFlowSchema reparse drops it when retyping AWAY from
   // linkflow.
-  linkflow: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'target']),
+  linkflow: new Set(['name', 'description', 'detail', 'icon', 'target']),
   // Freehand nodes carry the normalized `points` array in flow.json data;
   // color/strokeWidth are visual keys (NODE_VISUAL_KEYS) routed to style.json.
-  freehand: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'points']),
+  freehand: new Set(['name', 'description', 'detail', 'icon', 'points']),
   // Line nodes carry the two normalized endpoint `points` in flow.json data;
   // stroke colour/width/style are visual keys routed to style.json.
-  line: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'points']),
+  line: new Set(['name', 'description', 'detail', 'icon', 'points']),
   // Group nodes carry the semantic `childIds` membership list (flow.json) plus
   // the universal semantic keys. Visual keys (background/border/cornerRadius)
   // are NODE_VISUAL_KEYS routed to style.json, preserved across a retype.
-  group: new Set(['name', 'description', 'detail', 'icon', 'handlerModule', 'childIds']),
+  group: new Set(['name', 'description', 'detail', 'icon', 'childIds']),
   // Table nodes carry their whole structure (columns/rows/cells + headerRow) in
   // flow.json — sizing co-locates with structure (no width side-table). Generic
   // border/font/colors are NODE_VISUAL_KEYS routed to style.json.
@@ -305,7 +304,6 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
     'description',
     'detail',
     'icon',
-    'handlerModule',
     'columns',
     'rows',
     'cells',
@@ -435,11 +433,6 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
 export interface OperationsDeps {
   registry: Registry;
   watcher?: FlowWatcher;
-  /** Tenant-scoped studio home for default project scaffolding. When omitted,
-   *  falls back to the process-wide `seeflowHome()` (single-tenant local
-   *  studio). The cloud passes `seeflowHome(tenantId)` so a UI-created project's
-   *  files land in the caller's per-user tree, not the shared root. */
-  home?: string;
 }
 
 export interface FlowListItem {
@@ -1327,7 +1320,7 @@ export async function createProjectImpl(
   const folderPath =
     body.path && body.path.trim().length > 0
       ? body.path
-      : join(deps.home ?? seeflowHome(), 'projects', slugify(name));
+      : join(seeflowHome(), 'projects', slugify(name));
 
   // Manifest-driven layout (US-018): a project is the seeflow.json manifest
   // plus one flow folder under flows/<id>/. The default flow id for a

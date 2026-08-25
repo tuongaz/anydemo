@@ -67,32 +67,3 @@ describe('createEventBus', () => {
     expect(bSawIt).toBe(true);
   });
 });
-
-describe('event bus tenancy', () => {
-  it('keeps subscribers without a tenant id working (back-compat)', () => {
-    const bus = createEventBus();
-    const seen: string[] = [];
-    bus.subscribe('flow-1', (e) => seen.push(e.type));
-    bus.broadcast({ type: 'flow:reload', flowId: 'flow-1', payload: {} });
-    expect(seen).toEqual(['flow:reload']);
-  });
-
-  it('does not deliver across tenants for the same flowId', () => {
-    const bus = createEventBus();
-    const a: string[] = [];
-    const b: string[] = [];
-    bus.subscribe('flow-1', (e) => a.push(e.type), 'tenant-a');
-    bus.subscribe('flow-1', (e) => b.push(e.type), 'tenant-b');
-    bus.broadcast({ type: 'flow:reload', flowId: 'flow-1', payload: {}, tenantId: 'tenant-a' });
-    expect(a).toEqual(['flow:reload']);
-    expect(b).toEqual([]);
-  });
-
-  it('counts subscribers per (tenantId, flowId)', () => {
-    const bus = createEventBus();
-    bus.subscribe('flow-1', () => {}, 'tenant-a');
-    expect(bus.subscriberCount('flow-1', 'tenant-a')).toBe(1);
-    expect(bus.subscriberCount('flow-1', 'tenant-b')).toBe(0);
-    expect(bus.subscriberCount('flow-1')).toBe(0);
-  });
-});

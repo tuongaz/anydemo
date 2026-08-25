@@ -600,7 +600,7 @@ describe('seeflow CLI new subcommands', () => {
       // jqHints.dataFields tells the agent which data.<field>s exist on the
       // variant so they can `--jq` straight to the one they care about.
       expect(parsed.jqHints.dataFields).toEqual(
-        expect.arrayContaining(['name', 'description', 'detail', 'handlerModule']),
+        expect.arrayContaining(['name', 'description', 'detail', 'icon']),
       );
       // jqHints.examples must include at least one ready-to-paste data-field path.
       expect(

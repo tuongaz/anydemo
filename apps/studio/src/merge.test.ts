@@ -137,20 +137,13 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
   // The full geometric-semantic key set from operations.ts. Every geometric
   // variant accepts all of these via GeometricNodeData. After a retype
   // between two geometric tags, every key must survive.
-  const GEOMETRIC_SEMANTIC_KEYS = [
-    'name',
-    'description',
-    'detail',
-    'icon',
-    'handlerModule',
-  ] as const;
+  const GEOMETRIC_SEMANTIC_KEYS = ['name', 'description', 'detail', 'icon'] as const;
 
   const fullSemanticData = {
     name: 'a',
     description: 'b',
     detail: 'c',
     icon: 'database',
-    handlerModule: 'src/h.ts',
   };
 
   it('rectangle → database preserves every GEOMETRIC_SEMANTIC_KEYS field', () => {
@@ -167,7 +160,7 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
     }
     expect(data.name).toBe('a');
     expect(data.icon).toBe('database');
-    expect(data.handlerModule).toBe('src/h.ts');
+    expect(data.description).toBe('b');
   });
 
   it('database → ellipse preserves every GEOMETRIC_SEMANTIC_KEYS field', () => {
@@ -308,14 +301,14 @@ describe('mergeNodeUpdates retype: geometric ↔ image / html / icon strips per-
       type: 'rectangle',
       data: {
         name: 'rect',
-        handlerModule: 'src/h.ts',
+        description: 'a rectangle',
       },
     };
     mergeNodeUpdates(node, { type: 'image' });
     expect(node.type).toBe('image');
     const data = node.data as Record<string, unknown>;
     expect(data.name).toBe('rect');
-    expect(data.handlerModule).toBe('src/h.ts'); // capabilities allowed on every type
+    expect(data.description).toBe('a rectangle'); // shared semantic base, allowed on every type
     expect('path' in data).toBe(false); // not supplied — caller must add
   });
 
@@ -354,19 +347,5 @@ describe('mergeNodeUpdates retype: geometric ↔ image / html / icon strips per-
     const data = node.data as Record<string, unknown>;
     expect(data.icon).toBe('shopping-cart');
     expect(data.alt).toBe('a cart'); // alt is in image-allowed semantic set too
-  });
-
-  it('preserves capability fields across geometric → image retype', () => {
-    const node: Record<string, unknown> = {
-      id: 'n1',
-      type: 'rectangle',
-      data: {
-        name: 'r',
-        handlerModule: 'src/h.ts',
-      },
-    };
-    mergeNodeUpdates(node, { type: 'image' });
-    const data = node.data as Record<string, unknown>;
-    expect(data.handlerModule).toBe('src/h.ts');
   });
 });

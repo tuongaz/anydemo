@@ -252,7 +252,7 @@ describe('seeflow_schema', () => {
     // MCP per-subname response carries the same jqHints affordances the CLI prints —
     // dataFields enumerates `data.<field>` keys; examples include drill paths.
     expect(body.jqHints.dataFields).toEqual(
-      expect.arrayContaining(['name', 'description', 'detail', 'handlerModule']),
+      expect.arrayContaining(['name', 'description', 'detail', 'icon']),
     );
     expect(
       body.jqHints.examples.some((e) =>

@@ -13,7 +13,6 @@ import { seeflowHome } from './paths.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import type { Spawner } from './shellout.ts';
-import { createTenantResolver } from './tenancy.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
 
 /** Absolute path to the vendored runtime asset directory. Resolved relative
@@ -69,11 +68,6 @@ export interface CreateAppOptions {
   /** Override the icon installer's fetcher. Production uses fetchWithProgress
    *  (real network); integration tests inject a fixture-returning closure. */
   iconFetcher?: IconFetcher;
-  /** Host-injected per-request tenant resolver. Returns a tenant id (e.g. the
-   *  authenticated user's id) from the request context, or undefined for the
-   *  single-tenant local studio. Provider-agnostic — the studio never learns
-   *  HOW the id is produced. See src/tenancy.ts. */
-  getTenantId?: (ctx: import('hono').Context) => string | undefined;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -100,19 +94,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     ? undefined
     : (options.registryWatcher ?? createRegistryWatcher({ registry, events }));
   const iconJobs = options.iconJobs ?? createJobRegistry();
-  const tenantResolver = createTenantResolver({
-    defaultRegistry: registry,
-    defaultEvents: events,
-    defaultWatcher: watcher,
-    // Each tenant gets a watcher bound to its OWN event bus so a mutation's
-    // flow:reload echo reaches that tenant's SSE subscribers (the route
-    // subscribes on the per-tenant bus). When watching is disabled (tests),
-    // skip the factory so per-tenant contexts stay watcher-less.
-    createWatcher: options.disableWatcher
-      ? undefined
-      : (reg, ev) => createWatcher({ registry: reg, events: ev }),
-  });
-  const getTenantId = options.getTenantId;
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
     watcher.watchAll();
@@ -122,18 +103,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   }
 
   const app = new Hono();
-
-  // Per-request tenant context. With no getTenantId hook this resolves the
-  // default singletons (local studio). The cloud injects a hook returning
-  // user.sub so each request reads/writes its own tenant tree. The studio's
-  // registry/event/ops routes consume this via `tenant(c)` in api.ts, so one
-  // tenant never sees another's projects.
-  app.use('*', async (c, next) => {
-    const tenantId = getTenantId ? getTenantId(c) : undefined;
-    if (tenantId) c.set('tenantId', tenantId);
-    c.set('tenant', tenantResolver.resolve(tenantId));
-    return next();
-  });
 
   // CORS + token gate runs first so every downstream route inherits the
   // null-origin rule. No-ops on requests without an Origin header (CLI
@@ -171,13 +140,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       },
     });
   });
-
-  // Public app config consumed by the SPA's auth bootstrap. Standalone/local
-  // studio has no auth, so this default reports `required: false` and the SPA
-  // resolves to its inert NullAuthProvider. A host (e.g. the cloud deployment)
-  // mounts its own `/api/config` AHEAD of the studio to advertise an auth
-  // requirement + adapter URL; that registration wins by route order.
-  app.get('/api/config', (c) => c.json({ mode: 'local', auth: { required: false } }));
 
   app.route(
     '/api',

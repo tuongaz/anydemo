@@ -1306,16 +1306,16 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
   // reparse is what enforces required fields on the new type (e.g. type:'image'
   // needs `path`). These cases assert the mutator's contract: type flips,
   // visuals survive, lingering semantic fields not allowed on the new type get
-  // stripped. The `handlerModule` capability field is valid on every type, so a
-  // geometric→geometric retype is strip-free.
+  // stripped. The shared semantic fields (name / description / detail / icon)
+  // are valid on every type, so a geometric→geometric retype is strip-free.
 
-  it('rectangle → ellipse preserves capabilities + visuals (geometric → geometric is strip-free)', () => {
+  it('rectangle → ellipse preserves semantics + visuals (geometric → geometric is strip-free)', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'rectangle',
       data: {
         name: 'svc',
-        handlerModule: 'svc-handler',
+        description: 'svc summary',
         borderColor: 'teal',
         cornerRadius: 8,
       },
@@ -1323,12 +1323,12 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     mergeNodeUpdates(node, { type: 'ellipse' });
     expect(node.type).toBe('ellipse');
     const data = node.data as Record<string, unknown>;
-    expect(data.handlerModule).toBe('svc-handler');
+    expect(data.description).toBe('svc summary');
     expect(data.borderColor).toBe('teal');
     expect(data.cornerRadius).toBe(8);
   });
 
-  it('image → rectangle strips path + alt, keeps capabilities + visuals', () => {
+  it('image → rectangle strips path + alt, keeps semantics + visuals', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'image',
@@ -1336,7 +1336,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
         name: 'pic',
         path: 'nodes/n1/upload.png',
         alt: 'a picture',
-        handlerModule: 'pic-handler',
+        description: 'pic summary',
         borderColor: 'teal',
       },
     };
@@ -1345,17 +1345,17 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     const data = node.data as Record<string, unknown>;
     expect('path' in data).toBe(false);
     expect('alt' in data).toBe(false);
-    expect(data.handlerModule).toBe('pic-handler');
+    expect(data.description).toBe('pic summary');
     expect(data.borderColor).toBe('teal');
   });
 
-  it('rectangle → icon supplies icon via the same patch; preserves capabilities + visuals', () => {
+  it('rectangle → icon supplies icon via the same patch; preserves semantics + visuals', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'rectangle',
       data: {
         name: 'svc',
-        handlerModule: 'svc-handler',
+        description: 'svc summary',
         borderColor: 'teal',
       },
     };
@@ -1363,7 +1363,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     expect(node.type).toBe('icon');
     const data = node.data as Record<string, unknown>;
     expect(data.icon).toBe('server');
-    expect(data.handlerModule).toBe('svc-handler');
+    expect(data.description).toBe('svc summary');
     expect(data.borderColor).toBe('teal');
   });
 
@@ -1379,7 +1379,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
         name: 'pic',
         path: 'nodes/n1/upload.png',
         alt: 'a picture',
-        handlerModule: 'pic-handler',
+        description: 'pic summary',
       },
     };
     mergeNodeUpdates(node, { type: 'html' });
@@ -1387,7 +1387,7 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
     const data = node.data as Record<string, unknown>;
     expect('path' in data).toBe(false);
     expect('alt' in data).toBe(false);
-    expect(data.handlerModule).toBe('pic-handler');
+    expect(data.description).toBe('pic summary');
     expect(data.name).toBe('pic');
   });
 
@@ -1397,12 +1397,12 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'rectangle',
       data: {
         name: 'svc',
-        handlerModule: 'svc-handler',
+        description: 'svc summary',
       },
     };
     mergeNodeUpdates(node, { type: 'rectangle' });
     expect(node.type).toBe('rectangle');
-    expect((node.data as Record<string, unknown>).handlerModule).toBe('svc-handler');
+    expect((node.data as Record<string, unknown>).description).toBe('svc summary');
   });
 });
 
@@ -1413,7 +1413,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'rectangle',
       data: {
         name: 'svc',
-        handlerModule: 'svc-handler',
+        description: 'svc summary',
         detail: 'docs survive retype',
       },
     });
@@ -1464,7 +1464,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'rectangle',
       data: {
         name: 'svc',
-        handlerModule: 'svc-handler',
+        description: 'svc summary',
       },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
@@ -1478,8 +1478,8 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
     expect(node.type).toBe('icon');
     expect(node.data.icon).toBe('server');
-    // Capabilities are valid on every type, so handlerModule carries through.
-    expect(node.data.handlerModule).toBe('svc-handler');
+    // The shared semantic base is valid on every type, so it carries through.
+    expect(node.data.description).toBe('svc summary');
   });
 });
 
@@ -1573,7 +1573,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a capability field (handlerModule) on every one of the 14 types via FlowSchema', async () => {
+  it('accepts a shared semantic field (description) on every one of the 14 geometric types via FlowSchema', async () => {
     const types = [
       'rectangle',
       'ellipse',
@@ -1586,6 +1586,9 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
       'cloud',
       'diamond',
       'hexagon',
+      'triangle',
+      'parallelogram',
+      'document',
     ] as const;
     const { FlowSchema } = await import('./schema.ts');
     for (const type of types) {
@@ -1598,7 +1601,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
             type,
             data: {
               name: type,
-              handlerModule: `${type}-handler`,
+              description: `${type} summary`,
             },
           },
         ],
@@ -1607,7 +1610,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
       const result = FlowSchema.safeParse(flow);
       if (!result.success) {
         throw new Error(
-          `expected ${type} with handlerModule to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} with description to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
     }

@@ -856,7 +856,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'and `jqHints.examples` gives ready-to-paste `--jq` paths pointing at ' +
       'each one — drill straight to the field you care about without re-paying ' +
       'for the full schema.\n\n' +
-      "The `node` payload includes all 16 flat variants (including type:'component', " +
+      "The `node` payload includes all 19 flat variants (including type:'component', " +
       'whose `spec` field lives in a sidecar — drill into `componentSpec` for ' +
       "that shape — and type:'linkflow', whose optional `target: { project, flow }` " +
       'turns the node into a clickable cross-flow link). The category-level ' +
@@ -884,8 +884,8 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
         description:
           'Optional named schema within the category — e.g. for `node`: ' +
           'rectangle, ellipse, sticky, text, database, server, user, queue, ' +
-          'cloud, diamond, hexagon, image, html, icon, component, linkflow. For ' +
-          '`action`: componentAction. For ' +
+          'cloud, diamond, hexagon, triangle, parallelogram, document, image, ' +
+          'html, icon, component, linkflow. For `action`: componentAction. For ' +
           '`componentSpec`: componentSpec, componentSpecElement.',
       },
     ],

@@ -316,9 +316,9 @@ describe('schema-catalog', () => {
     it('lists every data.* key for a node variant (rectangle)', () => {
       const fields = getDataFieldNames('node', 'rectangle');
       expect(fields).not.toBeNull();
-      // Rectangle is the kitchen-sink variant — must surface the capability
-      // field and the descriptive header fields the planner sets.
-      expect(fields).toEqual(expect.arrayContaining(['name', 'detail', 'handlerModule']));
+      // Rectangle is the kitchen-sink variant — must surface the descriptive
+      // header fields the planner sets.
+      expect(fields).toEqual(expect.arrayContaining(['name', 'detail', 'icon']));
     });
 
     it('returns null for shapes / categories with no data.properties wrapper', () => {
@@ -353,7 +353,7 @@ describe('schema-catalog', () => {
       expect(hints).not.toBeNull();
       if (!hints) return;
       // dataFields must surface the per-shape data.* keys so the agent can target one.
-      expect(hints.dataFields).toEqual(expect.arrayContaining(['name', 'detail', 'handlerModule']));
+      expect(hints.dataFields).toEqual(expect.arrayContaining(['name', 'detail', 'icon']));
       // Every example path under data.properties must be addressable by .schemas.rectangle.
       for (const example of hints.examples) {
         if (example.startsWith('.schemas.')) {

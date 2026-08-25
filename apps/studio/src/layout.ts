@@ -45,9 +45,9 @@ export interface LayoutResult {
 }
 
 // Structural shape computeLayout cares about. Decoupled from the strict
-// FlowSchema so callers like assembleDemo (which carries pre-validation
-// passthrough data) can feed in their loose nodes without round-tripping
-// through Zod.
+// FlowSchema so callers holding pre-validation data (the canvas Tidy button
+// sends measured DOM sizes, not full node payloads) can feed in their loose
+// nodes without round-tripping through Zod.
 export interface LayoutNode {
   id: string;
   type: FlowNode['type'];

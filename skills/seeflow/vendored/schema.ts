@@ -153,17 +153,6 @@ const addGroupMembershipIssues = (
   });
 };
 
-// Capabilities — optional metadata valid on every node type. `handlerModule`
-// is reserved for a future skills runtime and is schema-only at v1.
-const NodeCapabilitiesShape = {
-  handlerModule: z
-    .string()
-    .optional()
-    .describe(
-      'Reserved for the v2 skills runtime. Schema-only at v1 — set by tooling; leave undefined when authoring flows by hand.',
-    ),
-};
-
 // Flow ids are URL-safe and folder-safe: lowercase alphanumerics + dashes,
 // must start with an alphanumeric character. Same pattern enforced by the
 // manifest CRUD endpoints (POST/PATCH /api/projects/:project/flows[/:flow]).
@@ -171,10 +160,11 @@ const NodeCapabilitiesShape = {
 // SeeflowManifest schemas at the bottom of the file reuse the same constant.
 export const FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/;
 
-// 19 flat node types. The first 14 are geometric/illustrative and share
-// GeometricNodeData. `image`, `html`, `icon`, `component`, `linkflow` carry
-// per-type fields. The renderer picks the SVG / chrome by `type`; the schema
-// treats them (apart from the per-type fields below) as identical.
+// 23 flat node types. The first 14 are geometric/illustrative and share
+// GeometricNodeData. `image`, `html`, `icon`, `component`, `linkflow`,
+// `freehand`, `line`, `group`, `table` carry per-type fields. The renderer
+// picks the SVG / chrome by `type`; the schema treats them (apart from the
+// per-type fields below) as identical.
 export const GEOMETRIC_NODE_TYPES = [
   'rectangle',
   'ellipse',
@@ -214,8 +204,8 @@ export const NodeTypeSchema = z.enum([
 // The 'component' node renders a json-render-driven reactive UI on the canvas.
 // `spec` is the source of truth for layout + interactivity; on disk it lives at
 // `<project>/nodes/<id>/spec.json` (the resolver inlines it into data.spec for
-// ResolvedFlowSchema). Element types and props are catalog-validated by a
-// superRefine wired in a later story.
+// ResolvedFlowSchema). Element types and props are catalog-validated by the
+// `superRefine` on ResolvedFlowSchema below.
 
 export const ComponentSpecElementSchema = z.object({
   type: z
@@ -261,7 +251,6 @@ export type ComponentSpecElement = z.infer<typeof ComponentSpecElementSchema>;
 const ResolvedGeometricNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
 });
 
 // Image node — references a file under the project root by relative path.
@@ -270,7 +259,6 @@ const ResolvedGeometricNodeData = z.object({
 const ResolvedImageNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   path: z.string().min(1).refine(isCleanRelativePath, {
     message: 'path must be a relative path under the project root (no absolute / traversal)',
   }),
@@ -286,7 +274,6 @@ const ResolvedImageNodeData = z.object({
 const ResolvedHtmlNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   html: z.string().optional(),
   autoSize: z.boolean().optional(),
 });
@@ -296,7 +283,6 @@ const ResolvedHtmlNodeData = z.object({
 const ResolvedIconNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   icon: z.string().min(1),
   color: ColorTokenSchema.optional(),
   strokeWidth: z.number().min(0.5).max(4).optional(),
@@ -310,7 +296,6 @@ const ResolvedIconNodeData = z.object({
 const ResolvedComponentNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   spec: ComponentSpecSchema,
   autoSize: z.boolean().optional(),
 });
@@ -334,7 +319,6 @@ export const LinkflowTargetSchema = z.object({
 const ResolvedLinkflowNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   target: LinkflowTargetSchema.optional(),
 });
 
@@ -344,7 +328,6 @@ const ResolvedLinkflowNodeData = z.object({
 const ResolvedFreehandNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   points: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
   color: ColorTokenSchema.optional(),
   strokeWidth: z.number().min(0.5).max(4).optional(),
@@ -357,7 +340,6 @@ const ResolvedFreehandNodeData = z.object({
 const ResolvedLineNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   points: z.array(z.tuple([z.number(), z.number()])).length(2),
 });
 
@@ -371,7 +353,6 @@ const ResolvedLineNodeData = z.object({
 const ResolvedGroupNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   childIds: z.array(z.string()).default([]),
 });
 
@@ -401,7 +382,6 @@ const TableDataShape = {
 const ResolvedTableNodeData = z.object({
   ...NodeSemanticBaseShape,
   ...NodeVisualBaseShape,
-  ...NodeCapabilitiesShape,
   ...TableDataShape,
 });
 
@@ -631,14 +611,12 @@ export type EdgePinSide = z.infer<typeof EdgePinSideSchema>;
 const FlowGeometricNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
   })
   .strict();
 
 const FlowImageNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     path: z
       .string()
       .min(1)
@@ -662,7 +640,6 @@ const FlowImageNodeData = z
 const FlowHtmlNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     html: z
       .string()
       .optional()
@@ -675,7 +652,6 @@ const FlowHtmlNodeData = z
 const FlowIconNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     icon: z
       .string()
       .min(1)
@@ -693,7 +669,6 @@ const FlowIconNodeData = z
 const FlowComponentNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     autoSize: z
       .boolean()
       .optional()
@@ -711,7 +686,6 @@ const FlowComponentNodeData = z
 const FlowLinkflowNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     target: LinkflowTargetSchema.optional().describe(
       "Slug pair { project, flow } naming the flow this node links to. Both fields are matched against /^[a-z0-9][a-z0-9-]*$/. Omitted on freshly-dropped nodes — the picker dialog patches it once the user picks a target. Cross-project links are allowed (project may differ from the host flow's project).",
     ),
@@ -723,7 +697,6 @@ const FlowLinkflowNodeData = z
 const FlowFreehandNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     points: z
       .array(z.tuple([z.number(), z.number(), z.number()]))
       .min(2)
@@ -739,7 +712,6 @@ const FlowFreehandNodeData = z
 const FlowLineNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     points: z
       .array(z.tuple([z.number(), z.number()]))
       .length(2)
@@ -758,7 +730,6 @@ const FlowLineNodeData = z
 const FlowGroupNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     childIds: z
       .array(z.string())
       .default([])
@@ -776,7 +747,6 @@ const FlowGroupNodeData = z
 const FlowTableNodeData = z
   .object({
     ...NodeSemanticBaseShape,
-    ...NodeCapabilitiesShape,
     ...TableDataShape,
   })
   .strict();
