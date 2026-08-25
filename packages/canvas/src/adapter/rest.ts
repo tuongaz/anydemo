@@ -44,12 +44,13 @@ export interface RestAdapterOptions {
   /**
    * Optional extra headers attached to every request the adapter issues. Used
    * by cross-origin embedders (e.g. the MCP App iframe in Claude Desktop) to
-   * forward a per-process auth token via `X-Seeflow-Token`. Merged into both
-   * JSON requests (`content-type` set by the adapter) and the multipart
-   * upload (where the browser sets the boundary). NOTE: EventSource (used by
-   * `icons.subscribeJob`) does NOT accept custom headers — hosts that need
-   * authenticated SSE should use a token-in-URL scheme or proxy through their
-   * own backend.
+   * forward the local studio's per-process `X-Seeflow-Token`, which the studio
+   * regenerates on each boot to scope requests to the current process. Merged
+   * into both JSON requests (`content-type` set by the adapter) and the
+   * multipart upload (where the browser sets the boundary). NOTE: EventSource
+   * (used by `icons.subscribeJob`) does NOT accept custom headers — hosts that
+   * need a token-scoped SSE stream should use a token-in-URL scheme or proxy
+   * through their own backend.
    */
   headers?: Record<string, string>;
 }

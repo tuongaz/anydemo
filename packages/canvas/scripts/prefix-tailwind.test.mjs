@@ -83,7 +83,7 @@ describe('prefixToken — v4 prefix-first ordering', () => {
   it('leaves non-Tailwind tokens alone', () => {
     expect(prefixToken('seeflow-canvas-root')).toBe('seeflow-canvas-root');
     expect(prefixToken('react-flow__node')).toBe('react-flow__node');
-    expect(prefixToken('animate-ping-fast')).toBe('animate-ping-fast');
+    expect(prefixToken('inline-edit-shake')).toBe('inline-edit-shake');
   });
 });
 
@@ -108,7 +108,7 @@ describe('isTailwindToken', () => {
   it('rejects known non-Tailwind class names', () => {
     expect(isTailwindToken('seeflow-canvas-root')).toBe(false);
     expect(isTailwindToken('react-flow__node')).toBe(false);
-    expect(isTailwindToken('animate-ping-fast')).toBe(false);
+    expect(isTailwindToken('inline-edit-shake')).toBe(false);
   });
 });
 

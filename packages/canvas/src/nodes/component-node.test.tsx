@@ -165,16 +165,12 @@ describe('ComponentNode container', () => {
     expect(attr).toBe('component');
   });
 
-  it('mounts ComponentRuntime with the spec and nodeId from data', () => {
+  it('mounts ComponentRuntime with the spec from data', () => {
     const tree = callComponentNode();
     const runtime = findRuntime(tree);
     expect(runtime).not.toBeNull();
-    const props = runtime?.props as {
-      spec?: ComponentSpec;
-      nodeId?: string;
-    };
+    const props = runtime?.props as { spec?: ComponentSpec };
     expect(props.spec).toBe(TRIVIAL_SPEC);
-    expect(props.nodeId).toBe('c1');
   });
 });
 
@@ -442,7 +438,7 @@ describe('ComponentNode zoom (fullscreen) button', () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the live runtime inside the modal body with the same spec + nodeId', () => {
+  it('renders the live runtime inside the modal body with the same spec', () => {
     const tree = callComponentNode({
       enableFullscreen: true,
     });
@@ -453,12 +449,8 @@ describe('ComponentNode zoom (fullscreen) button', () => {
     expect(body).not.toBeNull();
     const runtime = findElement(body, (el) => el.type === ComponentRuntime);
     expect(runtime).not.toBeNull();
-    const rp = runtime?.props as {
-      spec?: ComponentSpec;
-      nodeId?: string;
-    };
+    const rp = runtime?.props as { spec?: ComponentSpec };
     expect(rp.spec).toBe(TRIVIAL_SPEC);
-    expect(rp.nodeId).toBe('c1');
   });
 });
 

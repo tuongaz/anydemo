@@ -27,8 +27,6 @@ import { argv } from 'node:process';
 const KNOWN_NON_TAILWIND = new Set([
   'seeflow-canvas-root',
   'seeflow-no-scrollbar',
-  'animate-ping-fast',
-  'seeflow-node-pulse',
   'inline-edit-shake',
   'inline-edit-empty',
   'seeflow-connector-endpoint-dot',

@@ -44,7 +44,7 @@ export interface PerformImageDropUploadArgs {
   position: { x: number; y: number };
   /** Capped natural dims of the image (longest side <= 400). */
   dims: { width: number; height: number };
-  /** Last-used node style overlay (docs/plans/2026-05-13-last-used-style-design.md).
+  /** Last-used node style overlay (see git history: 2026-05-13-last-used-style-design.md).
    *  Filtered to image-accepted fields inside `buildNewImageData`. */
   lastUsed?: Partial<NodeStylePatch>;
 }

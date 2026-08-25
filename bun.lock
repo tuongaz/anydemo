@@ -39,7 +39,7 @@
     },
     "apps/studio": {
       "name": "@tuongaz/seeflow",
-      "version": "0.4.11",
+      "version": "0.7.0",
       "bin": {
         "seeflow": "bin/seeflow",
         "seeflow-mcp": "bin/seeflow-mcp",
@@ -70,7 +70,6 @@
         "@radix-ui/react-dialog": "^1.1.2",
         "@seeflow/canvas": "file:../../packages/canvas",
         "@xyflow/react": "^12.3.5",
-        "fflate": "^0.8.2",
         "html-to-image": "^1.11.13",
         "jspdf": "^4.2.1",
         "lucide-react": "^0.453.0",
@@ -1571,8 +1570,6 @@
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
 
-    "yaml": ["yaml@1.10.3", "", {}, "sha512-vIYeF1u3CjlhAFekPPAk2h/Kv4T3mAkMox5OymRiJQB0spDP10LHvt+K7G9Ny6NuuMAb25/6n1qyUjAcGNf/AA=="],
-
     "yargs": ["yargs@17.7.2", "", { "dependencies": { "cliui": "^8.0.1", "escalade": "^3.1.1", "get-caller-file": "^2.0.5", "require-directory": "^2.1.1", "string-width": "^4.2.3", "y18n": "^5.0.5", "yargs-parser": "^21.1.1" } }, "sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w=="],
 
     "yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
@@ -1607,9 +1604,9 @@
 
     "@radix-ui/react-tooltip/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 
-    "@seeflow/mcp-app/@seeflow/canvas": ["@seeflow/canvas@file:packages/canvas", { "dependencies": { "@radix-ui/react-context-menu": "^2.2.2", "@radix-ui/react-dialog": "^1.1.2", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.2", "@radix-ui/react-slider": "^1.2.1", "@radix-ui/react-slot": "^1.1.0", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.1.4", "class-variance-authority": "^0.7.0", "clsx": "^2.1.1", "cmdk": "^1.0.0", "html-to-image": "^1.11.13", "jspdf": "^4.2.1", "tailwind-merge": "^2.5.4", "zod": "^3.23.8" }, "devDependencies": { "@tailwindcss/cli": "^4.3.0", "@tailwindcss/postcss": "^4.3.0", "@types/bun": "^1.1.0", "@types/react": "^18.3.12", "autoprefixer": "^10.4.20", "happy-dom": "^20.9.0", "mermaid": "^11.4.1", "postcss": "^8.4.49", "recharts": "^2.13.0", "shiki": "^1.24.0", "tailwindcss": "^4.3.0", "tsup": "^8.5.1", "tw-animate-css": "^1", "typescript": "^5.6.3" }, "peerDependencies": { "@xyflow/react": "*", "lucide-react": "*", "mermaid": "^11", "react": "*", "react-dom": "*", "react-markdown": "^10", "recharts": "^2.13.0", "remark-gfm": "^4", "shiki": "^1.24.0" }, "optionalPeers": ["mermaid", "recharts", "shiki"] }],
+    "@seeflow/mcp-app/@seeflow/canvas": ["@seeflow/canvas@file:packages/canvas", { "dependencies": { "@iconify-json/logos": "^1", "@radix-ui/react-context-menu": "^2.2.2", "@radix-ui/react-dialog": "^1.1.2", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.2", "@radix-ui/react-slider": "^1.2.1", "@radix-ui/react-slot": "^1.1.0", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.1.4", "class-variance-authority": "^0.7.0", "clsx": "^2.1.1", "cmdk": "^1.0.0", "html-to-image": "^1.11.13", "jspdf": "^4.2.1", "tailwind-merge": "^2.5.4", "zod": "^3.23.8" }, "devDependencies": { "@iconify-json/twemoji": "^1", "@iconify/react": "^5", "@tailwindcss/cli": "^4.3.0", "@tailwindcss/postcss": "^4.3.0", "@types/bun": "^1.1.0", "@types/react": "^18.3.12", "@types/react-dom": "^18.3.0", "autoprefixer": "^10.4.20", "emojibase-data": "^16", "happy-dom": "^20.9.0", "mermaid": "^11.4.1", "perfect-freehand": "^1.2.3", "postcss": "^8.4.49", "recharts": "^2.13.0", "shiki": "^1.24.0", "tailwindcss": "^4.3.0", "tsup": "^8.5.1", "tw-animate-css": "^1", "typescript": "^5.6.3" }, "peerDependencies": { "@iconify/react": "^5", "@xyflow/react": "*", "lucide-react": "*", "mermaid": "^11", "perfect-freehand": "^1.2.0", "react": "*", "react-dom": "*", "react-markdown": "^10", "recharts": "^2.13.0", "remark-gfm": "^4", "shiki": "^1.24.0" }, "optionalPeers": ["@iconify/react", "mermaid", "perfect-freehand", "recharts", "shiki"] }],
 
-    "@seeflow/web/@seeflow/canvas": ["@seeflow/canvas@file:packages/canvas", { "dependencies": { "@radix-ui/react-context-menu": "^2.2.2", "@radix-ui/react-dialog": "^1.1.2", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.2", "@radix-ui/react-slider": "^1.2.1", "@radix-ui/react-slot": "^1.1.0", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.1.4", "class-variance-authority": "^0.7.0", "clsx": "^2.1.1", "cmdk": "^1.0.0", "html-to-image": "^1.11.13", "jspdf": "^4.2.1", "tailwind-merge": "^2.5.4", "zod": "^3.23.8" }, "devDependencies": { "@tailwindcss/cli": "^4.3.0", "@tailwindcss/postcss": "^4.3.0", "@types/bun": "^1.1.0", "@types/react": "^18.3.12", "autoprefixer": "^10.4.20", "happy-dom": "^20.9.0", "mermaid": "^11.4.1", "postcss": "^8.4.49", "recharts": "^2.13.0", "shiki": "^1.24.0", "tailwindcss": "^4.3.0", "tsup": "^8.5.1", "tw-animate-css": "^1", "typescript": "^5.6.3" }, "peerDependencies": { "@xyflow/react": "*", "lucide-react": "*", "mermaid": "^11", "react": "*", "react-dom": "*", "react-markdown": "^10", "recharts": "^2.13.0", "remark-gfm": "^4", "shiki": "^1.24.0" }, "optionalPeers": ["mermaid", "recharts", "shiki"] }],
+    "@seeflow/web/@seeflow/canvas": ["@seeflow/canvas@file:packages/canvas", { "dependencies": { "@iconify-json/logos": "^1", "@radix-ui/react-context-menu": "^2.2.2", "@radix-ui/react-dialog": "^1.1.2", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.2", "@radix-ui/react-slider": "^1.2.1", "@radix-ui/react-slot": "^1.1.0", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.1.4", "class-variance-authority": "^0.7.0", "clsx": "^2.1.1", "cmdk": "^1.0.0", "html-to-image": "^1.11.13", "jspdf": "^4.2.1", "tailwind-merge": "^2.5.4", "zod": "^3.23.8" }, "devDependencies": { "@iconify-json/twemoji": "^1", "@iconify/react": "^5", "@tailwindcss/cli": "^4.3.0", "@tailwindcss/postcss": "^4.3.0", "@types/bun": "^1.1.0", "@types/react": "^18.3.12", "@types/react-dom": "^18.3.0", "autoprefixer": "^10.4.20", "emojibase-data": "^16", "happy-dom": "^20.9.0", "mermaid": "^11.4.1", "perfect-freehand": "^1.2.3", "postcss": "^8.4.49", "recharts": "^2.13.0", "shiki": "^1.24.0", "tailwindcss": "^4.3.0", "tsup": "^8.5.1", "tw-animate-css": "^1", "typescript": "^5.6.3" }, "peerDependencies": { "@iconify/react": "^5", "@xyflow/react": "*", "lucide-react": "*", "mermaid": "^11", "perfect-freehand": "^1.2.0", "react": "*", "react-dom": "*", "react-markdown": "^10", "recharts": "^2.13.0", "remark-gfm": "^4", "shiki": "^1.24.0" }, "optionalPeers": ["@iconify/react", "mermaid", "perfect-freehand", "recharts", "shiki"] }],
 
     "@seeflow/web/lucide-react": ["lucide-react@0.453.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0-rc" } }, "sha512-kL+RGZCcJi9BvJtzg2kshO192Ddy9hv3ij+cPrVPWSRzgCWCVazoQJxOjAwgK53NomL07HB7GPHW120FimjNhQ=="],
 

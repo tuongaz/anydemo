@@ -1,11 +1,5 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import {
-  type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  memo,
-  useEffect,
-  useState,
-} from 'react';
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
@@ -39,16 +33,6 @@ export type ImageNodeRuntimeData = ImageNodeData & {
    * Not persisted to disk.
    */
   fileBaseUrl?: string;
-  /**
-   * Optional host hook (cloud/authed mode) that turns the computed file URL into
-   * a displayable src — e.g. fetching it with an auth token and returning a blob
-   * URL. A native `<img>` GET can't carry an `Authorization` header, so in the
-   * cloud the token-gated `/api/projects/:id/files/:path` route 401s and the
-   * image renders broken; routing through this resolver fixes that. Absent → the
-   * URL is used directly (local/same-origin — byte-identical to before).
-   * Threaded from `<SeeflowCanvas resolveFileSrc>`. Not persisted to disk.
-   */
-  resolveFileSrc?: (url: string) => Promise<string>;
   /**
    * US-008: click-to-retry callback dispatched when the user clicks the
    * 'Upload failed' placeholder. Injected by demo-canvas's `sourceNodes`
@@ -93,40 +77,9 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
   // (precreated-node click-shrink fix).
   const sized = data.width !== undefined || data.height !== undefined;
 
-  // The on-disk `path` resolves to a project-scoped file URL. When the host
-  // supplies `resolveFileSrc` (cloud/authed mode), that URL is token-gated and a
-  // native <img> can't carry the bearer header — so we hand the URL to the host
-  // to fetch (with a token) and swap in the returned blob URL. Without a
-  // resolver the URL is used directly (local/same-origin), unchanged from before.
+  // The on-disk `path` resolves to a project-scoped file URL served by the
+  // studio on the same origin, so the <img> can fetch it directly.
   const directUrl = data.projectId ? fileUrl(data.projectId, data.path, data.fileBaseUrl) : '';
-  const resolver = data.resolveFileSrc;
-  const [resolvedSrc, setResolvedSrc] = useState<string>(resolver ? '' : directUrl);
-  useEffect(() => {
-    if (!resolver) {
-      setResolvedSrc(directUrl);
-      return;
-    }
-    if (!directUrl) {
-      setResolvedSrc('');
-      return;
-    }
-    let active = true;
-    resolver(directUrl)
-      .then((src) => {
-        if (active) setResolvedSrc(src);
-      })
-      // Resolver failure (e.g. a real fetch error after apiFetch's own 401
-      // refresh) falls back to the direct URL so we never hang on the loading
-      // tile — it may render broken, which is the correct signal for a true error.
-      .catch(() => {
-        if (active) setResolvedSrc(directUrl);
-      });
-    return () => {
-      active = false;
-    };
-  }, [resolver, directUrl]);
-  // Resolving = a resolver is wired, we have a URL to resolve, and no src yet.
-  const resolving = !!resolver && !!directUrl && !resolvedSrc;
 
   // Optional caption rendered below the image. Double-clicking the image opens
   // the inline editor (edit mode only — gated on the injected callback, like
@@ -223,12 +176,10 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         )}
         style={chromeStyle}
       >
-        {data._uploading || resolving ? (
+        {data._uploading ? (
           // US-008: optimistic-placement loading state. The <img> is suppressed
           // because the file hasn't been uploaded yet (data.path is empty), so
           // we render a flat 'Loading…' tile sized to the dropped image dims.
-          // The same tile covers the brief window while a `resolveFileSrc` host
-          // hook fetches the token-gated asset and produces a blob URL.
           <div
             data-testid="image-node-placeholder"
             data-placeholder="loading"
@@ -252,7 +203,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
           </button>
         ) : (
           <img
-            src={resolvedSrc}
+            src={directUrl}
             alt={data.alt ?? ''}
             // `block` strips the inline-element baseline gap that would otherwise
             // leave a thin strip below the image inside the node container.

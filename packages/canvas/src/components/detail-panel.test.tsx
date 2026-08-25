@@ -657,16 +657,15 @@ describe('DetailPanel icon trigger', () => {
     expect((triggers[0]?.props as { icon?: string | null }).icon).toBe('database');
   });
 
-  it('icon trigger is visible for a rectangle carrying an extra capability field', () => {
-    // The icon-trigger condition is type-based, not capability-based; this test
-    // guards that an extra optional capability field on data doesn't
-    // accidentally hide the trigger.
+  it('icon trigger is visible for a rectangle carrying an extra optional field', () => {
+    // The icon-trigger condition is type-based; this test guards that an extra
+    // optional field on data doesn't accidentally hide the trigger.
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
         node: makeRectangleNode({
           data: {
-            handlerModule: 'handlers/foo.ts',
+            shadow: 3,
           },
         } as Partial<FlowNode>),
         connector: null,

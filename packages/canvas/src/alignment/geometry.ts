@@ -2,7 +2,7 @@
  * Pure alignment geometry for the canvas alignment-guides subsystem.
  *
  * Zero React / DOM dependencies so the snapping algorithm can be exhaustively
- * unit-tested. See docs/plans/2026-06-01-canvas-alignment-guides-design.md.
+ * unit-tested. See git history: 2026-06-01-canvas-alignment-guides-design.md.
  *
  * Spacing-guide naming follows the design-doc field SHAPES (not axis names):
  *   - `spacing-v` carries { x1, x2, y } → a horizontal segment, emitted for

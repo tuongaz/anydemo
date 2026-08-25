@@ -2,8 +2,7 @@
 # Local twin of release.yml's npm path — publish @tuongaz/seeflow to npm BY HAND
 # when GitHub Actions is unavailable (e.g. over quota). Reproduces the
 # prepare-release + tests + publish-npm jobs locally; it does NOT cover the
-# Docker Hub push or the seeflow-cloud lockstep deploy (run `make docker.push`
-# and seeflow-cloud's `make deploy.local` separately).
+# Docker Hub push (run `make docker.push` separately).
 #
 #   Usage:  make release.local [BUMP=patch|minor|major]   (default: patch)
 #           make release.local DRY_RUN=1                   (gate only, no publish)
@@ -214,7 +213,5 @@ PUSHED=1
 
 log "Released @tuongaz/seeflow@$NEW  ->  https://www.npmjs.com/package/@tuongaz/seeflow"
 echo ""
-echo "Not done by this target (run separately if you want them):"
+echo "Not done by this target (run separately if you want it):"
 echo "  - Docker Hub image:  make docker.push DOCKER_TAG=$NEW   (and DOCKER_TAG=latest)"
-echo "  - cloud.seeflow.dev: bump @tuongaz/seeflow to ^$NEW + SEEFLOW_REF=$TAG in"
-echo "                       seeflow-cloud, then its 'make deploy.local'"

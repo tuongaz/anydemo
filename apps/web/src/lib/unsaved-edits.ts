@@ -9,7 +9,7 @@
  * it's in flight — a navigation or page reload discards it, and the subsequent
  * GET re-reads whatever is actually on disk. If the write hadn't landed yet (in
  * flight, or failed and the override was kept), the edit is silently lost and
- * the refreshed page shows stale data — exactly the reported cloud instability.
+ * the refreshed page shows stale data.
  *
  * `hasUnconfirmedEdits` is the single predicate behind the `beforeunload`
  * guard: when it's true, the studio warns before letting the tab unload so the

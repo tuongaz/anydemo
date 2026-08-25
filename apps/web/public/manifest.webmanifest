@@ -1,7 +1,7 @@
 {
   "name": "SeeFlow Studio",
   "short_name": "SeeFlow",
-  "description": "Architecture diagrams that actually run.",
+  "description": "Architecture diagrams your AI agent and you both edit.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

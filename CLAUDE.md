@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # SeeFlow
 
-Local studio that hosts file-defined demos as React Flow canvases wired to a running app via REST + SSE + Zod schema. Published as `@tuongaz/seeflow` with bin entrypoints `seeflow` (CLI / studio daemon) and `seeflow-mcp` (MCP server, also boots an embedded studio for MCP-Apps hosts).
+Localhost studio that renders file-defined, Zod-validated flows as React Flow canvases and keeps every open canvas in sync over REST + SSE. Published as `@tuongaz/seeflow` with bin entrypoints `seeflow` (CLI / studio daemon) and `seeflow-mcp` (MCP server, also boots an embedded studio for MCP-Apps hosts).
 
 ## Workspace
 

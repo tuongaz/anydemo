@@ -1,7 +1,6 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import { navigateToFlow } from '@/hooks/use-navigate-flow';
+import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
-import { useAppConfig } from '@/lib/auth/app-config';
 import { readLastFlow } from '@/lib/last-flow';
 import {
   Button,
@@ -49,7 +48,6 @@ export function ProjectSwitcher({
   onProjectCreated,
   onUnregisterProject,
 }: ProjectSwitcherProps) {
-  const { isCloud } = useAppConfig();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [unregisterTarget, setUnregisterTarget] = useState<ProjectSummary | null>(null);
@@ -75,11 +73,7 @@ export function ProjectSwitcher({
     // the manifest's defaultFlow when no preference has been recorded yet.
     const lastFlow = readLastFlow(project.projectSlug);
     const targetFlow = lastFlow ?? project.defaultFlow;
-    // `navigateToFlow` so switching to ANOTHER project works under a
-    // single-project boot shell (cloud `/p/<id>`): it full-loads into the
-    // multi-project studio when the target isn't the booted project, instead of
-    // an in-SPA reset that the boot router would pin back to the booted project.
-    navigateToFlow({ project: project.projectSlug, flow: targetFlow });
+    resetFlow({ project: project.projectSlug, flow: targetFlow });
   };
 
   const handleCreated = (result: CreateProjectResult) => {
@@ -161,7 +155,7 @@ export function ProjectSwitcher({
                     >
                       <div className="flex min-w-0 flex-col items-start gap-0.5">
                         <span className="font-medium">{project.name}</span>
-                        {!isCloud && project.repoPath ? (
+                        {project.repoPath ? (
                           <span className="w-full truncate text-xs text-muted-foreground">
                             {project.repoPath}
                           </span>
@@ -225,7 +219,7 @@ export function ProjectSwitcher({
               under this project will be unregistered.
             </DialogDescription>
           </DialogHeader>
-          {!isCloud && unregisterTarget?.repoPath ? (
+          {unregisterTarget?.repoPath ? (
             <label className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
               <input
                 type="checkbox"

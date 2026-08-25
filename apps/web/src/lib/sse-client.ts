@@ -1,14 +1,8 @@
-import { getAuthProvider } from './auth/provider.ts';
-import { readBootConfig } from './boot-config.ts';
-
 /**
  * Fetch-based Server-Sent Events client.
  *
- * Replaces the browser `EventSource` so the auth seam can carry a bearer token
- * in an `Authorization` header (EventSource cannot set headers — the only
- * alternative is a token in the URL, which leaks into logs and can't be
- * refreshed on reconnect). A FRESH token is minted on every (re)connect, so a
- * short-lived JWT survives long-lived streams.
+ * Replaces the browser `EventSource` so reconnects use our own backoff policy
+ * rather than the browser's opaque one.
  *
  * The surface intentionally mirrors the slice of EventSource the studio hooks
  * use — `addEventListener(type, cb)` and `close()` — so callers change minimally.
@@ -53,18 +47,10 @@ export function apiEventStream(path: string): SseStream {
     const parser = createSseParser((type, event) => emit(type, event));
 
     try {
-      const token = await getAuthProvider().getToken();
-      const headers = new Headers({ accept: 'text/event-stream' });
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-      // Cloud shared-editing: tag the live stream with the booted cloud project
-      // id (same seam as apiFetch) so the cloud resolves a shared editor's
-      // /api/events to the OWNER's tenant bus — without it the editor only sees
-      // their own tenant and misses the owner's live edits (owner→editor sync).
-      // Absent in local/standalone studio → no header, behaviour unchanged.
-      const sharedProjectId = readBootConfig()?.projectId;
-      if (sharedProjectId) headers.set('X-Seeflow-Project-Id', sharedProjectId);
-
-      const res = await fetch(path, { headers, signal: controller.signal });
+      const res = await fetch(path, {
+        headers: { accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
       if (!res.ok || !res.body) {
         scheduleReconnect();
         return;

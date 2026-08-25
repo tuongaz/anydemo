@@ -2,7 +2,7 @@
  * React hook that owns the drag/resize gesture lifecycle for canvas alignment
  * guides. It is the stateful bridge between the pure {@link computeGuides}
  * algorithm and `SeeflowCanvas`'s mutation points (`onNodesChange`, the resize
- * gesture). See docs/plans/2026-06-01-canvas-alignment-guides-design.md.
+ * gesture). See git history: 2026-06-01-canvas-alignment-guides-design.md.
  *
  * Responsibilities:
  *  - Capture a frozen snapshot of the non-moving reference rects once per

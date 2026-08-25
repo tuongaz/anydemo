@@ -40,10 +40,12 @@ describe('seeflow skill <-> CLI contract', () => {
     expect(skill).toContain('$SEEFLOW help');
   });
 
-  it('no skill or agent prompt references the removed Play/Status feature', () => {
-    // The Play-script + Status-probe + component-script-action feature was removed.
-    // No prose, schema example, or agent contract may resurrect its node
-    // capabilities, designers, or runtime tokens.
+  it('no skill or agent prompt references a removed execution or cloud feature', () => {
+    // The Play-script + Status-probe + component-script-action feature was
+    // removed, and so were the flow-envelope reset action, the node-level
+    // `handlerModule`, and the `--with-scripts` lookup flag. No prose, schema
+    // example, or agent contract may resurrect their node capabilities,
+    // designers, or runtime tokens.
     const banned = [
       /\bplayAction\b/,
       /\bstatusAction\b/,
@@ -54,6 +56,10 @@ describe('seeflow skill <-> CLI contract', () => {
       /seeflow-play-designer/,
       /seeflow-status-designer/,
       /scripts\/(?:play|status)/,
+      /\bscriptPath\b/,
+      /\bresetAction\b/,
+      /\bhandlerModule\b/,
+      /--with-scripts/,
     ];
     const docs = [
       { path: SKILL_MD, body: readFileSync(SKILL_MD, 'utf8') },
@@ -65,7 +71,7 @@ describe('seeflow skill <-> CLI contract', () => {
         const match = pattern.exec(body);
         if (match) {
           const line = body.slice(0, match.index).split('\n').length;
-          throw new Error(`${path}:${line} references removed Play/Status token "${match[0]}"`);
+          throw new Error(`${path}:${line} references removed feature token "${match[0]}"`);
         }
       }
     }

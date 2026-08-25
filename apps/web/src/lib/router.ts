@@ -1,59 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { type BootConfig, readBootConfig } from './boot-config';
 
 const NAV_EVENT = 'seeflow:navigate';
-
-/**
- * Build-time base path baked in by Vite, with the trailing slash trimmed:
- * `''` for the standalone studio (Vite base `/`) and `/app` for the cloud
- * build (`VITE_BASE=/app/`). Vite always defines `import.meta.env.BASE_URL`
- * (defaulting to `/`); the `?? '/'` guards non-Vite contexts (e.g. bun:test).
- */
-export const BUILD_BASE = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-
-/**
- * Effective base path the SPA is served under, with the trailing slash trimmed.
- * When the host injects a boot config (e.g. cloud serves the studio under
- * `/p/<id>`), the boot base wins over the build-time base; otherwise it falls
- * back to `BUILD_BASE`. Computed once at module load — the boot global is set
- * before the bundle runs.
- *
- * All matchers (`matchProjectFlow`, `matchProjectAlone`, `flowPath`) operate in
- * base-RELATIVE space. `stripBase` peels the base off `window.location.pathname`
- * before matching; `withBase` re-attaches it before `pushState`/`replaceState`.
- */
-export const BASE = readBootConfig()?.base?.replace(/\/$/, '') ?? BUILD_BASE;
-
-/**
- * Strip the leading base segment from an absolute pathname, returning a
- * base-relative path (always starts with `/`). Pure + base-injectable so it's
- * unit-testable without mutating `import.meta.env.BASE_URL`.
- *
- * - `stripBase('/app/projects/p', '/app')` → `/projects/p`
- * - `stripBase('/app', '/app')` → `/` (the base root)
- * - `stripBase('/projects/p', '')` → `/projects/p` (no-op when base is empty)
- * - A path that doesn't start with the base is returned unchanged (defensive).
- */
-export const stripBase = (pathname: string, base: string = BASE): string => {
-  if (!base) return pathname;
-  if (pathname === base) return '/';
-  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
-  return pathname;
-};
-
-/**
- * Prepend the base to a base-relative path. Inverse of `stripBase`. Pure +
- * base-injectable for testing.
- *
- * - `withBase('/projects/p', '/app')` → `/app/projects/p`
- * - `withBase('/', '/app')` → `/app`
- * - `withBase('/projects/p', '')` → `/projects/p` (no-op when base is empty)
- */
-export const withBase = (path: string, base: string = BASE): string => {
-  if (!base) return path;
-  if (path === '/') return base;
-  return `${base}${path}`;
-};
 
 const subscribe = (listener: () => void) => {
   window.addEventListener('popstate', listener);
@@ -64,13 +11,13 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-const getSnapshot = () => stripBase(window.location.pathname);
+const getSnapshot = () => window.location.pathname;
 
 export const usePathname = (): string => useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
 export const navigate = (to: string) => {
-  if (to === stripBase(window.location.pathname)) return;
-  window.history.pushState({}, '', withBase(to));
+  if (to === window.location.pathname) return;
+  window.history.pushState({}, '', to);
   window.dispatchEvent(new Event(NAV_EVENT));
 };
 
@@ -78,48 +25,16 @@ export const navigate = (to: string) => {
  * US-010: build the canvas-page URL from a (project, flow) pair. Slugs go
  * through `encodeURIComponent` so reserved characters survive the path
  * segments cleanly.
- *
- * Boot mode: the project is FIXED to `boot.projectSlug`, so the URL carries no
- * `/projects/<slug>` segment — only `/flows/<flow>` (the `project` arg is
- * ignored). Without boot, the legacy `/projects/:project/flows/:flow` grammar.
  */
-export const flowPath = (
-  project: string,
-  flow: string,
-  boot: BootConfig | null = readBootConfig(),
-): string => {
-  if (boot) return `/flows/${encodeURIComponent(flow)}`;
-  return `/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}`;
-};
+export const flowPath = (project: string, flow: string): string =>
+  `/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}`;
 
 /**
  * US-010: parse the canvas-page path into its (project, flow) slugs. Returns
  * null for any other path or when either segment is empty.
- *
- * Boot mode: the project is FIXED to `boot.projectSlug`. The base root (`/`)
- * resolves to the project's default flow ONLY when `boot.flowId` is set;
- * without a boot flowId the base root is null (no concrete flow — App.tsx
- * resolves the project default via the project-only path). `/flows/<flow>`
- * resolves to that flow; anything else is null (the legacy `/projects/...`
- * grammar is invalid under boot). Without boot, the legacy
- * `/projects/:project/flows/:flow` grammar.
  */
-export const matchProjectFlow = (
-  pathname: string,
-  boot: BootConfig | null = readBootConfig(),
-): { project: string; flow: string } | null => {
+export const matchProjectFlow = (pathname: string): { project: string; flow: string } | null => {
   const parts = pathname.split('/').filter(Boolean);
-  if (boot) {
-    if (parts.length === 0) {
-      return boot.flowId ? { project: boot.projectSlug, flow: boot.flowId } : null;
-    }
-    if (parts.length === 2 && parts[0] === 'flows') {
-      const flow = decodeURIComponent(parts[1] ?? '');
-      if (!flow) return null;
-      return { project: boot.projectSlug, flow };
-    }
-    return null;
-  }
   if (parts.length !== 4) return null;
   if (parts[0] !== 'projects' || parts[2] !== 'flows') return null;
   const project = decodeURIComponent(parts[1] ?? '');
@@ -154,22 +69,8 @@ export const splitFlowSlug = (slug: string): { project: string; flow: string } |
  * US-026: parse `/projects/:project` (no `/flows/:flow` segment) for the
  * project-only landing page. App.tsx redirects this case to the user's
  * last-opened flow (or the project default) via pickInitialFlow.
- *
- * Boot mode: the project is FIXED. When `boot.flowId` is set the base root
- * already resolves to that flow, so there is no project-only landing (null).
- * When `boot.flowId` is absent, the base root surfaces the fixed project so
- * App.tsx's project-only effect resolves the default/last flow — mirroring the
- * non-boot `/projects/:slug` case. Any non-root path under boot is still null.
  */
-export const matchProjectAlone = (
-  pathname: string,
-  boot: BootConfig | null = readBootConfig(),
-): { project: string } | null => {
-  if (boot) {
-    if (boot.flowId) return null;
-    const parts = pathname.split('/').filter(Boolean);
-    return parts.length === 0 ? { project: boot.projectSlug } : null;
-  }
+export const matchProjectAlone = (pathname: string): { project: string } | null => {
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length !== 2) return null;
   if (parts[0] !== 'projects') return null;

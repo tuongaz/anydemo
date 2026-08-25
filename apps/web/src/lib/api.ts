@@ -21,7 +21,6 @@ export type {
   IconNodeData,
   LinkflowNodeData,
   LinkflowTarget,
-  NodeCapabilities,
   NodeDescription,
   NodeSemanticBase,
   NodeType,

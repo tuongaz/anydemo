@@ -97,7 +97,7 @@
      * canvas. Light is the default; the .dark block below overrides
      * when an ancestor (typically <html>) carries the `.dark` class.
      * Canvas-only tokens (--shadow-*, --seeflow-handle-*,
-     * --amber, --danger, --font-mono, --bg-canvas, --emerald-glow,
+     * --font-mono, --bg-canvas, --emerald-glow,
      * --ring-selected, --glow-dot-color) live under .seeflow-canvas-root
      * in the canvas package — they don't belong at :root because the
      * studio chrome doesn't use them and a consumer importing the

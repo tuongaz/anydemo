@@ -5,7 +5,7 @@ import { splitFlowSlug } from '@/lib/router';
 
 export interface StudioHomeProps {
   demos: FlowSummary[];
-  /** Cloud only: forwarded to the empty-state "Create your first project" CTA. */
+  /** Forwarded to the empty-state "Create a project" CTA. */
   onProjectCreated?: (result: CreateProjectResult) => void;
 }
 

@@ -141,7 +141,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto"
       style={bodyFontStyle}
     >
-      <ComponentRuntime spec={data.spec} nodeId={id} />
+      <ComponentRuntime spec={data.spec} />
     </div>
   ) : (
     <div
@@ -150,7 +150,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       className="sf:inline-block"
       style={{ ...bodyFontStyle, maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
     >
-      <ComponentRuntime spec={data.spec} nodeId={id} />
+      <ComponentRuntime spec={data.spec} />
     </div>
   );
 
@@ -222,7 +222,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
             className="sf:min-h-0 sf:flex-1 sf:overflow-auto sf:p-4"
             style={bodyFontStyle}
           >
-            <ComponentRuntime spec={data.spec} nodeId={id} />
+            <ComponentRuntime spec={data.spec} />
           </div>
         </DialogContent>
       </Dialog>

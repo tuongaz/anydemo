@@ -12,14 +12,6 @@ export interface UseCanvasExportInput {
 export interface UseCanvasExportApi {
   exportPdf: () => Promise<void>;
   exportPng: () => Promise<void>;
-  /**
-   * Capture the current viewport as a PNG data URL (fit-view + snapshot +
-   * restore viewport) WITHOUT triggering a download. Returns `undefined` when
-   * the React Flow instance or `.react-flow__viewport` element is not mounted
-   * yet. Used by the host's "Export to seeflow.dev" dialog so the preview
-   * thumbnail shares the same capture path as the PNG/PDF downloads.
-   */
-  capturePreview: () => Promise<string | undefined>;
   lastError: string | null;
   clearError: () => void;
 }
@@ -100,10 +92,5 @@ export const useCanvasExport = ({
     }
   }, [captureViewportFramed, projectId]);
 
-  const capturePreview = useCallback(async (): Promise<string | undefined> => {
-    const captured = await captureViewportFramed();
-    return captured?.dataUrl;
-  }, [captureViewportFramed]);
-
-  return { exportPdf, exportPng, capturePreview, lastError, clearError };
+  return { exportPdf, exportPng, lastError, clearError };
 };

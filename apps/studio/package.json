@@ -1,17 +1,8 @@
 {
   "name": "@tuongaz/seeflow",
-  "version": "0.6.2",
-  "description": "Local studio that hosts file-defined demos as React Flow canvases wired to a running app via REST + SSE + Zod schema.",
-  "keywords": [
-    "seeflow",
-    "react-flow",
-    "diagram",
-    "architecture",
-    "playable",
-    "studio",
-    "hono",
-    "bun"
-  ],
+  "version": "0.7.0",
+  "description": "Localhost studio for architecture diagrams: file-defined, Zod-validated flows rendered as React Flow canvases that AI agents author over CLI/MCP and humans edit in the browser.",
+  "keywords": ["seeflow", "react-flow", "diagram", "architecture", "studio", "hono", "bun"],
   "homepage": "https://github.com/tuongaz/seeflow#readme",
   "repository": {
     "type": "git",

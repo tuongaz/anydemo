@@ -33,7 +33,6 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
-  useContext: (context: unknown) => unknown;
 };
 
 function renderWithHooks<T>(fn: () => T): T {
@@ -54,9 +53,6 @@ function renderWithHooks<T>(fn: () => T): T {
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
-    // useAppConfig() reads context; with no provider it falls back to
-    // DEFAULT_APP_CONFIG (isCloud false) — i.e. local studio behavior.
-    useContext: () => undefined,
   };
   try {
     return fn();
@@ -138,47 +134,13 @@ describe('Header', () => {
     it('renders ShareMenu between ProjectSwitcher and Settings when `share` is provided', () => {
       const onDownloadPdf = () => {};
       const onDownloadPng = () => {};
-      const onExportToCloud = () => {};
-      const tree = renderHeader({
-        share: { onDownloadPdf, onDownloadPng, onExportToCloud },
-      });
+      const tree = renderHeader({ share: { onDownloadPdf, onDownloadPng } });
 
       const share = findShareMenu(tree);
       if (!share) throw new Error('expected ShareMenu in the tree when share prop is provided');
 
-      expect(share.props.mode).toBe('edit');
-      expect(share.props.enableEmbed).toBe(false);
       expect(share.props.onDownloadPdf).toBe(onDownloadPdf);
       expect(share.props.onDownloadPng).toBe(onDownloadPng);
-      expect(share.props.onExportToCloud).toBe(onExportToCloud);
-    });
-
-    it('forwards onShareWithMembers to ShareMenu when the host provides it', () => {
-      const onShareWithMembers = () => {};
-      const tree = renderHeader({
-        share: {
-          onDownloadPdf: () => {},
-          onDownloadPng: () => {},
-          onExportToCloud: () => {},
-          onShareWithMembers,
-        },
-      });
-      const share = findShareMenu(tree);
-      if (!share) throw new Error('expected ShareMenu in the tree');
-      expect(share.props.onShareWithMembers).toBe(onShareWithMembers);
-    });
-
-    it('leaves ShareMenu onShareWithMembers undefined when the host omits it', () => {
-      const tree = renderHeader({
-        share: {
-          onDownloadPdf: () => {},
-          onDownloadPng: () => {},
-          onExportToCloud: () => {},
-        },
-      });
-      const share = findShareMenu(tree);
-      if (!share) throw new Error('expected ShareMenu in the tree');
-      expect(share.props.onShareWithMembers).toBeUndefined();
     });
   });
 

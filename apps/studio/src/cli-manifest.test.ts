@@ -23,7 +23,6 @@ describe('COMMAND_MANIFEST', () => {
         'flow:add-bulk',
         'projects:create',
         'projects:list',
-        'export',
         'nodes:add',
         'nodes:get',
         'nodes:patch',

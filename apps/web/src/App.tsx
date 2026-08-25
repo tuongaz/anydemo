@@ -1,10 +1,7 @@
-import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
-import { MembersShareDialog } from '@/components/members-share-dialog';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
-  navigateToFlow,
   popBack,
   reset as resetFlow,
   useFlowStack,
@@ -13,16 +10,13 @@ import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import type { CreateProjectResult } from '@/lib/api';
-import { useAppConfig } from '@/lib/auth/app-config';
-import { readBootConfig } from '@/lib/boot-config';
-import { fetchAccessibleProjects } from '@/lib/cloud-members-api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
 import { FlowStackPane } from '@/pages/flow-stack-pane';
 import { StudioHome } from '@/pages/studio-home';
 import { type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 // US-005: seed the flow navigation stack from the initial URL + stamp
 // history.state.stackDepth so the popstate handler has a reliable signal.
@@ -106,12 +100,7 @@ export function App() {
       // defaultFlow — `result.slug` is flow-qualified (`<proj>/<flow>`), so
       // passing it as `project` produced a malformed
       // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown demo" page.
-      // `navigateToFlow` (not `resetFlow`) so that under a single-project boot
-      // shell (cloud `/p/<id>`) the brand-new project — which is NOT the booted
-      // one — full-loads into the multi-project studio instead of silently
-      // staying on the booted project (the "create does nothing + /api/flows
-      // refetch storm" bug).
-      navigateToFlow({ project: result.projectSlug, flow: result.defaultFlow });
+      resetFlow({ project: result.projectSlug, flow: result.defaultFlow });
     },
     [refreshFlows, refreshProjects],
   );
@@ -135,37 +124,26 @@ export function App() {
   //
   // This runs once per app mount — gated on `autoResumedRef`. Re-running it on
   // every navigation to '/' would make "home" unreachable: an explicit go-home
-  // (the SeeFlow logo, or the cloud avatar menu's "My projects") lands on '/',
-  // and the effect would immediately bounce back to the last-opened flow.
-  // config.mode === 'cloud'. Gates cloud-only behaviour below (last-project
-  // recall is disabled in cloud; the share affordance is resolved differently).
-  const { isCloud } = useAppConfig();
-
+  // (the SeeFlow logo) lands on '/', and the effect would immediately bounce
+  // back to the last-opened flow.
   const autoResumedRef = useRef(false);
   useEffect(() => {
     if (demos === null) return;
     if (autoResumedRef.current) return;
     autoResumedRef.current = true;
-    // Cloud is multi-account on a single origin: `seeflow:last-project` is shared
-    // localStorage, so a value left by a previous session/account must NOT
-    // auto-load — after logging into a different account you may have no access
-    // to it. Local studio (single user, no auth) keeps the recall.
-    if (isCloud) return;
     if (pathname !== '/') return;
     const target = pickInitialDemo(demos, readLastProjectId());
     if (target) {
       const split = splitFlowSlug(target.slug);
       if (split) resetFlow(split);
     }
-  }, [pathname, demos, isCloud]);
+  }, [pathname, demos]);
 
-  // US-001: persist whichever project is currently open so we can reopen it next
-  // visit — local studio only (see above: in cloud the key would bleed across
-  // accounts on a shared origin, so we neither store nor recall it).
+  // US-001: persist whichever project is currently open so we can reopen it
+  // next visit.
   useEffect(() => {
-    if (isCloud) return;
     if (currentSummary) writeLastProjectId(currentSummary.id);
-  }, [currentSummary, isCloud]);
+  }, [currentSummary]);
 
   // US-026: persist last-opened flow per project, keyed by project slug so
   // each project remembers its own last-visited flow independently.
@@ -184,63 +162,20 @@ export function App() {
   }, [projectOnlySlug, standaloneFlows]);
 
   // US-015 + linkflow merge: canvasRef lives at App so the studio header
-  // (ShareMenu) and the cloud-export dialog can both reach the canvas
-  // imperative handle. FlowStackPane plumbs the ref onto the TOP stack
-  // entry's SeeflowCanvas only — non-top mounts use a throwaway local ref so
-  // a hidden flow can't silently overwrite the visible flow's handle.
+  // (ShareMenu) can reach the canvas imperative handle. FlowStackPane plumbs
+  // the ref onto the TOP stack entry's SeeflowCanvas only — non-top mounts use
+  // a throwaway local ref so a hidden flow can't silently overwrite the visible
+  // flow's handle.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
-
-  // "Share with people" is a host (cloud) feature: it needs the open project's
-  // internal cloud project id + an OWNER flag (only the owner may (re)share; the
-  // cloud grants API enforces this server-side too — defense in depth). There are
-  // two ways the studio learns them:
-  //   1. Boot config (the single-project /p/<id> shell) injects projectId +
-  //      canShare directly — the fast path. A shared `editor` gets the full editor
-  //      but canShare:false, so no Share button.
-  //   2. The multi-project /app studio has NO boot config (e.g. right after
-  //      creating a project). There we resolve the OPEN project (by slug) against
-  //      the cloud DB's accessible-projects list — owner ⇒ canShare. This is why a
-  //      freshly-created project is now shareable. Local studio: isCloud is false,
-  //      the fetch never runs, and the item stays hidden.
-  const boot = useMemo(() => readBootConfig(), []);
-  const [dbShare, setDbShare] = useState<{ projectId: string; canShare: boolean } | null>(null);
-  useEffect(() => {
-    if (!isCloud || boot || !topProject) {
-      setDbShare(null);
-      return;
-    }
-    let cancelled = false;
-    fetchAccessibleProjects()
-      .then((projects) => {
-        if (cancelled) return;
-        const row = projects.find((p) => p.slug === topProject);
-        setDbShare(row ? { projectId: row.projectId, canShare: row.access === 'owner' } : null);
-      })
-      .catch(() => {
-        // Best-effort: a failed lookup just hides Share (never crashes the editor).
-        if (!cancelled) setDbShare(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isCloud, boot, topProject]);
-
-  const cloudProjectId = boot?.projectId ?? dbShare?.projectId ?? null;
-  const canShare = boot ? boot.canShare === true : dbShare?.canShare === true;
-  const canShareMembers = isCloud && cloudProjectId !== null && canShare;
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;
     return {
       onDownloadPdf: () => canvasRef.current?.exportPdf(),
       onDownloadPng: () => canvasRef.current?.exportPng(),
-      onExportToCloud: () => setExportDialogOpen(true),
-      onShareWithMembers: canShareMembers ? () => setMembersDialogOpen(true) : undefined,
     };
-  }, [flowId, canShareMembers]);
+  }, [flowId]);
 
   if (demos === null) {
     return (
@@ -273,24 +208,6 @@ export function App() {
             <StudioHome demos={demos} onProjectCreated={onProjectCreated} />
           )}
         </main>
-        {flowId && topProject ? (
-          <ExportDialog
-            open={exportDialogOpen}
-            onOpenChange={setExportDialogOpen}
-            project={topProject}
-            flowName={currentSummary?.name}
-            onCapturePreview={() =>
-              canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)
-            }
-          />
-        ) : null}
-        {canShareMembers && cloudProjectId ? (
-          <MembersShareDialog
-            open={membersDialogOpen}
-            onOpenChange={setMembersDialogOpen}
-            projectId={cloudProjectId}
-          />
-        ) : null}
       </div>
     </TooltipProvider>
   );

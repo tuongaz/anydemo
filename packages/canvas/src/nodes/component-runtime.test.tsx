@@ -122,12 +122,9 @@ function findElement(
   return null;
 }
 
-function renderRuntime(spec: ComponentSpec, nodeId = 'n1'): unknown {
-  const impl = ComponentRuntime as unknown as (props: {
-    spec: ComponentSpec;
-    nodeId: string;
-  }) => unknown;
-  return renderWithHooks(() => impl({ spec, nodeId }));
+function renderRuntime(spec: ComponentSpec): unknown {
+  const impl = ComponentRuntime as unknown as (props: { spec: ComponentSpec }) => unknown;
+  return renderWithHooks(() => impl({ spec }));
 }
 
 function findComponent(tree: unknown, name: string): ReactElementLike | null {

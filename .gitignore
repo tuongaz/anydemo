@@ -25,7 +25,6 @@ ralph/
 ,claude/settings.local.json
 .claude/skills/run-ralph
 .claude/worktrees/
-apps/cloud/cdk.out
 ralph/prd.json
 ralph/progress.txt
 apps/studio/integration/.artifacts/

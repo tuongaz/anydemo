@@ -192,13 +192,9 @@ render as a `[seeflow: missing file '…']` placeholder card.
 
 ## `flow.json` envelope
 
-For the envelope shape, run `$SEEFLOW schema flow`. Two runtime points
+For the envelope shape, run `$SEEFLOW schema flow`. One runtime point
 the schema can't express:
 
-- The envelope's optional reset action exists only when the app has a
-  "wipe state" entrypoint — author it only if one exists. Its
-  `scriptPath` is anchored at the flow folder (`flows/<flowSlug>/`);
-  per-node anchor is a deferred follow-up.
 - Author the empty envelope at scaffold time using whatever `$SEEFLOW
   schema flow` says is required — never paste a hardcoded shape from
   memory or this file. `projects:create` writes the empty envelope for

@@ -3,8 +3,9 @@
 // relative path under the project root.
 //
 // `baseUrl` lets embedders point file fetches at a different host/route shape
-// (e.g. the public viewer hits `https://seeflow.dev/api/flows/:id/files/:path`,
-// which is the same `/<id>/files/<path>` suffix under a different prefix).
+// (e.g. a page served from Vite's dev server hits
+// `http://localhost:4321/api/projects/:id/files/:path`, which is the same
+// `/<id>/files/<path>` suffix under a different prefix).
 // Trailing slashes on `baseUrl` are stripped so callers can pass either form.
 //
 // `encodeURI` is used (not `encodeURIComponent`) so the slash characters that

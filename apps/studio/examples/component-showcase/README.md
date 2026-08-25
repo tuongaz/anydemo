@@ -8,7 +8,7 @@ Three `component`-type nodes that exercise the json-render-powered runtime end-t
 seeflow start
 ```
 
-SeeFlow seeds this example on first launch alongside `order-pipeline` and `ecommerce-platform`. Open the studio at `http://localhost:4321` and click the **Component Showcase** flow.
+SeeFlow copies this example into `~/.seeflow/` and registers it on every studio start, alongside `order-pipeline` and `ecommerce-platform`. Open `http://localhost:4321` and click the **Component Showcase** flow.
 
 ## What each node demonstrates
 
@@ -23,5 +23,3 @@ SeeFlow seeds this example on first launch alongside `order-pipeline` and `ecomm
 - **`$state`** references in props (e.g. `{ "$state": "/count" }`) — resolved at render time.
 - **`$action`** references on event handlers (e.g. `onClick: { "$action": "reset" }`) — resolved to a callable that dispatches by name.
 - **`$param`** references inside a `set` action's `value` (e.g. `{ "$param": "value" }`) — pull a field out of the event payload at dispatch time.
-
-See `docs/plans/2026-05-23-component-node-design.md` for the full design rationale.

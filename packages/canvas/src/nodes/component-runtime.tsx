@@ -64,10 +64,9 @@ function resolveProps(
 
 export interface ComponentRuntimeProps {
   spec: ComponentSpec;
-  nodeId: string;
 }
 
-export function ComponentRuntime({ spec, nodeId: _nodeId }: ComponentRuntimeProps): ReactNode {
+export function ComponentRuntime({ spec }: ComponentRuntimeProps): ReactNode {
   const [state, dispatchState] = useReducer(reducer, spec.state ?? {});
   const actionNames = new Set(Object.keys(spec.actions ?? {}));
 

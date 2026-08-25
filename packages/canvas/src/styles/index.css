@@ -109,11 +109,6 @@ layer(base);
   --detail-panel-border-left: 1px;
   --detail-panel-shadow: -8px 0 24px -8px rgba(15, 23, 42, 0.10), -24px 0 48px -16px rgba(15, 23, 42, 0.08);
 
-  /* Status colors are theme-agnostic (--amber/--amber-hi/--danger) so flow
-     state reads the same under both palettes. */
-  --amber: #f59e0b;
-  --amber-hi: #fbbf24;
-  --danger: #ef4444;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   --seeflow-handle-fill: hsl(var(--background));
@@ -243,34 +238,6 @@ layer(base);
   cursor: grabbing;
 }
 
-@keyframes seeflow-ping-fast {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  75%,
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-.seeflow-canvas-root .animate-ping-fast {
-  animation: seeflow-ping-fast 0.7s cubic-bezier(0, 0, 0.2, 1);
-}
-
-@keyframes seeflow-node-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
-  }
-}
-.seeflow-canvas-root .seeflow-node-pulse {
-  animation: seeflow-node-pulse 1.4s ease-in-out infinite;
-}
-
 @keyframes inline-edit-shake {
   0%,
   100% {
@@ -287,66 +254,6 @@ layer(base);
 }
 .seeflow-canvas-root .inline-edit-shake {
   animation: inline-edit-shake 0.32s ease-in-out;
-}
-
-/* Status-uplift keyframes — all gated on prefers-reduced-motion: no-preference */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes seeflow-ring-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  @keyframes seeflow-pill-pop {
-    0%,
-    100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.1);
-    }
-  }
-  @keyframes seeflow-play-pop {
-    0%,
-    100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.15);
-    }
-  }
-  @keyframes seeflow-success-halo {
-    0% {
-      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
-    }
-    100% {
-      box-shadow: 0 0 0 16px rgba(16, 185, 129, 0);
-    }
-  }
-  @keyframes seeflow-edge-handoff {
-    0%,
-    100% {
-      stroke-width: var(--seeflow-edge-base-width, 2px);
-    }
-    50% {
-      stroke-width: calc(var(--seeflow-edge-base-width, 2px) + 1px);
-    }
-  }
-
-  .seeflow-canvas-root .seeflow-ring-spin {
-    animation: seeflow-ring-spin 1.2s linear infinite;
-  }
-  .seeflow-canvas-root .seeflow-pill-pop {
-    animation: seeflow-pill-pop 240ms ease-out;
-  }
-  .seeflow-canvas-root .seeflow-play-pop {
-    animation: seeflow-play-pop 320ms ease-out;
-  }
-  .seeflow-canvas-root .seeflow-success-halo {
-    animation: seeflow-success-halo 600ms cubic-bezier(0, 0, 0.2, 1);
-  }
-  .seeflow-canvas-root .react-flow__edge[data-handoff="true"] .react-flow__edge-path {
-    animation: seeflow-edge-handoff 500ms ease-out;
-  }
 }
 
 .seeflow-canvas-root .inline-edit-empty::before {
@@ -371,17 +278,8 @@ layer(base);
 .seeflow-canvas-root button:disabled {
   cursor: not-allowed;
 }
-.seeflow-canvas-root .react-flow__node button:not([data-testid="play-button"]) {
+.seeflow-canvas-root .react-flow__node button {
   cursor: default;
-}
-/* The play button is the one in-node button that stays clickable. Its icon /
-   ring children are matched by `.react-flow__node *` above (cursor: default),
-   so without this they flicker against the button's own `pointer` as the mouse
-   crosses them. Cover the button AND its descendants. Disabled play buttons
-   carry `pointer-events: none`, so their cursor reflects the node behind. */
-.seeflow-canvas-root .react-flow__node [data-testid="play-button"]:not(:disabled),
-.seeflow-canvas-root .react-flow__node [data-testid="play-button"]:not(:disabled) * {
-  cursor: pointer;
 }
 /* Table column/row border-drag strips resize a single column/row, so they show
    the resize cursor on hover. The attribute selector (0,3,0) outranks the blanket

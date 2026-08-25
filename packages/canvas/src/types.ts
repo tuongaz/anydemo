@@ -53,15 +53,6 @@ export interface NodeDescription {
 }
 
 /**
- * Optional, schema-only capability fields shared by every node type. Valid on
- * every node type.
- */
-export interface NodeCapabilities {
-  /** Reserved for v2 skills runtime. Schema-only at v1. */
-  handlerModule?: string;
-}
-
-/**
  * Semantic-data fields shared by every node type. `name` is optional —
  * every visual works without a label. `icon` is decorative on every type
  * except `type:'icon'`, where it becomes the main visual and is required.
@@ -115,7 +106,7 @@ export type NodeType =
 export type DrawableNodeType = GeometricNodeType | 'linkflow' | 'line' | 'table';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
-export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
+export interface GeometricNodeData extends NodeSemanticBase, NodeVisual {}
 
 // Exhaustive enumeration of every field on `GeometricNodeData`. The `satisfies
 // Record<keyof GeometricNodeData, true>` clause makes TypeScript fail compilation
@@ -139,11 +130,9 @@ export const CANVAS_NODE_DATA_FIELDS = {
   textAlign: true,
   cornerRadius: true,
   shadow: true,
-  // capabilities
-  handlerModule: true,
 } as const satisfies Record<keyof GeometricNodeData, true>;
 
-export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface ImageNodeData extends NodeSemanticBase, NodeVisual {
   path: string;
   alt?: string;
   /** Optional caption rendered below the image; edited via double-click. */
@@ -151,7 +140,7 @@ export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabil
   borderWidth?: number;
 }
 
-export interface IconNodeData extends Omit<NodeSemanticBase, 'icon'>, NodeVisual, NodeCapabilities {
+export interface IconNodeData extends Omit<NodeSemanticBase, 'icon'>, NodeVisual {
   /** Required for type:'icon' — the icon IS the visual. */
   icon: string;
   color?: ColorToken;
@@ -159,7 +148,7 @@ export interface IconNodeData extends Omit<NodeSemanticBase, 'icon'>, NodeVisual
   alt?: string;
 }
 
-export interface FreehandNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface FreehandNodeData extends NodeSemanticBase, NodeVisual {
   /** Required for type:'freehand' — normalized [x, y, pressure] stroke samples. */
   points: [number, number, number][];
   color?: ColorToken;
@@ -174,12 +163,12 @@ export interface FreehandNodeData extends NodeSemanticBase, NodeVisual, NodeCapa
  * (solid/dashed/dotted). NOT connectable — endpoints are edited via the two
  * endpoint handles, never through the connection system.
  */
-export interface LineNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface LineNodeData extends NodeSemanticBase, NodeVisual {
   /** Exactly two endpoints [[x, y], [x, y]], normalized to the node box (0..1). */
   points: [[number, number], [number, number]];
 }
 
-export interface HtmlNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface HtmlNodeData extends NodeSemanticBase, NodeVisual {
   /**
    * Inline HTML content. Studio externalizes this to
    * `<project>/nodes/<id>/view.html` and stores a `file://` ref in flow.json;
@@ -245,7 +234,7 @@ export interface ComponentSpec {
  * state seeded from `spec.state`, resolves `$state` / `$action` / `$cond`
  * refs in element props, and dispatches `spec.actions` on user interaction.
  */
-export interface ComponentNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface ComponentNodeData extends NodeSemanticBase, NodeVisual {
   spec: ComponentSpec;
   /**
    * When true, the renderer measures its content and React Flow sizes the
@@ -272,7 +261,7 @@ export interface LinkflowTarget {
  * in the linked-healthy state; the unlinked + broken states paint their own
  * fixed chrome (dashed border + tint).
  */
-export interface LinkflowNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface LinkflowNodeData extends NodeSemanticBase, NodeVisual {
   target?: LinkflowTarget;
 }
 
@@ -290,7 +279,7 @@ export interface LinkflowNodeData extends NodeSemanticBase, NodeVisual, NodeCapa
  * geometric field set, and `childIds` persists to flow.json via its own
  * `FlowGroupNodeData` on-disk schema.
  */
-export interface GroupNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface GroupNodeData extends NodeSemanticBase, NodeVisual {
   /** Ids of the member nodes (absolute-positioned). At most one group per node; never another group's id (no nesting in v1). */
   childIds: string[];
 }
@@ -325,7 +314,7 @@ export interface TableRow {
  * rides the shared `NodeVisual` fields and routes to style.json like every other
  * node. Cell text is the content; there is no per-cell formatting in v1.
  */
-export interface TableNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+export interface TableNodeData extends NodeSemanticBase, NodeVisual {
   columns: TableColumn[];
   rows: TableRow[];
   /** Cell text keyed by `${rowId}:${colId}`. Empty cells are omitted (sparse). */

@@ -22,10 +22,8 @@ import type {
 } from '@/lib/api';
 import { fetchFlowDetail } from '@/lib/api';
 import { apiFetch } from '@/lib/api-client';
-import { useAppConfig } from '@/lib/auth/app-config';
 import { buildPastePayload, encodeClipboard } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
-import { resolveFileSrc } from '@/lib/file-src-resolver';
 import { decideFirstOpenFit } from '@/lib/first-open-fit';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
@@ -179,9 +177,9 @@ export interface DemoViewProps {
   applyDetail: (next: FlowDetail) => void;
   /**
    * Imperative handle on the canvas's export workflow, owned by App.tsx so
-   * the studio header's Share button and the cloud-export dialog can both
-   * reach the same instance. DemoView forwards it into `<SeeflowCanvas ref>`
-   * and uses it for the command-palette PDF/PNG entries.
+   * the studio header's Share button reaches the same instance. DemoView
+   * forwards it into `<SeeflowCanvas ref>` and uses it for the command-palette
+   * PDF/PNG entries.
    */
   canvasRef: RefObject<SeeflowCanvasHandle>;
 }
@@ -402,29 +400,18 @@ export function DemoView({
   // through DemoViewProps. Bound to one (project, flow) for its lifetime;
   // rebuilt on flow switch. Every REST mutation in this file (and the prop
   // threaded to <SeeflowCanvas>) now routes through this adapter.
-  const { isCloud } = useAppConfig();
   const rawAdapter = useMemo(
-    // Route canvas mutations through apiFetch so they carry the auth bearer
-    // token in authenticated hosts (cloud). In local mode the NullAuthProvider
-    // adds no header, so this is identical to a bare fetch. Without this, every
-    // node/connector save bypasses auth and 401s ("Couldn't save change").
+    // Route canvas mutations through apiFetch so they share the studio's retry
+    // behaviour on transient failures.
     // Cast: apiFetch is fetch-compatible but lacks the `preconnect` static.
-    () => {
-      const base = createRestAdapter({
+    () =>
+      createRestAdapter({
         baseUrl: '',
         project,
         flow,
         fetch: apiFetch as unknown as typeof fetch,
-      });
-      if (!isCloud) return base;
-      // Cloud is the collaborative canvas: no host execution, no local
-      // filesystem. Dropping these optional adapter methods hides the
-      // Open-in-editor / Reveal-in-Finder affordances in the canvas
-      // (their backend endpoints are 409-guarded in cloud anyway).
-      const { openFile, revealFile, ...rest } = base;
-      return rest;
-    },
-    [project, flow, isCloud],
+      }),
+    [project, flow],
   );
   // Live snapshot of the flow state the wrapper reads when an intercepted
   // mutation needs a `before` value. We use a ref (not the values themselves)
@@ -3123,11 +3110,6 @@ export function DemoView({
           // Post-US-008, file routes are addressed by project slug — so we
           // pass the URL slug here, not the registry entry id (`flowId`).
           projectId={project}
-          // Cloud only: image assets live behind the token-gated file route, and
-          // a native <img> GET can't carry the bearer header — so resolve the
-          // src through apiFetch into a blob URL. Local stays on the direct URL.
-          resolveFileSrc={isCloud ? resolveFileSrc : undefined}
-          enableEmbed={false}
           // ShareMenu lives in the studio header now (App.tsx). The library
           // component still exists for embedders consuming @seeflow/canvas
           // directly — we just don't render the in-canvas chrome here.
@@ -3253,9 +3235,7 @@ export function DemoView({
       {/* US-004: linkflow picker dialog. Opens via `data.onOpenPicker(mode)`
           injected into linkflow nodes (see linkflowDecoratedNodes above). The
           commit handler PATCHes the active node's target through the wrapped
-          adapter so the change flows through undo/redo + SSE echo. ExportDialog
-          itself was lifted to App.tsx so the studio header can drive it from
-          its Share menu — DemoView no longer renders it locally. */}
+          adapter so the change flows through undo/redo + SSE echo. */}
       <LinkflowPickerDialog
         open={linkflowPicker !== null}
         onOpenChange={(open) => {

@@ -16,7 +16,7 @@
  *                                       className already renders the icon
  *                                       caption at 12px)
  *
- * Last-used overlay (docs/plans/2026-05-13-last-used-style-design.md): each
+ * Last-used overlay (see git history: 2026-05-13-last-used-style-design.md): each
  * builder accepts an optional `lastUsed` patch and merges only the fields its
  * kind accepts on top of the hardcoded factory defaults. An empty patch
  * reproduces today's behavior exactly. Property irrelevant to a given kind

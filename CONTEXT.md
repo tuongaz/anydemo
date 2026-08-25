@@ -9,7 +9,7 @@ A single canvas of nodes and connectors describing one system or story — the c
 _Avoid_: Demo (dead legacy term — scrub on sight), board, drawing
 
 **Project**:
-A named container of one or more flows; the unit that is registered, exported, and shared.
+A named container of one or more flows; the unit that is registered.
 _Avoid_: Repo, workspace
 
 **Node**:
@@ -20,7 +20,7 @@ A directed relationship between two nodes, optionally labeled and annotated with
 _Avoid_: Edge (React Flow implementation term)
 
 **Canvas**:
-The interactive surface a flow is rendered on, in edit, view, or mini mode.
+The interactive surface a flow is rendered on inside the studio.
 
 **Studio**:
 The local SeeFlow application (backend + UI) that hosts registered projects and serves the canvas.
@@ -37,5 +37,5 @@ The propagation of flow edits to every open canvas and connected agent session a
 _Avoid_: Live, living (retired positioning vocabulary)
 
 **Export**:
-Publishing a project from the local studio to the cloud for sharing.
-_Avoid_: Deploy, upload
+Downloading a flow from the studio as a PNG or PDF file.
+_Avoid_: Publish, share, upload

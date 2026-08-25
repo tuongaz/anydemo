@@ -109,36 +109,26 @@ image. `createRestAdapter` in
 implementation targeting the SeeFlow studio's HTTP endpoints; implement your
 own adapter to plug the canvas into a different backend.
 
-## Share menu — PDF / PNG / Embed export
+## Download menu — PDF / PNG export
 
-`<SeeflowCanvas>` ships a top-right ShareMenu that exposes Download PDF,
-Download PNG, and an iframe Embed snippet. Capture lives in the canvas via
+`<SeeflowCanvas>` ships a top-right download menu that exposes Download PDF
+and Download PNG. Capture lives in the canvas via
 [`useCanvasExport`](./src/hooks/use-canvas-export.ts), so every embedder gets
 the same fit-view + snapshot + jspdf pipeline for free — no setup required.
 
 - The menu renders in `mode='edit'` and `mode='view'`, and is suppressed in
   `mode='mini'`. Override with `showShareMenu={true|false}` to force it on or
   off for a specific surface.
-- The Embed action is **opt-in** — pass `enableEmbed={true}` to surface the
-  iframe-snippet item. Works in both `mode='edit'` and `mode='view'`, but
-  still requires a `projectId`. The default is off because Embed is a
-  SeeFlow-studio-specific affordance; most embedders of this package should
-  keep it hidden.
-- An opt-in "Export to seeflow.dev" item is also gated on edit mode (view
-  embedders only see PDF / PNG download).
-- Pass `onExportToCloud` to enable the "Export to seeflow.dev" item — when
-  the prop is omitted the item is hidden. Use this to launch your own
-  upload-to-cloud dialog.
-- Pass `projectId` so the embed snippet URL resolves to
-  `https://seeflow.dev/embed/<projectId>`.
+- Both items are wired automatically from the canvas's own export hook; the
+  trigger hides itself if neither download is available.
+- Pass `projectId` to seed the download filename (`<projectId>.pdf` /
+  `<projectId>.png`); it falls back to `canvas` when unset.
 
 ```tsx
 <SeeflowCanvas
   mode="edit"
   adapter={adapter}
   projectId="my-demo"
-  enableEmbed={true}
-  onExportToCloud={() => setExportDialogOpen(true)}
   /* ...other props */
 />
 ```
@@ -208,9 +198,8 @@ shows a slice.
 ### Imperative handle (`SeeflowCanvasHandle`)
 
 `<SeeflowCanvas>` is a `forwardRef` component. Pass a `ref` to drive PDF / PNG
-export, open the embed dialog, or capture a preview thumbnail from a command
-palette / keyboard shortcut / external menu — no need to mirror the export
-workflow in the host.
+export from a command palette / keyboard shortcut / external menu — no need to
+mirror the export workflow in the host.
 
 ```tsx
 import { useRef } from 'react';
@@ -221,10 +210,6 @@ const canvasRef = useRef<SeeflowCanvasHandle>(null);
 <SeeflowCanvas ref={canvasRef} /* ... */ />;
 
 // Trigger from a command palette:
-canvasRef.current?.exportPdf();      // download PDF
-canvasRef.current?.exportPng();      // download PNG
-canvasRef.current?.openEmbedDialog(); // open iframe snippet dialog (no-op when ShareMenu is hidden)
-
-// Capture a preview thumbnail without triggering a download:
-const dataUrl = await canvasRef.current?.capturePreview();
+canvasRef.current?.exportPdf(); // download PDF
+canvasRef.current?.exportPng(); // download PNG
 ```

@@ -1,5 +1,5 @@
 /**
- * Last-used style memory (design doc: docs/plans/2026-05-13-last-used-style-design.md).
+ * Last-used style memory (design doc, see git history: 2026-05-13-last-used-style-design.md).
  *
  * When the user changes a style property on any node or connector, remember
  * that value and apply it to the next shape of the same family they create.

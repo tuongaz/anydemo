@@ -25,7 +25,7 @@ export interface FlowStackPaneProps {
   demos: FlowSummary[];
   refreshFlows: () => Promise<void> | void;
   /**
-   * App-owned canvas imperative handle (Share menu + ExportDialog drive it).
+   * App-owned canvas imperative handle (the header's Share menu drives it).
    * Forwarded only to the top stack entry's DemoView — hidden mounts use a
    * local throwaway ref so a flow under the top can't overwrite App's ref.
    */

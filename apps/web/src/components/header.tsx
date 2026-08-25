@@ -1,9 +1,7 @@
 import { ProjectSwitcher } from '@/components/project-switcher';
-import { UserMenu } from '@/components/user-menu';
 import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import { type Theme, useTheme } from '@/hooks/use-theme';
 import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
-import { useAppConfig } from '@/lib/auth/app-config';
 import {
   Button,
   DropdownMenu,
@@ -22,13 +20,6 @@ import { ArrowLeft, Settings, Workflow } from 'lucide-react';
 export interface HeaderShareCallbacks {
   onDownloadPdf: () => Promise<unknown> | unknown;
   onDownloadPng: () => Promise<unknown> | unknown;
-  onExportToCloud: () => void;
-  /**
-   * Open the host's "share with people" dialog. Set only when the host supports
-   * member grants (cloud mode with a known project id); omitting it hides the
-   * ShareMenu item.
-   */
-  onShareWithMembers?: () => void;
 }
 
 export interface HeaderProps {
@@ -39,8 +30,7 @@ export interface HeaderProps {
   /**
    * Renders the Share trigger between ProjectSwitcher and Settings. Pass
    * `undefined` (the default) when no flow is open — the trigger is hidden
-   * entirely on StudioHome. Embed is intentionally left off here to mirror
-   * the existing studio config.
+   * entirely on StudioHome.
    */
   share?: HeaderShareCallbacks;
   /**
@@ -70,7 +60,6 @@ export function Header({
   previousFlowName,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
-  const { isCloud, user, provider } = useAppConfig();
   const showBack = previousFlowName !== undefined;
 
   return (
@@ -112,16 +101,7 @@ export function Header({
           onUnregisterProject={onUnregisterProject}
         />
         {share ? (
-          <ShareMenu
-            mode="edit"
-            enableEmbed={false}
-            onDownloadPdf={share.onDownloadPdf}
-            onDownloadPng={share.onDownloadPng}
-            // Export-to-cloud targets the seeflow.dev viewer — hide it in the
-            // cloud app (omitting the callback hides the menu item).
-            onExportToCloud={isCloud ? undefined : share.onExportToCloud}
-            onShareWithMembers={share.onShareWithMembers}
-          />
+          <ShareMenu onDownloadPdf={share.onDownloadPdf} onDownloadPng={share.onDownloadPng} />
         ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -158,14 +138,6 @@ export function Header({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        {isCloud && user ? (
-          <UserMenu
-            user={user}
-            onOpenProfile={() => provider.openProfile?.()}
-            onMyProjects={() => resetFlow(null)}
-            onSignOut={() => void provider.signOut()}
-          />
-        ) : null}
       </div>
     </header>
   );

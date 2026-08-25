@@ -1993,7 +1993,7 @@ describe('SeeflowCanvas', () => {
   });
 
   // Ghost preview honours the last-used node-style bucket — see
-  // `docs/plans/2026-05-23-ghost-preview-last-used-style-design.md`. The
+  // git history: `2026-05-23-ghost-preview-last-used-style-design.md`. The
   // commit path overlays `getLastUsedStyle().node` via `buildNewShapeData`;
   // the ghost reads the same bucket directly at render time so the preview
   // shown during drag matches what gets committed on pointer-up.
@@ -3472,11 +3472,11 @@ describe('SeeflowCanvas', () => {
     // The hook-shim tree captures <DetailPanel ...> as a placeholder element
     // (its body isn't executed) so we can assert its forwarded props directly.
     //
-    // The new sidebar-open state lives at useStateOverrides[13] (slot 14 per
+    // The new sidebar-open state lives at useStateOverrides[12] (slot 13 per
     // packages/canvas/CLAUDE.md). Tests below force it to `true` to exercise
     // the mounted-panel path.
     const sidebarOpenOverrides: unknown[] = [];
-    sidebarOpenOverrides[13] = true;
+    sidebarOpenOverrides[12] = true;
 
     function findDetailPanel(tree: unknown) {
       return findElement(tree, (el) => el.type === DetailPanel);
@@ -3678,7 +3678,7 @@ describe('SeeflowCanvas', () => {
     // LEFT, and is gated on the same `flags.showDetailPanel && !disableSidebar`
     // pair that gates the panel itself.
     const sidebarOpenOverrides: unknown[] = [];
-    sidebarOpenOverrides[13] = true;
+    sidebarOpenOverrides[12] = true;
 
     function findDetailPanel(tree: unknown) {
       return findElement(tree, (el) => el.type === DetailPanel);
@@ -3701,7 +3701,7 @@ describe('SeeflowCanvas', () => {
     });
 
     it('clicking the inspector toggle drives DetailPanel.open=true with the selected node', () => {
-      // With the toggle "open" (sidebarOpen=true via the slot-13 override) and a
+      // With the toggle "open" (sidebarOpen=true via the slot-12 override) and a
       // node selected, DetailPanel receives open=true so the Sheet slides in,
       // and `node` is the selected one.
       const a = makeShapeNode('a');
@@ -3742,9 +3742,9 @@ describe('SeeflowCanvas', () => {
       setterCalls.length = 0;
       handler?.({} as unknown);
       expect(paneClicks).toBe(1);
-      // The handler MUST NOT call setSidebarOpen on slot 13.
-      const slot13Calls = setterCalls.filter((c) => c.slot === 13);
-      expect(slot13Calls).toEqual([]);
+      // The handler MUST NOT call setSidebarOpen on slot 12.
+      const slot12Calls = setterCalls.filter((c) => c.slot === 12);
+      expect(slot12Calls).toEqual([]);
     });
 
     it('connector-only selection leaves DetailPanel.open=false', () => {
@@ -3799,7 +3799,7 @@ describe('SeeflowCanvas', () => {
       const closedTree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const closedToggle = findInspectorToggle(closedTree);
       expect((closedToggle?.props as { open?: boolean }).open).toBe(false);
-      // Pinned open via slot-13 — the in-sidebar close button owns the close
+      // Pinned open via slot-12 — the in-sidebar close button owns the close
       // affordance, so the top-right toggle unmounts to avoid a duplicate icon.
       const openTree = callSeeflowCanvas(
         { nodes: [makeShapeNode('a')] },
@@ -4149,9 +4149,6 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: true,
       enableSelection: true,
       enableNodeMove: true,
-      // Embed defaults OFF in every mode — it's a SeeFlow-studio-specific
-      // affordance, so embedders of @seeflow/canvas opt in explicitly.
-      enableEmbed: false,
       // US-004: alignment guides default ON in edit mode.
       enableAlignmentGuides: true,
       // No preset for the snap threshold — passes through undefined.
@@ -4183,7 +4180,6 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: true,
       enableSelection: true,
       enableNodeMove: true,
-      enableEmbed: false,
       // US-004: view mode is read-only — alignment guides off.
       enableAlignmentGuides: false,
       alignmentSnapThreshold: undefined,
@@ -4213,7 +4209,6 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: false,
       enableSelection: false,
       enableNodeMove: false,
-      enableEmbed: false,
       // US-004: mini thumbnails are static — alignment guides off.
       enableAlignmentGuides: false,
       alignmentSnapThreshold: undefined,
@@ -4276,18 +4271,6 @@ describe('US-027: resolveFlags helper', () => {
     expect(resolveFlags({ mode: 'view', showToolbar: true }).showToolbar).toBe(true);
   });
 
-  it('lets an edit-mode consumer opt in to the ShareMenu Embed item via enableEmbed', () => {
-    // Embed is off by default in every mode; the studio (and other hosts that
-    // want the iframe-snippet surface) flip it on explicitly. Without the
-    // override the flag stays false so most embedders never surface Embed.
-    expect(resolveFlags({ mode: 'edit' }).enableEmbed).toBe(false);
-    expect(resolveFlags({ mode: 'edit', enableEmbed: true }).enableEmbed).toBe(true);
-    // Override is honored regardless of mode (the menu's mode+projectId gate
-    // is what stops a view-mode embed surface from rendering at the end).
-    expect(resolveFlags({ mode: 'view', enableEmbed: true }).enableEmbed).toBe(true);
-    expect(resolveFlags({ mode: 'mini', enableEmbed: true }).enableEmbed).toBe(true);
-  });
-
   it('defaults showMiniMap ON for edit + view, OFF for mini, and accepts overrides', () => {
     // The high-level outline box is a navigation aid for full / read-only
     // canvases. Mini mode IS the thumbnail, so the default is OFF there to
@@ -4310,14 +4293,12 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     return findElement(tree, (el) => el.type === (ShareMenu as unknown));
   }
 
-  it('exposes exportPdf, exportPng, openEmbedDialog, capturePreview, pasteImageFromClipboard on the ref handle after mount', () => {
+  it('exposes exportPdf, exportPng, pasteImageFromClipboard on the ref handle after mount', () => {
     const handle: { current: SeeflowCanvasHandle | null } = { current: null };
     callSeeflowCanvas({}, { ref: handle });
     expect(handle.current).not.toBeNull();
     expect(typeof handle.current?.exportPdf).toBe('function');
     expect(typeof handle.current?.exportPng).toBe('function');
-    expect(typeof handle.current?.openEmbedDialog).toBe('function');
-    expect(typeof handle.current?.capturePreview).toBe('function');
     expect(typeof handle.current?.pasteImageFromClipboard).toBe('function');
     // No-op path: jsdom has no real rfInstance/wrapper, so calling it without
     // a DataTransfer-backed image must not throw.
@@ -4326,18 +4307,12 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
 
   it('renders the ShareMenu in edit mode by default', () => {
     const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter });
-    const menu = findShareMenu(tree);
-    expect(menu).not.toBeNull();
-    // mode is forwarded as 'edit' (not mapped to view) so Embed + Export to
-    // seeflow.dev remain reachable inside the menu's own gating.
-    expect(menu?.props.mode).toBe('edit');
+    expect(findShareMenu(tree)).not.toBeNull();
   });
 
   it('renders the ShareMenu in view mode by default', () => {
     const tree = callSeeflowCanvas({ mode: 'view' });
-    const menu = findShareMenu(tree);
-    expect(menu).not.toBeNull();
-    expect(menu?.props.mode).toBe('view');
+    expect(findShareMenu(tree)).not.toBeNull();
   });
 
   it("does NOT render the ShareMenu when mode === 'mini'", () => {
@@ -4376,34 +4351,16 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     expect(findElement(editOverride, (el) => el.type === MiniMap)).toBeNull();
   });
 
-  it('threads projectId + onExportToCloud + the exportApi callbacks into ShareMenu', () => {
-    const onExportToCloud = () => {};
+  it('threads the exportApi callbacks into ShareMenu', () => {
     const tree = callSeeflowCanvas({
       mode: 'edit',
       adapter: noopAdapter,
       projectId: 'demo-42',
-      onExportToCloud,
     });
     const menu = findShareMenu(tree);
     expect(menu).not.toBeNull();
-    expect(menu?.props.projectId).toBe('demo-42');
-    expect(menu?.props.onExportToCloud).toBe(onExportToCloud);
     expect(typeof menu?.props.onDownloadPdf).toBe('function');
     expect(typeof menu?.props.onDownloadPng).toBe('function');
-    // The controlled embed-dialog state lift exposes both prongs.
-    expect(typeof menu?.props.onEmbedOpenChange).toBe('function');
-    expect(menu?.props.embedOpen).toBe(false);
-  });
-
-  it('forwards onShareWithMembers into ShareMenu in view mode', () => {
-    const onShareWithMembers = () => {};
-    const tree = callSeeflowCanvas({
-      mode: 'view',
-      onShareWithMembers,
-    });
-    const menu = findShareMenu(tree);
-    expect(menu).not.toBeNull();
-    expect(menu?.props.onShareWithMembers).toBe(onShareWithMembers);
   });
 });
 
@@ -4878,13 +4835,13 @@ describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
 
 // ---------------------------------------------------------------------------
 // Canvas grouping M6 — double-click ENTER / one documented EXIT set + the
-// isolation render overlay (design §5.3). `activeGroupId` is the 15th useState
-// → setterSink slot 14 (per packages/canvas/CLAUDE.md). The live pointer/keydown
+// isolation render overlay (design §5.3). `activeGroupId` is the 14th useState
+// → setterSink slot 13 (per packages/canvas/CLAUDE.md). The live pointer/keydown
 // gesture itself is covered by the orchestrator browser test; here we assert the
 // WIRING + the state transitions via the dispatcher-shim.
 // ---------------------------------------------------------------------------
 describe('grouping M6: enter / exit isolation (§5.3)', () => {
-  const ACTIVE_GROUP_SLOT = 14;
+  const ACTIVE_GROUP_SLOT = 13;
   const makeGroup = (id: string, childIds: string[]): FlowNode => ({
     id,
     type: 'group',
@@ -5069,7 +5026,7 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
         },
       };
       for (const fn of captured) fn(escEvent);
-      // The isolation step ran (slot 14 → null) and preventDefault()'d — it
+      // The isolation step ran (slot 13 → null) and preventDefault()'d — it
       // short-circuits BEFORE the selection-clear (a SECOND Esc would clear
       // selection; that ranking is the browser test's job to confirm).
       expect(lastActiveSetter(sink)?.next).toBeNull();

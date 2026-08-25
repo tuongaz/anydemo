@@ -1,5 +1,4 @@
 import { type CreateProjectResult, createProject } from '@/lib/api';
-import { useAppConfig } from '@/lib/auth/app-config';
 import {
   Button,
   Dialog,
@@ -18,7 +17,6 @@ export interface CreateProjectDialogProps {
 }
 
 export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreateProjectDialogProps) {
-  const { isCloud } = useAppConfig();
   const [path, setPath] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -75,9 +73,8 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
         <DialogHeader>
           <DialogTitle>Create new project</DialogTitle>
           <DialogDescription>
-            {isCloud
-              ? 'Scaffold a new SeeFlow project.'
-              : "Scaffold a new SeeFlow project. It's created in ~/.seeflow/projects/ unless you give a path."}
+            Scaffold a new SeeFlow project. It's created in ~/.seeflow/projects/ unless you give a
+            path.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -94,27 +91,24 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
               className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
-          {/* Cloud projects are scaffolded server-side — no user-supplied path. */}
-          {isCloud ? null : (
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium">
-                Project path <span className="text-muted-foreground">(optional)</span>
-              </span>
-              <input
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="/absolute/path/to/my-project"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                data-testid="create-project-path-input"
-                className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-              <span className="text-xs text-muted-foreground">
-                Leave blank to create it in ~/.seeflow/projects/
-              </span>
-            </label>
-          )}
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium">
+              Project path <span className="text-muted-foreground">(optional)</span>
+            </span>
+            <input
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="/absolute/path/to/my-project"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              data-testid="create-project-path-input"
+              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <span className="text-xs text-muted-foreground">
+              Leave blank to create it in ~/.seeflow/projects/
+            </span>
+          </label>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">
               Description <span className="text-muted-foreground">(optional)</span>

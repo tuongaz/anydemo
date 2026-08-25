@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { runLogin, runLogout, runWhoami } from './cli-auth.ts';
 import {
   drainStdin,
   loadBody,
@@ -12,9 +11,7 @@ import {
 } from './cli-helpers.ts';
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations, registerProject } from './cli-ops.ts';
-import { DEFAULT_CLOUD_ENDPOINT } from './credentials.ts';
 import { createEventBus } from './events.ts';
-import { bundleProject } from './export-bundle.ts';
 import { JqError, applyJq } from './jq-filter.ts';
 import type { LayoutOptions } from './layout.ts';
 import {
@@ -24,7 +21,6 @@ import {
   ReorderBodySchema,
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
-import { publishProject } from './publish.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import {
   DEFAULT_CONFIG,
@@ -218,14 +214,6 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runSchema();
 } else if (sub === 'ids') {
   await runIds();
-} else if (sub === 'login') {
-  await runLoginCmd();
-} else if (sub === 'logout') {
-  runLogoutCmd();
-} else if (sub === 'whoami') {
-  runWhoamiCmd();
-} else if (sub === 'export') {
-  await runExportCmd();
 } else {
   console.error(`Unknown subcommand: ${sub}`);
   printHelp();
@@ -289,14 +277,6 @@ Icons (local cache):
   icons add <v>        Install a vendor pack (v: aws|azure) [--accept-terms] [--pack-url <url>]
   icons update <v>     Re-install a vendor pack — same flags as add
   icons remove <v>     Remove an installed vendor pack (idempotent)
-
-Cloud account:
-  login                Sign in to the cloud (opens a browser) [--endpoint <url>]
-  logout               Clear the stored cloud credential [--endpoint <url>]
-  whoami               Show the stored cloud identity [--endpoint <url>]
-  export [path]        Bundle a project (default: cwd) and export it to the cloud,
-                       creating it on first run and updating in place after
-                       [--endpoint <url>] [--dry-run]
 
 Meta:
   version              Print the CLI version
@@ -1075,8 +1055,8 @@ async function runSchema() {
   }
   // Drill into a single named schema within the category — e.g.
   // `seeflow schema node component`. Notes ride along unchanged because the
-  // cross-variant invariants (image path prefix, scriptPath rooting, etc.)
-  // are still relevant when you're looking at one variant.
+  // cross-variant invariants (image path prefix, etc.) are still relevant when
+  // you're looking at one variant.
   if (subname) {
     const single = getCategorySubschema(category as string, subname);
     if (!single) {
@@ -1254,56 +1234,4 @@ async function runIconsRemove() {
   const { iconCacheRoot } = await import('./icons/paths.ts');
   removeIconPack(vendor, { cacheRoot: iconCacheRoot() });
   printOk({ removed: vendor });
-}
-
-// --- Cloud account verbs (generic, provider-agnostic) -----------------------
-// Declared as a hoisted function (not a const arrow) so the cloud command
-// handlers, which are invoked from the top-level dispatch above, can reach it
-// without tripping the temporal-dead-zone on the const binding.
-function cloudEndpoint(): string {
-  return flagValue('endpoint') ?? process.env.SEEFLOW_CLOUD_URL ?? DEFAULT_CLOUD_ENDPOINT;
-}
-
-async function runLoginCmd() {
-  const endpoint = cloudEndpoint();
-  console.error(`Opening ${endpoint} to sign in… (a browser window should open)`);
-  try {
-    const outcome = await runLogin({ endpoint });
-    printOk({
-      loggedIn: true,
-      endpoint: outcome.endpoint,
-      userId: outcome.userId,
-      email: outcome.email,
-    });
-  } catch (err) {
-    printError(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-function runLogoutCmd() {
-  const endpoint = cloudEndpoint();
-  runLogout(endpoint);
-  printOk({ loggedOut: true, endpoint });
-}
-
-function runWhoamiCmd() {
-  printOk(runWhoami(cloudEndpoint()));
-}
-
-async function runExportCmd() {
-  const root = resolve(positionalArgs()[0] ?? '.');
-  const endpoint = cloudEndpoint();
-  // --dry-run bundles the project without any network call (no credential
-  // needed) — useful for inspecting what would be shipped.
-  if (hasFlag('dry-run')) {
-    const bundle = bundleProject(root);
-    printOk({ dryRun: true, endpoint, name: bundle.name, files: bundle.files.map((f) => f.path) });
-    return;
-  }
-  try {
-    const { projectId } = await publishProject({ root, baseUrl: endpoint });
-    printOk({ exported: true, endpoint, projectId });
-  } catch (err) {
-    printError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
 }

@@ -14,7 +14,7 @@ DRY_RUN ?= 0
 
 CLI := bun run apps/studio/src/cli.ts
 
-.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release release.local deploy gh.deploy docker.build docker.run docker.buildx docker.push
+.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean cli start stop register demo ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync release release.local docker.build docker.run docker.buildx docker.push
 
 SEEFLOW_SCHEMA_SRC := apps/studio/src/schema.ts
 SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
@@ -29,13 +29,13 @@ help: ## Show this target list
 	@echo "  ITERATIONS=<n>       iterations passed to 'make ralph' (default: 10)"
 	@echo "  DOCKER_IMAGE=<name>  image name for docker.* targets (default: tuongaz/seeflow)"
 	@echo "  DOCKER_TAG=<tag>     image tag for docker.* targets (default: dev)"
-	@echo "  BUMP=<level>         semver bump for 'make deploy' / 'make release.local' (patch, minor, major; default: patch)"
+	@echo "  BUMP=<level>         semver bump for 'make release.local' (patch, minor, major; default: patch)"
 	@echo "  DRY_RUN=1            'make release.local' runs the gate only (no bump/tag/publish)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev"
-	@echo "  make register DIR=examples/todo-demo-target"
-	@echo "  make docker.run DIR=examples/todo-demo-target"
+	@echo "  make register DIR=apps/studio/examples/order-pipeline"
+	@echo "  make docker.run DIR=apps/studio/examples/order-pipeline"
 	@echo "  make release.local BUMP=minor"
 
 install: ## Install all workspace deps via bun
@@ -77,8 +77,8 @@ stop: ## Stop the studio daemon (sends SIGTERM)
 register: ## Register a demo: make register DIR=<path>
 	$(CLI) register --path $(DIR)
 
-demo: ## Quickstart: start studio, register the bundled todo example, open in browser
-	@OUTPUT="$$($(CLI) register --path examples/todo-demo-target)"; \
+demo: ## Quickstart: register the bundled order-pipeline example and open it in the browser
+	@OUTPUT="$$($(CLI) register --path apps/studio/examples/order-pipeline)"; \
 	echo "$$OUTPUT"; \
 	URL="$$(echo "$$OUTPUT" | grep -oE 'http://[^ ]+' | head -1)"; \
 	if [ -n "$$URL" ]; then \
@@ -88,11 +88,8 @@ demo: ## Quickstart: start studio, register the bundled todo example, open in br
 	  esac; \
 	fi
 
-example-order-pipeline: ## Run the order-pipeline example app (port 3040)
-	cd examples/order-pipeline && bun start
-
 clean: ## Remove node_modules + apps/studio/dist (preserves ~/.seeflow)
-	rm -rf node_modules apps/*/node_modules packages/*/node_modules examples/*/node_modules
+	rm -rf node_modules apps/*/node_modules packages/*/node_modules
 	rm -rf apps/studio/dist
 
 ralph: ## Run ralph loop (default 10 iterations; override with ITERATIONS=N)
@@ -120,9 +117,6 @@ verify-seeflow-schema-sync: ## Fail if vendored schema has drifted from apps/stu
 	fi
 	@echo "OK: $(SEEFLOW_SCHEMA_DST) matches $(SEEFLOW_SCHEMA_SRC)"
 
-smoke-seeflow: ## End-to-end smoke: registers TWO demos in one repo via plugin scripts (studio must be running)
-	@bun run skills/seeflow/scripts/smoke.ts
-
 docker.build: ## Build the local Docker image (DOCKER_IMAGE:DOCKER_TAG)
 	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
@@ -137,11 +131,3 @@ docker.push: ## Build and push multi-arch image to the registry
 
 release.local: ## Publish @tuongaz/seeflow to npm BY HAND when GitHub Actions is down (BUMP=patch|minor|major; DRY_RUN=1 to gate only)
 	BUMP=$(BUMP) DRY_RUN=$(DRY_RUN) bash apps/studio/scripts/release-local.sh
-
-deploy: gh.deploy ## Alias for gh.deploy
-
-gh.deploy: ## Trigger the Release workflow (BUMP=patch|minor|major, default patch) + viewer deploy
-	@gh workflow run release.yml --repo tuongaz/seeflow -f bump=$(BUMP)
-	@gh workflow run deploy.yml --repo tuongaz/seeflow-viewer
-	@echo "Release ($(BUMP)) running: https://github.com/tuongaz/seeflow/actions/workflows/release.yml"
-	@echo "Viewer deploy running: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"

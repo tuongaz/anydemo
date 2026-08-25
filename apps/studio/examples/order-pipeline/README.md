@@ -1,6 +1,6 @@
 # Order Pipeline — SeeFlow Example
 
-A four-stage e-commerce pipeline (Order → Inventory → Payment → Fulfillment) served directly by the SeeFlow studio. Hit **Play** on the canvas and watch each service light up in sequence as events flow through the chain.
+A four-stage e-commerce pipeline (Order → Inventory → Payment → Fulfillment) drawn as a SeeFlow flow: a node per stage, the connectors between them, and per-node detail describing what each stage is responsible for.
 
 ## Run
 
@@ -8,4 +8,4 @@ A four-stage e-commerce pipeline (Order → Inventory → Payment → Fulfillmen
 seeflow start
 ```
 
-SeeFlow registers this example automatically on first launch. Open the studio at `http://localhost:4321` and click **Play** on the **POST /orders** node.
+SeeFlow copies this example into `~/.seeflow/` and registers it every time the studio starts. Open `http://localhost:4321` and pick the **Order Pipeline** flow.

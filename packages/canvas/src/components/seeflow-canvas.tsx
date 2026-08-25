@@ -189,11 +189,10 @@ export interface CanvasFeatureOverrides {
    */
   showControls?: boolean;
   /**
-   * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG / Embed /
-   * Export to seeflow.dev). Default ON for `edit` and `view` (downloads and
-   * embed are useful for both edit and read-only consumers), OFF for `mini`
-   * (thumbnails want no chrome). The menu's own internal rules still filter
-   * items by mode + the presence of each callback / `projectId`.
+   * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG). Default ON
+   * for `edit` and `view` (downloads are useful for both edit and read-only
+   * consumers), OFF for `mini` (thumbnails want no chrome). The menu's own
+   * internal rules still filter items by the presence of each callback.
    */
   showShareMenu?: boolean;
   /**
@@ -203,14 +202,6 @@ export interface CanvasFeatureOverrides {
    * thumbnail; nesting a minimap inside it would be redundant chrome.
    */
   showMiniMap?: boolean;
-  /**
-   * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
-   * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
-   * affordance and most embedders of this package should not surface the
-   * iframe-snippet dialog. Set to `true` to opt in (works in both `edit` and
-   * `view` modes); the item still requires a `projectId` to actually render.
-   */
-  enableEmbed?: boolean;
   enableKeyboard?: boolean;
   enableContextMenu?: boolean;
   enableDragDrop?: boolean;
@@ -268,7 +259,6 @@ export interface ResolvedCanvasFlags {
   enablePan: boolean;
   enableSelection: boolean;
   enableNodeMove: boolean;
-  enableEmbed: boolean;
   enableAlignmentGuides: boolean;
   // No preset default — the alignment hook falls back to 6 when undefined.
   alignmentSnapThreshold?: number;
@@ -290,8 +280,6 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   enablePan: true,
   enableSelection: true,
   enableNodeMove: true,
-  // Embed is a SeeFlow-studio-specific affordance — opt-in even in edit mode.
-  enableEmbed: false,
   // Alignment guides + snap are an editing affordance — on by default in edit.
   enableAlignmentGuides: true,
 };
@@ -308,8 +296,7 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
   // fit-view buttons — they're navigation aids, not editing affordances.
   showControls: true,
-  // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
-  // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
+  // View mode keeps ShareMenu so embedders can still download PDF/PNG.
   showShareMenu: true,
   // View mode keeps the MiniMap — it's a navigation aid that pairs with the
   // pan/zoom that stays on in this mode.
@@ -327,8 +314,6 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // inspector) and nudge nodes locally without persisting.
   enableSelection: true,
   enableNodeMove: true,
-  // Embed is edit-mode-only inside ShareMenu, so view never surfaces it.
-  enableEmbed: false,
   // View mode is read-only — no drag-snap affordances.
   enableAlignmentGuides: false,
 };
@@ -356,7 +341,6 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   enablePan: false,
   enableSelection: false,
   enableNodeMove: false,
-  enableEmbed: false,
   // Thumbnails are static — no alignment guides.
   enableAlignmentGuides: false,
 };
@@ -389,7 +373,6 @@ export function resolveFlags(
     enablePan: input.enablePan ?? defaults.enablePan,
     enableSelection: input.enableSelection ?? defaults.enableSelection,
     enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove,
-    enableEmbed: input.enableEmbed ?? defaults.enableEmbed,
     enableAlignmentGuides: input.enableAlignmentGuides ?? defaults.enableAlignmentGuides,
     // No preset — pass through verbatim; the hook defaults to 6 when undefined.
     alignmentSnapThreshold: input.alignmentSnapThreshold,
@@ -432,24 +415,13 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * Optional override for the file-serving URL prefix used by file-backed
    * nodes (type:'image', type:'html'). Default `/api/projects` is correct for the
-   * studio (same-origin). Embedders that serve files from a different host
-   * or route shape pass an absolute prefix here — e.g. the public viewer
-   * passes `https://seeflow.dev/api/flows` so files resolve to
-   * `https://seeflow.dev/api/flows/:id/files/:path` instead of falling back
-   * to the viewer's own origin. Threaded into each node's runtime `data`
-   * alongside `projectId`.
+   * studio (same-origin). Embedders that serve files from a different route
+   * shape pass a prefix here — e.g. `http://localhost:4321/api/projects` so
+   * files resolve to `http://localhost:4321/api/projects/:id/files/:path`
+   * instead of falling back to the embedder's own origin. Threaded into each
+   * node's runtime `data` alongside `projectId`.
    */
   fileBaseUrl?: string;
-  /**
-   * Optional host hook that turns a file URL (the one `fileUrl()` builds for a
-   * file-backed node) into a displayable src — e.g. fetching it with an auth
-   * token and returning a blob URL. Needed in the cloud, where the file route
-   * is token-gated and a native `<img>` GET can't carry the bearer header (so
-   * it 401s and the image renders broken). Absent → file-backed nodes use the
-   * URL directly (local/same-origin, unchanged). Threaded into each node's
-   * runtime `data` alongside `projectId` / `fileBaseUrl`.
-   */
-  resolveFileSrc?: (url: string) => Promise<string>;
   /**
    * US-013: studio origin used by IconRenderer's `kind:'svg-url'` branch when
    * resolving vendor-prefixed icon ids (`aws:lambda` → `${studioBaseUrl}/api/icons/aws/lambda.svg`).
@@ -1001,21 +973,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   customIcons?: Record<string, ComponentType<LucideProps>>;
   /**
-   * US-014: opt-in callback that wires the "Export to seeflow.dev" item in
-   * the canvas's built-in ShareMenu. Edit-mode-only (the ShareMenu enforces
-   * the visibility rule internally) so view embedders never see the cloud
-   * upload affordance. Absent → the item is hidden.
-   */
-  onExportToCloud?: () => void;
-  /**
-   * Open the host's "share with people" dialog. Generic opt-in: wired into the
-   * canvas's built-in ShareMenu whenever this callback is set, in BOTH edit and
-   * view mode (the cloud viewer mounts the canvas in view mode). The canvas
-   * knows nothing about grants — it just fires the callback. Absent → the item
-   * is hidden.
-   */
-  onShareWithMembers?: () => void;
-  /**
    * Telemetry: fired once when any node drag begins. Pure passthrough — the
    * canvas's internal `draggingRef` bookkeeping runs regardless. Wired by the
    * MCP App so the host model receives a drag-in-progress signal via
@@ -1052,30 +1009,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
 
 /**
  * US-014: imperative handle exposed through `forwardRef`. Lets a host call the
- * canvas's export actions and open the embed dialog without owning the
- * underlying state — useful for command palettes / keyboard shortcuts /
- * external menus where the in-canvas ShareMenu chrome is not the entry point.
+ * canvas's export actions without owning the underlying state — useful for
+ * command palettes / keyboard shortcuts / external menus where the in-canvas
+ * ShareMenu chrome is not the entry point.
  */
 export interface SeeflowCanvasHandle {
   /** Capture the viewport and save a PDF. Errors surface inline in the canvas. */
   exportPdf(): Promise<void>;
   /** Capture the viewport and save a PNG. Errors surface inline in the canvas. */
   exportPng(): Promise<void>;
-  /**
-   * Open the embed-snippet dialog programmatically. No-op when the canvas is
-   * not rendering its ShareMenu chrome (mini mode or `showShareMenu: false`)
-   * OR when `enableEmbed` is false (Embed defaults to opt-in) — in either
-   * case the dialog is not mounted, so toggling state has nothing to render.
-   */
-  openEmbedDialog(): void;
-  /**
-   * Capture the current viewport as a PNG data URL without triggering a
-   * download. Resolves to `undefined` when the canvas is not fully mounted.
-   * Hosts use this to feed a preview thumbnail into their own
-   * "Export to seeflow.dev" dialog while keeping the capture path
-   * (fit-view + snapshot + restore) co-located with the canvas.
-   */
-  capturePreview(): Promise<string | undefined>;
   /**
    * Paste image file(s) from a clipboard `DataTransfer` (e.g. a native
    * `paste` event's `clipboardData`) as image node(s). Reuses the same
@@ -2228,7 +2170,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     topRightSlot,
     projectId,
     fileBaseUrl,
-    resolveFileSrc,
     studioBaseUrl = '',
     nodes,
     connectors,
@@ -2305,8 +2246,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     autoFitView,
     autoFitViewSignal,
     customIcons,
-    onExportToCloud,
-    onShareWithMembers,
     onNodeDragStart,
     onNodeDragStop,
     onViewportChange,
@@ -2326,7 +2265,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     enablePan,
     enableSelection,
     enableNodeMove,
-    enableEmbed,
     enableAlignmentGuides,
     alignmentSnapThreshold,
   } = props;
@@ -2355,7 +2293,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         enablePan,
         enableSelection,
         enableNodeMove,
-        enableEmbed,
         enableAlignmentGuides,
         alignmentSnapThreshold,
       }),
@@ -2376,7 +2313,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       enablePan,
       enableSelection,
       enableNodeMove,
-      enableEmbed,
       enableAlignmentGuides,
       alignmentSnapThreshold,
     ],
@@ -3678,9 +3614,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
-          // Cloud/authed mode: lets type:'image' resolve its token-gated asset
-          // through the host (blob URL) instead of a header-less native <img>.
-          resolveFileSrc,
           // type:'component'-only: hover "View fullscreen" affordance. On for
           // edit + view (where a person is looking at the canvas), off for mini
           // thumbnails (every input/chrome path is disabled by design there).
@@ -3841,7 +3774,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, [
     projectId,
     fileBaseUrl,
-    resolveFileSrc,
     nodes,
     selectedNodeIdSet,
     onNodeResize,
@@ -5087,13 +5019,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // own space input still types a literal space.
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [spaceDragging, setSpaceDragging] = useState(false);
-  // US-014: open state for the ShareMenu's EmbedDialog, hoisted so the
-  // imperative ref handle (`openEmbedDialog`) can flip it programmatically
-  // even when the host invokes from a command palette / keyboard shortcut. The
-  // ShareMenu still falls back to its own internal state when these props are
-  // absent, so the controlled lift is opt-in.
-  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState(false);
-  // SLOT 13 — must remain at end per CLAUDE.md hook-shim rule. Mirrors the
+  // SLOT 12 — must remain at end per CLAUDE.md hook-shim rule. Mirrors the
   // optional `history` prop's `{canUndo, canRedo}` snapshots into React
   // state so the toolbar + command palette can resolve effective values
   // (via `effectiveCanUndo` / `effectiveCanRedo` below) without subscribing
@@ -5108,20 +5034,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const off = history.subscribe(setHistoryState);
     return off;
   }, [history]);
-  // SLOT 14 — built-in DetailPanel sidebar's visibility. Decoupled from
+  // SLOT 13 — built-in DetailPanel sidebar's visibility. Decoupled from
   // selection: node clicks no longer auto-open the sidebar; the new top-right
   // InspectorToggle flips this, and clicking the empty pane closes it (see
   // handlePaneClickWithGroupExit). Connector selection never opens it (the
   // DetailPanel's connector prop is wired to null).
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // SLOT 15 — Canvas grouping M6: double-click-to-enter isolation. `activeGroupId`
+  // SLOT 14 — Canvas grouping M6: double-click-to-enter isolation. `activeGroupId`
   // is the id of the group the user has ENTERED (so its members are individually
   // addressable and the group body is click-through), or null when not in
   // isolation. It is RUNTIME-ONLY UI state — never persisted, never patched —
   // and is dropped the moment its group vanishes (see the cleanup effect below).
   // Appended at the END of the useState block per the hook-shim rule in
   // packages/canvas/CLAUDE.md (so no existing `useStateOverrides[N]` shifts);
-  // it is the 15th useState → `useStateOverrides[14]`.
+  // it is the 14th useState → `useStateOverrides[13]`.
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   // Mirror into a ref so the window-level keydown (ESC) listener and the
   // memoized click handlers read the latest value without re-binding every time
@@ -5198,7 +5124,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return changed ? mapped : selectionOverlayNodes;
   }, [selectionOverlayNodes, rfNodes]);
   // US-004: alignment-guides gesture hook. CRITICAL — this call sits AFTER the
-  // last component-level `useState` (activeGroupId, slot 15) so the hook's own
+  // last component-level `useState` (activeGroupId, slot 14) so the hook's own
   // internal `useState` lands in a slot beyond every index the hook-shim tests
   // reference (0–13); the existing `useStateOverrides[N]` assertions stay
   // valid. The returned API is published into `alignmentApiRef` (read by
@@ -5253,11 +5179,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     () => ({
       exportPdf: exportApi.exportPdf,
       exportPng: exportApi.exportPng,
-      openEmbedDialog: () => setShareEmbedDialogOpen(true),
-      capturePreview: exportApi.capturePreview,
       pasteImageFromClipboard,
     }),
-    [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview, pasteImageFromClipboard],
+    [exportApi.exportPdf, exportApi.exportPng, pasteImageFromClipboard],
   );
   useEffect(() => {
     // US-027: Space-held pan is a keyboard affordance — gate on the same flag
@@ -6182,11 +6106,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   </Panel>
                 ) : null}
                 {/* Top-right action cluster: host-provided topRightSlot + ShareMenu.
-            Sharing one Panel keeps them side-by-side so they never overlap.
-            ShareMenu mode is mapped to 'view' for mini defensively (the Panel
-            itself is gated below). EmbedDialog state is hoisted into this
-            component so the imperative ref handle can open it without going
-            through the menu. */}
+            Sharing one Panel keeps them side-by-side so they never overlap. */}
                 {flags.showShareMenu || topRightSlot || sidebarEnabled ? (
                   <Panel position="top-right">
                     <div className="sf:flex sf:items-center sf:gap-1">
@@ -6199,15 +6119,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                       ) : null}
                       {flags.showShareMenu ? (
                         <ShareMenu
-                          mode={mode === 'mini' ? 'view' : mode}
-                          projectId={projectId}
-                          enableEmbed={flags.enableEmbed}
                           onDownloadPdf={exportApi.exportPdf}
                           onDownloadPng={exportApi.exportPng}
-                          onExportToCloud={onExportToCloud}
-                          onShareWithMembers={onShareWithMembers}
-                          embedOpen={shareEmbedDialogOpen}
-                          onEmbedOpenChange={setShareEmbedDialogOpen}
                         />
                       ) : null}
                     </div>
@@ -6666,8 +6579,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
 /**
  * US-014: ref-aware wrapper. Hosts use `useRef<SeeflowCanvasHandle>()` +
- * `ref={canvasRef}` to call `exportPdf` / `exportPng` / `openEmbedDialog`
- * from a command palette or keyboard shortcut without owning the underlying
- * state.
+ * `ref={canvasRef}` to call `exportPdf` / `exportPng` from a command palette
+ * or keyboard shortcut without owning the underlying state.
  */
 export const SeeflowCanvas = forwardRef<SeeflowCanvasHandle, SeeflowCanvasProps>(SeeflowCanvasImpl);

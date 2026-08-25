@@ -1315,8 +1315,8 @@ export function createApi(options: ApiOptions): Hono {
     }
 
     // The returned path is PROJECT-ROOT-relative — that's the addressing the
-    // file-serve route (`GET /projects/:project/files/:path`), `fileUrl`, and
-    // the export bundle all use. For manifest-driven projects the file lives
+    // file-serve route (`GET /projects/:project/files/:path`) and `fileUrl`
+    // both use. For manifest-driven projects the file lives
     // under `<flowDir>/nodes/<id>/`, so the prefix must be included or the
     // image 404s on display. Legacy root-`flow.json` flows have `flowDir === '.'`
     // and collapse to the bare `nodes/<id>/` form.
