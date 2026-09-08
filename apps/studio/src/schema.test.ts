@@ -2943,3 +2943,27 @@ describe('table node', () => {
     }
   });
 });
+
+describe('connector animated', () => {
+  it('keeps animated on a resolved connector', () => {
+    const parsed = ResolvedFlowSchema.safeParse({
+      version: 2,
+      name: 'T',
+      nodes: [
+        { id: 'a', type: 'rectangle', position: { x: 0, y: 0 }, data: {} },
+        { id: 'b', type: 'rectangle', position: { x: 200, y: 0 }, data: {} },
+      ],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', animated: true }],
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.connectors[0]?.animated).toBe(true);
+  });
+
+  it('accepts animated in a style.json connector entry', () => {
+    expect(StyleSchema.safeParse({ connectors: { c1: { animated: true } } }).success).toBe(true);
+  });
+
+  it('rejects a non-boolean animated', () => {
+    expect(StyleSchema.safeParse({ connectors: { c1: { animated: 'yes' } } }).success).toBe(false);
+  });
+});

@@ -473,6 +473,12 @@ const ConnectorVisualBaseShape = {
   color: ColorTokenSchema.optional(),
   direction: ConnectorDirectionSchema.optional(),
   borderSize: z.number().min(0).optional(),
+  animated: z
+    .boolean()
+    .optional()
+    .describe(
+      'Marching-dash animation along the line. Marks the connection a change is really about; the canvas also animates connectors adjacent to a running node, and the two are ORed.',
+    ),
   path: ConnectorPathSchema.optional(),
   headShape: ConnectorHeadShapeSchema.optional(),
   tailShape: ConnectorHeadShapeSchema.optional(),
@@ -1009,6 +1015,7 @@ const ConnectorStyleEntrySchema = z
     color: ColorTokenSchema.optional(),
     direction: ConnectorDirectionSchema.optional(),
     borderSize: z.number().min(0).optional(),
+    animated: z.boolean().optional(),
     path: ConnectorPathSchema.optional(),
     headShape: ConnectorHeadShapeSchema.optional(),
     tailShape: ConnectorHeadShapeSchema.optional(),
