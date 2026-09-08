@@ -1616,3 +1616,10 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
     }
   });
 });
+
+describe('ConnectorPatchBodySchema animated', () => {
+  it('accepts animated on a connector patch', () => {
+    expect(ConnectorPatchBodySchema.safeParse({ animated: true }).success).toBe(true);
+    expect(ConnectorPatchBodySchema.safeParse({ animated: false }).success).toBe(true);
+  });
+});

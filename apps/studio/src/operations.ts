@@ -645,6 +645,7 @@ export const ConnectorPatchBodySchema = z
     color: ColorTokenSchema.optional(),
     direction: z.enum(['forward', 'backward', 'both', 'none']).optional(),
     borderSize: z.number().min(0).optional(),
+    animated: z.boolean().optional(),
     path: z.enum(['curve', 'step']).optional(),
     // Endpoint glyph shapes — `direction` decides which ends carry a head,
     // these decide what each looks like (arrow / crow's-foot / diamond /
