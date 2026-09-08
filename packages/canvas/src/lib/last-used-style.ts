@@ -80,6 +80,9 @@ export const rememberNodeStyle = (prefix: string, patch: NodeStylePatch): void =
 
 /** Merge a connector-style patch into the connector bucket. */
 export const rememberConnectorStyle = (prefix: string, patch: ConnectorStylePatch): void => {
+  // Animation is a per-connector statement about one relationship, not a
+  // brush setting — inheriting it would animate every line drawn afterwards.
+  const { animated: _animated, ...rest } = patch;
   const current = readRaw(prefix);
-  writeRaw(prefix, { ...current, connector: { ...current.connector, ...patch } });
+  writeRaw(prefix, { ...current, connector: { ...current.connector, ...rest } });
 };

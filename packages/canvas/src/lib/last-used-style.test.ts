@@ -160,6 +160,13 @@ describe('rememberConnectorStyle', () => {
     rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, { style: 'dashed' });
     expect(getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node).toEqual({ borderColor: 'blue' });
   });
+
+  it('does not remember connector animation', () => {
+    rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, { color: 'red', animated: true });
+    const remembered = getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector;
+    expect(remembered.color).toBe('red');
+    expect(remembered.animated).toBeUndefined();
+  });
 });
 
 describe('storage failure modes', () => {
