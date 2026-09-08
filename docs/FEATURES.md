@@ -27,6 +27,7 @@ Your AI sees JSON; you see pictures. A SeeFlow flow is both at once: a schema-va
 - **The canvas appears in the conversation.** On MCP Apps hosts (Claude Desktop today), five tools render the canvas inline: the agent opens the flow it just built, focuses a specific node, or scaffolds a new project without you leaving the chat. One process, one install — the MCP server boots its own embedded studio.
 - **Atomic bulk authoring.** Up to 100 nodes and 100 connectors land in a single all-or-nothing call (`flow:add-bulk` / `seeflow_add_bulk`) — no half-drawn diagrams.
 - **Auto-layout.** ELK layout via CLI or HTTP (`flows:layout`) gives agents readable diagrams without fumbling pixel coordinates.
+- **A pull request, explained before you read it.** `/seeflow pr review <link>` turns a PR into a small set of linked flows: what the change touches, what it did to each part, the order things happen in, and a short guided tour.
 - **Read tools sized to the question.** Topology-only (`flows:graph`), one node with its detail (`nodes:get`), or the full flow — so an agent shows you exactly the slice that answers your question.
 
 ## 3. Human → AI: you show the agent
@@ -62,5 +63,6 @@ Your AI sees JSON; you see pictures. A SeeFlow flow is both at once: a schema-va
 | Human edits / selection streamed to the model | — | ✓ (MCP Apps) | — | — |
 | Instant sync of edits (SSE) | writes | writes | writes | ✓ |
 | PDF / PNG download | — | — | — | ✓ |
+| Pull-request review flows | — | — | ✓ | ✓ |
 
 Compatibility, stated at honest strength: the MCP server works with **any MCP client** (e.g. Claude Code, Codex, Cursor, Windsurf); the **inline canvas** requires an MCP Apps host (Claude Desktop today); the **authoring skills** ship as plugins for Claude Code and Cursor.
