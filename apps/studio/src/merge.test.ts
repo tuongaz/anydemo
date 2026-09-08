@@ -361,8 +361,8 @@ describe('connector animated', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', animated: true }],
     });
-    expect(style.connectors?.c1?.animated).toBe(true);
-    expect(flow.connectors[0]).not.toHaveProperty('animated');
+    expect((style.connectors as Record<string, Record<string, unknown>>).c1?.animated).toBe(true);
+    expect((flow.connectors as Array<Record<string, unknown>>)[0]).not.toHaveProperty('animated');
   });
 
   it('merges connector animated back onto the resolved connector', () => {
