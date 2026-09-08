@@ -204,3 +204,33 @@ describe('seeflow skill <-> CLI contract', () => {
     expect(result.stdout.toString().length).toBeGreaterThan(0);
   });
 });
+
+describe('pr review branch', () => {
+  it('SKILL.md routes a pull-request ask to the pr input class', () => {
+    const skill = readFileSync(SKILL_MD, 'utf8');
+    expect(skill).toContain('pr review');
+    expect(skill).toContain('code | conversation | document | pr');
+  });
+
+  it('the pr reference files and agents exist', () => {
+    for (const rel of [
+      'references/pr/review-model.md',
+      'references/pr/flow-mapping.md',
+      'agents/seeflow-pr-analyzer.md',
+      'agents/seeflow-pr-flow-writer.md',
+    ]) {
+      expect(existsSync(join(SKILL_ROOT, rel))).toBe(true);
+    }
+  });
+
+  it('the pr branch never lays out a generated flow', () => {
+    const mapping = readFileSync(join(SKILL_ROOT, 'references/pr/flow-mapping.md'), 'utf8');
+    expect(mapping).toContain('flows:layout');
+    expect(mapping.toLowerCase()).toContain('never');
+  });
+
+  it('the pr branch declares its gh dependency in preflight', () => {
+    const p0 = readFileSync(join(REFERENCES_DIR, 'phases/p0-preflight.md'), 'utf8');
+    expect(p0).toContain('gh auth status');
+  });
+});
