@@ -101,3 +101,77 @@ URL="$STUDIO_URL/projects/$projectSlug/flows/$flowSlug"
 ### Finalise
 
 Once the layout is approved (with or without edits): re-run the **Silent LEARN.md write** (step 7) if any edits were applied, then print `Flow "<name>" registered as <projectSlug>/<flowSlug>. Open: $STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`, then `rm -rf "$SEEFLOW_TMP"` to clear flow-local scratch. Done.
+
+## Phase 3 on the `pr` branch
+
+> Everything above describes the default (`code` / `conversation` / `document`) path.
+> Ignore it when `$inputClass === "pr"` and follow this section instead.
+
+The seven steps above assume one flow authored by the node-planner. A PR review
+creates a small project of linked flows instead. `$prNumber` and `$prRepo` come from
+Phase 1 step 2; `$SEEFLOW_TMP` is the value Phase 1 set and is not re-pointed here.
+Run this sequence:
+
+1. **Pick the path.** Inside a checkout of the PR's repo (`$repoRoot` non-null):
+   `$repoPath = $repoRoot/.seeflow/pr-$prNumber`. Otherwise ask once, offering
+   `$PWD/.seeflow/<repo-name>-pr-$prNumber` as the default (`<repo-name>` is the
+   second segment of `$prRepo`). If the user declines or gives no path, stop with one
+   line — `no project path for PR $prNumber; nothing written` — and do not fall back
+   to `$PWD` or a temp directory. Nothing has been created at this point, so there is
+   nothing to unwind.
+2. **Replace, don't merge.** A re-run always rebuilds from the current state of the
+   pull request. If `$repoPath/seeflow.json` exists: preserve
+   `$repoPath/pr-review.overrides.json` and `$repoPath/pr-review-notes.md` if either
+   exists — they are the only files this feature never regenerates — then resolve the
+   existing registry slug with `$SEEFLOW projects:list` (match the entry whose
+   `repoPath` is `$repoPath`) into `$oldSlug`, read `seeflow.json`'s `flows[]`, run
+   `flows:delete --project "$oldSlug" --flow <id>` for every flow except the
+   manifest's `defaultFlow`, then `rm -rf "$repoPath"` and restore the two preserved
+   files afterwards. `flows:delete` returns 409 `last-flow` on the project default —
+   that one registry row is left behind on purpose, and step 3's `projects:create` at
+   the same path re-registers over it. Say in one line that you are replacing it, that
+   the canvas itself is rebuilt so hand edits do not survive, and that
+   `pr-review.overrides.json` is where a correction goes to stick. Do not ask.
+3. **Create the project.** `projects:create --path "$repoPath" --name "PR $prNumber — $prRepo"`.
+   Reassign `$projectSlug` from the response slug's first segment, as always.
+4. **Create the other flows.** For every entry in `flowPlan` after the first,
+   `flows:create --project "$projectSlug" --flow <slug> --name "<title>"`. At most
+   six flows; `main` always exists from step 3, and it is always `flowPlan[0]`. The
+   slugs `main`, `sequence` and `tour` are reserved words used verbatim for those
+   kinds — never derive them.
+5. **Write them in parallel.** One message, one `seeflow-pr-flow-writer` per flow.
+   Pass exactly these parameter names — they are the names the agent contract
+   declares, and a writer handed `$SEEFLOW` or `$SEEFLOW_TMP` under any other name
+   sees no CLI and no scratch dir and must abort:
+
+   | Parameter | Value |
+   |---|---|
+   | `modelPath` | `$SEEFLOW_TMP/review-model.json` |
+   | `mappingContract` | the **absolute** path to the skill's `references/pr/flow-mapping.md` — resolve it from the skill directory you loaded; never a relative path |
+   | `projectSlug` | `$projectSlug` |
+   | `flowSlug` | this entry's `slug` |
+   | `flowKind` | this entry's `kind` |
+   | `viewId` | this entry's `viewId` — **views only**, omitted for every other kind |
+   | `flowPlan` | the whole plan, so a writer can resolve a link target |
+   | `seeflowBin` | the resolved `$SEEFLOW` invocation, verbatim |
+   | `tmpDir` | `$SEEFLOW_TMP` |
+
+   Serial dispatch here costs the run its wall-clock for nothing. Every writer derives
+   its node and connector ids from the model per `flow-mapping.md` §1 — no writer
+   calls `$SEEFLOW ids` on this branch, because that mints random ids and two writers
+   would then name the same card differently.
+6. **Never lay out.** `flows:layout` rewrites `style.json` with positions only,
+   discarding every size and colour the writers authored and throwing the lane
+   bands into a junk column. The writers author geometry; there is nothing to tidy.
+7. **Check the returns.** Any writer reporting `ok: false`, or a non-zero
+   `selfCheck.duplicatePositions`, `selfCheck.cardsOutsideBand` or
+   `selfCheck.danglingConnectors`, gets one re-dispatch with the problem named.
+   Surface a writer's `modelProblems` to the user rather than silently rendering
+   around them.
+8. **Save and finish.** Silent `$learnPath` write, one row per created flow marked
+   `(pr-review)`, then the final line: the canvas URL for `tour` when a tour was
+   emitted and for `main` otherwise, the full flow list, and one sentence on where to
+   start reading. A reviewer who is going to open one thing opens the tour; the map is
+   where they go next, not first. Then `rm -rf "$SEEFLOW_TMP"` — the writers have
+   already read `review-model.json`. On a failed run, leave it: it is the debugging
+   trail.
