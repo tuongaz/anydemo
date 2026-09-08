@@ -174,7 +174,7 @@ export const connectorToEdge = (
     targetHandle: connector.targetHandle,
     type: 'editableEdge',
     label: connector.label,
-    animated: isAdjacentToRunning,
+    animated: connector.animated === true || isAdjacentToRunning,
     data: {
       path: connector.path,
       sourceHandleAutoPicked: connector.sourceHandleAutoPicked,

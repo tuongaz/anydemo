@@ -41,6 +41,21 @@ describe('connectorToEdge', () => {
     expect(connectorToEdge(c, false).animated).toBe(false);
   });
 
+  it('animates a connector authored with animated:true', () => {
+    const c: Connector = { id: 'c1', source: 'a', target: 'b', animated: true };
+    expect(connectorToEdge(c, false).animated).toBe(true);
+  });
+
+  it('leaves animated:false alone when not adjacent to a running node', () => {
+    const c: Connector = { id: 'c1', source: 'a', target: 'b', animated: false };
+    expect(connectorToEdge(c, false).animated).toBe(false);
+  });
+
+  it('run-adjacency still animates a connector authored animated:false', () => {
+    const c: Connector = { id: 'c1', source: 'a', target: 'b', animated: false };
+    expect(connectorToEdge(c, true).animated).toBe(true);
+  });
+
   it('renders a closed arrowhead at the target so direction reads at a glance', () => {
     const c: Connector = {
       id: 'c1',

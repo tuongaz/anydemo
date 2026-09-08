@@ -383,6 +383,8 @@ export interface ConnectorBase {
   color?: ColorToken;
   direction?: ConnectorDirection;
   borderSize?: number;
+  /** Author-set marching-dash animation. ORed with run-adjacency animation. */
+  animated?: boolean;
   path?: ConnectorPath;
   /** Glyph at the target (head) end (per `direction`). Absent ⇒ 'arrow'. */
   headShape?: ConnectorHeadShape;
