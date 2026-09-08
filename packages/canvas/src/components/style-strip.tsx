@@ -81,6 +81,8 @@ export interface ConnectorStylePatch {
   style?: ConnectorStyle;
   direction?: ConnectorDirection;
   borderSize?: number;
+  /** Author-set marching-dash animation. ORed with run-adjacency animation. */
+  animated?: boolean;
   path?: ConnectorPath;
   /** Glyph at the target (head) end (per `direction`). */
   headShape?: ConnectorHeadShape;
@@ -224,6 +226,11 @@ const DIRECTION_OPTIONS: IconToggleOption<ConnectorDirection>[] = [
   { value: 'both', icon: ArrowLeftRight, label: 'Both', testId: 'style-tab-direction-both' },
 ];
 
+const ANIMATION_OPTIONS: IconToggleOption<'off' | 'on'>[] = [
+  { value: 'off', icon: Minus, label: 'Static', testId: 'style-strip-animated-off' },
+  { value: 'on', icon: ArrowRight, label: 'Animated', testId: 'style-strip-animated-on' },
+];
+
 export function StyleStrip({
   nodes,
   connectors,
@@ -313,6 +320,7 @@ export function StyleStrip({
     | 'dotted';
   const connectorStyleActive: ConnectorStyle = firstConnector?.style ?? 'solid';
   const directionActive = (firstConnector?.direction ?? 'forward') as ConnectorDirection;
+  const animatedActive: 'off' | 'on' = firstConnector?.animated === true ? 'on' : 'off';
   const pathActive = (firstConnector?.path ?? 'curve') as ConnectorPath;
   const headShapeActive = (firstConnector?.headShape ?? 'arrow') as ConnectorHeadShape;
   // Tail (source end) falls back to the head shape when unset — matches the
@@ -479,6 +487,9 @@ export function StyleStrip({
   };
   const applyConnectorDirection = (direction: ConnectorDirection) => {
     for (const c of connectors) onStyleConnector(c.id, { direction });
+  };
+  const applyConnectorAnimated = (value: 'off' | 'on') => {
+    for (const c of connectors) onStyleConnector(c.id, { animated: value === 'on' });
   };
   const applyConnectorHeadShape = (headShape: ConnectorHeadShape) => {
     for (const c of connectors) onStyleConnector(c.id, { headShape });
@@ -978,6 +989,16 @@ export function StyleStrip({
                     value={directionActive}
                     onChange={applyConnectorDirection}
                     options={DIRECTION_OPTIONS}
+                  />
+                </PopoverSection>
+              ) : null}
+              {pureConnector ? (
+                <PopoverSection label="Animation" testId="style-strip-animated-section">
+                  <IconToggleGroup<'off' | 'on'>
+                    ariaLabel="Connector animation"
+                    value={animatedActive}
+                    onChange={applyConnectorAnimated}
+                    options={ANIMATION_OPTIONS}
                   />
                 </PopoverSection>
               ) : null}

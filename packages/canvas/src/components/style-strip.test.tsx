@@ -1084,6 +1084,39 @@ describe('StyleStrip — connector path merge + head shape', () => {
     expect(disabledFor('forward')).toBe(true);
     expect(disabledFor('none')).toBe(true);
   });
+
+  function findAnimatedToggle(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-animated-section'));
+    if (!section) throw new Error('animated section missing');
+    const toggle = findElement(section, (el) => {
+      const p = el.props as { ariaLabel?: string };
+      return p.ariaLabel === 'Connector animation';
+    });
+    if (!toggle) throw new Error('animated toggle missing');
+    return toggle;
+  }
+
+  it("defaults the animated toggle to 'off' when unset", () => {
+    const tree = callStrip({ nodes: [], connectors: [conn()] });
+    expect((findAnimatedToggle(tree).props as { value?: string }).value).toBe('off');
+  });
+
+  it("reads 'on' from an animated connector", () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ animated: true })] });
+    expect((findAnimatedToggle(tree).props as { value?: string }).value).toBe('on');
+  });
+
+  it('toggling animation fans out to every selected connector', () => {
+    const onStyleConnector = mock(() => {});
+    const tree = callStrip({
+      nodes: [],
+      connectors: [conn({ id: 'c1' }), conn({ id: 'c2' })],
+      onStyleConnector,
+    });
+    (findAnimatedToggle(tree).props as { onChange: (v: 'off' | 'on') => void }).onChange('on');
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { animated: true });
+    expect(onStyleConnector).toHaveBeenCalledWith('c2', { animated: true });
+  });
 });
 
 // Task 2: one font-size control drives BOTH node text and connector labels, so
