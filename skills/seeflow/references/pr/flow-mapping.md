@@ -354,7 +354,9 @@ Same geometry, narrower content. No header panel. Resolve your slice from `views
 - One card per `sequence.messages` entry, in the **receiver's** lane (`message.to`) at
   `row = index`. Size every band with `rows = messages.length`, so row `i` sits at the same `y` in
   every lane and the chain reads straight across.
-- Card `type` follows the receiving participant's element kind (§2). `data.name` =
+- Card `type` follows the receiving participant's element kind (§2), **including §2's ≤20-character
+  rule for the illustrative shapes** — a message label is usually longer than an element label, so
+  in this flow the answer is a `rectangle` with an icon more often than not. `data.name` =
   `message.label` trimmed to 34 characters; `data.description` = `"<delta> · step <i+1>"` and
   nothing more; `data.detail` = `message.note`; colour from `message.delta` (§3).
 
