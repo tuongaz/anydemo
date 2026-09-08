@@ -119,7 +119,7 @@ shape regardless of who produced it.
 
 Field-by-field:
 
-- **`inputClass`** *(string)* — one of `"code" | "conversation" | "document"`,
+- **`inputClass`** *(string)* — one of `"code" | "conversation" | "document" | "pr"`,
   verbatim. Set `"code"` when launched by the orchestrator (the only
   class that triggers this agent — see `../references/phases/p0-preflight.md`
   §"Input-source gate"). The other two values appear only on briefs the orchestrator

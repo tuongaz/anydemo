@@ -11,6 +11,8 @@ Look up registered SeeFlow flows and consult them as architectural ground truth.
 
 Inspection phrasing **always** lands here first, even when no flow is yet registered — the auto-handoff below covers the empty case. The trigger words are: `show me`, `show the`, `how does`, `how do`, `what does`, `what handles`, `where does`, `where is`, `diagram`, `explain`, `walk me through`, plus any reference to a flow by slug or title without an explicit creation verb (`create`, `scaffold`, `generate`, `add a flow`). When in doubt, route here — a no-match handoff to `/seeflow` is cheap; a duplicate creation run from skipping the gate is not.
 
+A pull request in the prompt (a GitHub PR URL, `owner/repo#123`, or "review this PR") is not an inspection ask — hand it to `/seeflow`, which builds the review flows.
+
 ## When NOT to invoke
 
 - **Editing flows** → use `/seeflow` or the canvas.

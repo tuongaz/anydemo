@@ -23,7 +23,7 @@ future run reuses the facts instead of re-discovering them.
 
 1. **`projectRoot`** — absolute path to the user's project.
 2. **`inputClass`** *(string)* — one of `"code" | "conversation" |
-   "document"`, forwarded from Phase 0's input-source gate. **You are
+   "document" | "pr"`, forwarded from Phase 0's input-source gate. **You are
    only launched for `"code"`.** When the orchestrator decides
    `"conversation"` or `"document"`, this agent is skipped entirely
    (the orchestrator builds the brief inline). If a launching prompt

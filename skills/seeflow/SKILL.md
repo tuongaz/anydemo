@@ -1,11 +1,11 @@
 ---
 name: seeflow
-description: This skill should be used when the user explicitly asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", or "add a flow to this repo" — or when a previous /seeflow-lookup has already reported no matching flow exists. Inspection phrasing ("show me", "how does X work", "diagram our system", "explain the flow") routes to /seeflow-lookup first; that skill auto-hands off here only when nothing is registered. Orchestrates three sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at <project>/flow.json (node-attached files live under <projectPath>/nodes/<id>/).
+description: This skill should be used when the user explicitly asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", or "add a flow to this repo" — or when a previous /seeflow-lookup has already reported no matching flow exists. Inspection phrasing ("show me", "how does X work", "diagram our system", "explain the flow") routes to /seeflow-lookup first; that skill auto-hands off here only when nothing is registered. Also handles pull-request review: "/seeflow pr review <PR link>", "review this PR", or a bare GitHub PR URL builds a small set of linked flows that explain the change before you read the diff. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at <project>/flow.json (node-attached files live under <projectPath>/nodes/<id>/).
 ---
 
 # seeflow
 
-Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flows/<flowSlug>/flow.json` (skill-created projects default to `flowSlug: 'main'`), with node-attached content (detail.md, view.html) under `$repoPath/flows/<flowSlug>/nodes/<id>/`. Orchestrate three sub-agents and the `seeflow` CLI; never read the codebase directly, never author `seeflow.json` or `flow.json` by hand (`projects:create` writes both the manifest and the first flow envelope).
+Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flows/<flowSlug>/flow.json` (skill-created projects default to `flowSlug: 'main'`), with node-attached content (detail.md, view.html) under `$repoPath/flows/<flowSlug>/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `seeflow.json` or `flow.json` by hand (`projects:create` writes both the manifest and the first flow envelope).
 
 ## When NOT to invoke
 
@@ -53,7 +53,7 @@ Always call `seeflow projects:create --path "$repoPath" --name "..."` — the CL
 | `$flowSlug` | the flow id within the project — the **second segment** of the `projects:create` response `slug` (`slug.split('/')[1]`). Defaults to `'main'` for skill-created projects; subsequent `flows:create` calls take arbitrary lowercase-kebab ids matching `^[a-z0-9][a-z0-9-]*$`. |
 | `$repoPath` | `$PWD/.seeflow/<planner-slug>` — the directory passed to `projects:create --path`. This is just a path; the planner's `slug` names the folder. It does **not** have to equal `$projectSlug` (the registry resolves `--project` calls by slug, and stores `repoPath` independently). |
 | `$learnPath` | `$PWD/.seeflow/LEARN.md` — **shared across every project + flow** in the host repo. Lives next to the project folders, never inside one. |
-| `$SEEFLOW_TMP` | `$repoPath/flows/$flowSlug/.tmp/` — per-flow scratch directory. Full lifecycle in §"Scratch files & cleanup" below. |
+| `$SEEFLOW_TMP` | `$repoPath/flows/$flowSlug/.tmp/` — per-flow scratch directory. On the `pr` branch the project is created *after* the fetch, so it is `$PWD/.seeflow/.pr-tmp` for the whole run and is never re-pointed. Full lifecycle in §"Scratch files & cleanup" below. |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
 **Every flow mutation goes through the CLI.** The studio validates every write server-side — there is no separate validation step. Don't memorise CLI syntax — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
@@ -110,14 +110,18 @@ Every parallel step (the Phase 1 analyzers, the Phase 3 detail-backfill patches 
 ```
 P0    /health probe ‖ read $learnPath ‖ schema cache (5×)
       → schema-type diff (silent)
-      → input-source gate ($inputClass: code | conversation | document)
+      → input-source gate ($inputClass: code | conversation | document | pr)
 P1    branches on $inputClass:
         code         → code-analyzer ‖ system-analyzer
         conversation → orchestrator builds brief inline; system-analyzer
                        runs only if runtime relevant
         document     → both analyzers skipped; brief built inline
+        pr           → orchestrator fetches the PR with gh; pr-analyzer
+                       writes one review model; orchestrator validates it;
+                       no contextBrief
       learnUpdates STAGED in memory only — no disk write yet
-P2    node-planner (kicks off when brief ready; receives cached
+P2    node-planner (skipped on the pr branch — the model IS the graph;
+                   otherwise kicks off when brief ready; receives cached
                    schema + $componentCatalog + $inputClass)
 P3    projects:create (path + name → seeflow.json + flows/main/flow.json registered in one shot)
       → flow:add-bulk (nodes + connectors, atomic)
@@ -126,6 +130,8 @@ P3    projects:create (path + name → seeflow.json + flows/main/flow.json regis
       → SILENT LEARN.md write (merge staged learnUpdates + upsert flow row)
       → USER REVIEW (layout review; apply edits directly or re-run planner)
       → final-flow line → rm -rf "$SEEFLOW_TMP"
+      pr branch: projects:create → flows:create × N → pr-flow-writer × N
+                 in parallel → NO flows:layout
 ```
 
 Each phase gates on the previous (with the Phase 1 → Phase 2 overlap).
@@ -137,9 +143,10 @@ Each phase has its mechanics, contracts, and edge cases in a dedicated reference
 | Phase | Purpose | Reference |
 |---|---|---|
 | P0 | Lookup-first gate, capability probe, schema cache, input-source gate, studio probe | `references/phases/p0-preflight.md` |
-| P1 | Discover — three input-class branches (`code`, `conversation`, `document`) and Phase 1→2 overlap | `references/phases/p1-discover.md` |
+| P1 | Discover — four input-class branches (`code`, `conversation`, `document`, `pr`) and Phase 1→2 overlap | `references/phases/p1-discover.md` |
 | P2 | Plan nodes — launch `seeflow-node-planner`, validate envelope, retry once on partial output | `references/phases/p2-plan-nodes.md` |
 | P3 | Scaffold via `projects:create`, normalize, mint canonical ids, `flow:add-bulk`, detail-backfill, layout, LEARN.md save, user review, final-flow line + cleanup | `references/phases/p3-scaffold.md` |
+| P1–P3 (`pr`) | Fetch a pull request, model it, render it as linked flows | `references/pr/review-model.md`, `references/pr/flow-mapping.md` |
 
 ## Core rules
 
@@ -159,6 +166,8 @@ Full text in `references/core-rules.md`:
 - **Using the planner's `slug` as `--project`.** The registry slug is `slugify(--name)`, returned by `projects:create` — capture it from the response and reassign `$projectSlug`. The planner's `slug` field only names the `--path` directory and may differ; carrying it into `--project` makes `flow:add-bulk` / `flows:layout` fail with `projectNotFound`.
 - **Writing `LEARN.md` inside a per-project or per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every project + flow** in the host repo — never inside `<projectSlug>/` or `<projectSlug>/flows/<flowSlug>/`.
 - **Reaching for `type:'html'` before trying `type:'component'`.** The component catalog is the typed, theme-aware way to render rich node content (status cards, comparison tables, checklists, KPI tiles, gap rows) — and the rule is universal across every `inputClass`, not just `document`. `html` is a last-resort escape hatch, only legitimate once `$SEEFLOW schema componentCatalog` is confirmed not to cover the content (gap cited in `rationales[nodeId]`) **or** when the catalog is unavailable on the installed binary (`$hasComponentCatalog === false`, i.e. seeflow predates 0.1.94 — see `phases/p0-preflight.md`). See `references/schema.md` §"When to use which node type" and `agents/seeflow-node-planner.md` §"Picking node `type`".
+- **Running `flows:layout` on a PR-review flow.** It replaces `style.json` with positions only — every authored size, colour and lane band is discarded and the bands are ejected to a junk column. The `pr` branch authors geometry; nothing needs tidying.
+- **Turning a PR review into a review bot.** The flows say what the change did to the system and where to look. They carry no bug reports, risk scores or verdicts, and the model has no field for them.
 
 ## Red flags — stop and reconsider
 
@@ -175,6 +184,7 @@ If you catch yourself thinking any of the following, you are rationalising — s
 - "Schema output is just JSON — I'll parse `$schemaCache.node` myself (Python / hand-rolled walker / inline JS)." → no. The "don't memorise CLI syntax — run `$SEEFLOW help`" rule in §"Conventions" applies to every subcommand, schema included. Run `$SEEFLOW help schema` once: it documents the `<subname>` positional for per-variant drill-down AND the `--jq <filter>` flag for path extraction (jq-subset grammar, `badJq` exit 2). Reach for those before in-process JSON parsing.
 - "My `--jq` got `badJq` — I'll parse the JSON with Python/JS instead." → no. `badJq` = wrong path, not a tool failure. Re-run the parent call (`$SEEFLOW schema node rectangle`) WITHOUT `--jq`, read `jqHints.examples` (and `jqHints.dataFields` for node variants — that's the exact `data.<field>` list you can target), then retry `--jq` with one of those paths. Never switch tools.
 - "The user approved the layout, then asked to add two nodes — I'll re-run the full node-planner." → no, for a small fully-specified edit. Apply it directly: `flow:add-bulk` for new nodes/connectors, `nodes:patch` for field edits, `nodes:delete` for removals, then `flows:layout`. The planner is for turning an open-ended brief into a graph, not for relaying a tweak the user already spelled out. Re-run the planner only for substantive/structural changes. See `phases/p3-scaffold.md` §"User review".
+- "The PR is small — I'll skip the analyzer and write the flow myself from the diff." → no. One pass over the diff produces one model; the model is what keeps four flows telling the same story. Reading a diff into your own context also spends the budget the writers need.
 - "I'll design the node first and look up the schema when I'm ready to patch." → no. `$SEEFLOW schema` runs in milliseconds and tells you exactly which fields each variant accepts; designing before checking burns sub-agent iterations on shapes the CLI would have rejected. Run `$SEEFLOW schema <category>` (then `<subname>` for the variant you're about to author) before you draft a single `nodes:add` / `nodes:patch` body.
 
 ## Operations

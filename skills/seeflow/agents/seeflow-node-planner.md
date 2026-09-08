@@ -46,14 +46,15 @@ The launching prompt will give you:
 1. **`contextBrief`** — the merged JSON object returned by
    `seeflow-code-analyzer` (always present) and, when ready,
    `seeflow-system-analyzer`. Always includes `inputClass` (one of
-   `"code" | "conversation" | "document"`), `userIntent`,
+   `"code" | "conversation" | "document" | "pr"`), `userIntent`,
    `audienceFraming`, `depth` (one of `overview` / `walkthrough` /
    `deep-architectural`), `scope.{rootEntities,outOfScope}`,
    `codePointers[]`, `knownEndpoints[]`, `techStack`, `existingFlow`.
    May also include
    `runtimeProfile` once the system-analyzer has returned. **Branch on
    `inputClass` when picking node types** — see §"Picking node `type`
-   by input class" below.
+   by input class" below. A `"pr"` brief never reaches this agent — that
+   branch uses `seeflow-pr-flow-writer` instead.
 1a. **`componentCatalog`** — the legal `componentSpec.elements[].type`
     names, sourced by the orchestrator from the Phase 0
     `$SEEFLOW schema componentCatalog` cache (its `subnames` list).
