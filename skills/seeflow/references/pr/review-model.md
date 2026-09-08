@@ -143,11 +143,11 @@ No other top-level key exists. An unknown key is a rejection of the whole model,
 | Field | Type | Limit | Meaning |
 |---|---|---|---|
 | `id` | string | — | Stable within this file. |
-| `label` | string | ≤40 | The card title, spelled the way the team says it out loud. Never a filename. |
+| `label` | string | ≤34 | The card title, spelled the way the team says it out loud. Never a filename. A card is 300px wide and neither clips nor wraps a third line — 34 characters is what fits, and the flow writer trims anything past it mid-word. |
 | `kind` | enum | — | `service app route module function job queue datastore cache external ui actor config test other`. |
 | `delta` | enum | — | `added modified removed unchanged`. |
 | `lane` | string | — | A declared lane id. |
-| `subtitle?` | string | ≤48 | A signature, a path, a rate — one line under the title. |
+| `subtitle?` | string | ≤48 | A signature, a path, a rate — **one** line under the title. The writer renders it as `"<delta> — <subtitle>"` inside a 72-character budget, so a subtitle past ~56 characters loses its tail. |
 | `detail` | markdown | 1–3 short paragraphs | What this is, and what the change did to it. Becomes the panel a reviewer opens. |
 | `files[]` | array | ≤6 | `{path, lines?, why?, gone?}`. `path` is repo-relative POSIX, no leading slash. `lines` is `"120-186"`, taken from the diff's `@@` header — the hunk the reviewer should land on; omit it when the change is spread through the file. `gone: true` marks a file that does not exist at head (deleted, or the old side of a rename), and is set **per file, not per element** — a `modified` element routinely deletes one of its files. `why` is at most 8 words. Six is the cap: past that you are listing the diff, and the seventh file belongs to a different element. |
 

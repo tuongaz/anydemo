@@ -85,6 +85,14 @@ too coarse — cut scope, don't split the call.
 `data.icon` is optional, unprefixed Lucide kebab-case only. A wrong guess renders a `?`, which is
 worse than no icon — unsure means omit. Illustrative shapes already carry a glyph.
 
+**The illustrative shapes — `queue`, `database`, `cloud`, `user` — draw their label outside the
+frame**, centred under or beside the glyph, and the label does not wrap to the node's width. At
+`CARD_W` 300 that means **≤20 characters**, and a longer label runs across the lane gutter into the
+next lane's cards. When an element of one of those kinds has a label longer than 20 characters, draw
+it as a `rectangle` and put the shape's meaning in the icon instead (`queue` ⇒ `inbox`, `datastore`
+/ `cache` ⇒ `database`, `external` ⇒ `cloud`, `actor` ⇒ `user`). The lane grid is the thing that
+must hold; the glyph is a nicety.
+
 ## 3. The delta channel
 
 The one rule that makes the canvas readable at a glance. Every element in every flow carries its
@@ -138,43 +146,72 @@ canvas, and three animated lines tell the reader nothing about which one the cha
 Nothing auto-places. A node with no `position` lands at `(0,0)` with every other node.
 
 ```
-LANE_W 360   LANE_GUTTER 40   LANE_TOP 0   LANE_HEADER_H 56   CARD_W 300
-CARD_H 96    CARD_GAP 40      CARD_X_INSET 30
+LANE_W 360   LANE_GUTTER 40   LANE_TOP 0   LANE_HEADER_H 88   CARD_W 300
+CARD_H 160   CARD_GAP 40      CARD_X_INSET 30   HEADER_TEXT_H 64
+LINK_W 300   LINK_H 160
 BAND_PAD_BOTTOM 40   // sits on top of the trailing CARD_GAP: 80px of clear
                      // space below the last card, by design
 ```
 
+These numbers are **measured**, not chosen: a card holding a wrapped title plus one line of
+description renders 156px tall, a `linkflow` renders 153px, and a lane header that wraps to two
+lines renders 57px. Every constant above is the next round number above what the canvas actually
+paints. Do not shave them to tighten the picture — a node authored shorter than its content does
+not scroll and does not clip, it paints over its neighbour.
+
+**Every position and every size is an integer.** A fractional `y` is a sign you computed a
+layout instead of following one; round-tripping it through `style.json` also makes two runs of the
+same model disagree on ids' geometry, which is the one thing this mapping exists to prevent.
+
+**Nothing clips and nothing auto-grows.** A node renders its text at the size you authored and
+paints straight over its neighbours when the text does not fit — the canvas has no ellipsis and no
+reflow-to-fit. That is why the caps below are caps and not suggestions:
+
+| Field | Cap | Why |
+|---|---|---|
+| card `data.name` | ≤34 chars, one line | 300px at the card title size fits ~34 characters. |
+| card `data.description` | ≤72 chars, one line of prose | Two lines of body is the most a 160px card holds under a wrapped title. |
+| lane header `data.name` | ≤42 chars | `"<label> · <subtitle>"` when that fits in 42, **`label` alone when it does not** — a wrapped lane header paints over the first card. |
+
+Everything you had to cut goes in `data.detail`, which scrolls in the inspector panel and is the
+one place text is allowed to be long.
+
 1. Order lanes by `lane.order`, ties broken by `lanes[]` order. Lane index `k` starts at 0.
 2. `laneX = k * (LANE_W + LANE_GUTTER)`; `rows` = cards in that lane in this flow.
 3. `bandHeight = LANE_HEADER_H + rows * (CARD_H + CARD_GAP) + BAND_PAD_BOTTOM` — that is
-   `96 + rows * 136`.
+   `128 + rows * 200`.
 4. Band = `group` at `(laneX, LANE_TOP)`, `data.width: LANE_W`, `data.height: bandHeight`.
 5. Header = `text` at `(laneX + CARD_X_INSET, LANE_TOP + 12)`, `data.width: CARD_W`,
-   `data.height: 32`.
+   `data.height: HEADER_TEXT_H` (64) — two lines of clearance, so a label that wraps still lands
+   above the first card rather than on it.
 6. Card `i` at `(laneX + CARD_X_INSET, LANE_TOP + LANE_HEADER_H + i * (CARD_H + CARD_GAP))`,
    `data.width: CARD_W`, `data.height: CARD_H`. Cards keep their `elements[]` order within the lane.
 7. `maxBandBottom = LANE_TOP + max(bandHeight)` across lanes — the nav strip's anchor.
 
 **Worked example — the model in `review-model.md`, 3 lanes with 3 / 3 / 1 cards.**
 
-`laneX` = 0, 400, 800. `bandHeight` = 504, 504, 232 (`96 + 3*136`, `96 + 3*136`, `96 + 1*136`).
-`maxBandBottom` = 504. Card rows sit at `y` = 56, 192, 328 (`56 + i*136`) in every lane.
+`laneX` = 0, 400, 800. `bandHeight` = 728, 728, 328 (`128 + 3*200`, `128 + 3*200`, `128 + 1*200`).
+`maxBandBottom` = 728. Card rows sit at `y` = 88, 288, 488 (`88 + i*200`) in every lane.
 
 | Node | type | position | data.width × data.height |
 |---|---|---|---|
-| `lane-request-band` | `group` | (0, 0) | 360 × 504 |
-| `lane-request-header` | `text` | (30, 12) | 300 × 32 |
-| `el-checkout-route` | `rectangle` | (30, 56) | 300 × 96 |
-| `el-orders-db` | `database` | (30, 192) | 300 × 96 |
-| `el-inline-sender` | `rectangle` | (30, 328) | 300 × 96 |
-| `lane-async-band` | `group` | (400, 0) | 360 × 504 |
-| `lane-async-header` | `text` | (430, 12) | 300 × 32 |
-| `el-receipt-queue` | `queue` | (430, 56) | 300 × 96 |
-| `el-receipt-worker` | `server` | (430, 192) | 300 × 96 |
-| `el-mail-client` | `rectangle` | (430, 328) | 300 × 96 |
-| `lane-external-band` | `group` | (800, 0) | 360 × 232 |
-| `lane-external-header` | `text` | (830, 12) | 300 × 32 |
-| `el-mail-provider` | `cloud` | (830, 56) | 300 × 96 |
+| `lane-request-band` | `group` | (0, 0) | 360 × 728 |
+| `lane-request-header` | `text` | (30, 12) | 300 × 64 |
+| `el-checkout-route` | `rectangle` | (30, 88) | 300 × 160 |
+| `el-orders-db` | `database` | (30, 288) | 300 × 160 |
+| `el-inline-sender` | `rectangle` | (30, 488) | 300 × 160 |
+| `lane-async-band` | `group` | (400, 0) | 360 × 728 |
+| `lane-async-header` | `text` | (430, 12) | 300 × 64 |
+| `el-receipt-queue` | `queue` | (430, 88) | 300 × 160 |
+| `el-receipt-worker` | `server` | (430, 288) | 300 × 160 |
+| `el-mail-client` | `rectangle` | (430, 488) | 300 × 160 |
+| `lane-external-band` | `group` | (800, 0) | 360 × 328 |
+| `lane-external-header` | `text` | (830, 12) | 300 × 64 |
+| `el-mail-provider` | `cloud` | (830, 88) | 300 × 160 |
+
+A `user`, `cloud`, `queue` or `database` card draws a glyph the plain rectangle does not, and
+renders ~24px taller for the same text. `CARD_H` is 160 for **every** card so the rows stay level
+across lanes — never size a card to its own type.
 
 **Band.** `data.childIds` lists that lane's card ids, in row order — never the header, never a card
 from another lane, never a band (a group may not contain a group). Membership lives nowhere else:
@@ -186,7 +223,7 @@ and deleting it silently orphans nothing because it owned nothing.
 { "id": "lane-async-band", "type": "group", "position": { "x": 400, "y": 0 },
   "data": { "name": "Background",
             "childIds": ["el-receipt-queue", "el-receipt-worker", "el-mail-client"],
-            "width": 360, "height": 504, "borderColor": "gray", "borderSize": 1 } }
+            "width": 360, "height": 728, "borderColor": "gray", "borderSize": 1 } }
 ```
 
 Dragging a band moves the band and exactly its `childIds` members, so the `text` header — which is
@@ -194,43 +231,81 @@ never a member — stays behind and the lane label desyncs. Say in your closing 
 bands are laid out, not draggable furniture.
 
 **Header.** A band renders no visible label, so the header text node is what names the lane. `name`
-is `lane.label`; when `lane.subtitle` is set, `name` is `"<label> · <subtitle>"`.
+is `lane.label`; when `lane.subtitle` is set and `"<label> · <subtitle>"` is **≤42 characters**,
+`name` is that string. Past 42 the subtitle is dropped and `name` is the label alone — the subtitle
+is already in the cards, and a third line of header lands on the first one.
 
 ```json
 { "id": "lane-async-header", "type": "text", "position": { "x": 430, "y": 12 },
-  "data": { "name": "Background · queue + worker", "width": 300, "height": 32,
+  "data": { "name": "Background · queue + worker", "width": 300, "height": 64,
             "fontSize": 18, "textAlign": "left", "borderColor": "gray" } }
 ```
 
 **Card.** Every field below is required of you; nothing else is.
 
 ```json
-{ "id": "el-receipt-worker", "type": "server", "position": { "x": 430, "y": 192 },
+{ "id": "el-receipt-worker", "type": "server", "position": { "x": 430, "y": 288 },
   "data": { "name": "receipt worker", "icon": "timer", "detail": "…markdown, see §7…",
             "description": "added — every 10s, 500 per batch",
-            "width": 300, "height": 96,
+            "width": 300, "height": 160,
             "borderColor": "green", "borderStyle": "solid", "borderSize": 2 } }
 ```
+
+`name` is the element's `label` trimmed to 34 characters, `description` is one line of ≤72 —
+`"<delta> — <one clause>"`. Anything longer belongs in `detail`; a two-sentence description paints
+over the card below it.
 
 ## 6. Per-flow recipes
 
 ### `main`
 
-1. **Header panel** — one `component` node, id `pr-header`, at `(0, LANE_TOP - 200)`,
-   `data.width = nLanes * LANE_W + (nLanes - 1) * LANE_GUTTER` (3 lanes ⇒ 1160),
-   `data.height: 160`. A `Card` root titled `model.title`, a muted `Text` carrying `model.summary`,
-   a muted `Text` reading `"<pr.filesChanged> files  +<pr.additions>  -<pr.deletions>"`, then one
-   `Metric` per `model.chips` entry. `chip.tone` has no home on `Metric` — drop it, don't invent a
-   prop. `Card`, `Text` and `Metric` are catalog components; `spec` is inline at `data.spec`.
+1. **Header panel** — one `component` node, id `pr-header`, spanning the lanes:
+   `data.width = nLanes * LANE_W + (nLanes - 1) * LANE_GUTTER` (3 lanes ⇒ 1160).
+
+   **Its height is computed, not fixed, and it is authored above the lanes with real clearance:**
+
+   ```
+   HEADER_H = 300 + 48 * chips.length      // integer; 3 chips ⇒ 444, 5 ⇒ 540, none ⇒ 300
+   pr-header position = (0, LANE_TOP - (HEADER_H + 60))
+   ```
+
+   Those numbers are measured against the real render: a card title, a three-line lede, the counts
+   line and a five-row table come to 528px. The formula is deliberately generous — the panel sits
+   above the lanes, so spare height costs a reviewer nothing and a shortfall costs them the map.
+
+   A component paints its content at full size and **spills straight over whatever is beneath it**
+   — it neither scrolls nor clips. A panel authored shorter than its content is the single most
+   destructive thing you can do to this canvas: the chips land on the lane headers and the first
+   row of cards, and the map is unreadable. Compute the height, then leave the 60px gap.
+
+   The spec is a `Card` root titled `model.title`, with exactly three children:
+
+   - `lede` — a muted `Text` carrying the **first two sentences** of `model.summary`, ≤240
+     characters. The whole summary is not a caption; it goes in `data.detail`, which the inspector
+     panel scrolls.
+   - `counts` — a muted `Text` reading `"<pr.filesChanged> files  +<pr.additions>  -<pr.deletions>"`.
+   - `chips` — **one `Table`**, columns `[{key:"label",label:"What changed"},{key:"value",label:""}]`,
+     one row per `model.chips` entry (`{label, value}`). A `Table` is bounded — one row is one row
+     — where a stack of `Metric`s is not: each `Metric` renders a headline-sized value, and five of
+     them are taller than the whole map's header band. Emit no chips block at all when
+     `chips` is `[]`, and `HEADER_H` falls out of the formula at `300`.
+
+   `chip.tone` has no home on `Table` — drop it, don't invent a prop. `Card`, `Text` and `Table`
+   are catalog components; `spec` is inline at `data.spec`.
 
    ```json
-   { "id": "pr-header", "type": "component", "position": { "x": 0, "y": -200 },
-     "data": { "name": "Receipt mail moves off the request path", "width": 1160, "height": 160,
+   { "id": "pr-header", "type": "component", "position": { "x": 0, "y": -504 },
+     "data": { "name": "Receipt mail moves off the request path", "width": 1160, "height": 444,
+       "detail": "<the full model.summary, as markdown>",
        "spec": { "root": "card", "elements": {
-         "card":   { "type": "Card", "props": { "title": "Receipt mail moves off the request path" }, "children": ["lede", "counts", "chip0"] },
-         "lede":   { "type": "Text", "props": { "text": "<model.summary>", "muted": true } },
+         "card":   { "type": "Card", "props": { "title": "Receipt mail moves off the request path" }, "children": ["lede", "counts", "chips"] },
+         "lede":   { "type": "Text", "props": { "text": "POST /checkout used to call the mail provider inline, so a slow provider slowed checkout. The route now writes one job to the receipts queue and returns.", "muted": true } },
          "counts": { "type": "Text", "props": { "text": "11 files  +402  -168", "muted": true } },
-         "chip0":  { "type": "Metric", "props": { "label": "Provider calls", "value": "500x fewer" } } } } } }
+         "chips":  { "type": "Table", "props": {
+             "columns": [{ "key": "label", "label": "What changed" }, { "key": "value", "label": "" }],
+             "rows": [{ "label": "Provider calls", "value": "500x fewer" },
+                      { "label": "Provider round-trips", "value": "off the request path" },
+                      { "label": "Inline sender", "value": "deleted" }] } } } } } }
    ```
 
 2. **Lane bands and headers** for every lane in `model.lanes` (§5).
@@ -240,16 +315,16 @@ is `lane.label`; when `lane.subtitle` is set, `name` is `"<label> · <subtitle>"
    `direction: "forward"`, `path: "curve"`.
 5. **Nav strip** — one `linkflow` per child flow named in `flowPlan` (root views, then `sequence`,
    then `tour`), in a row at `y = maxBandBottom + 80`, the `j`-th at
-   `x = j * (LANE_W + LANE_GUTTER)`, `data.width: 300`, `data.height: 132`. `data.name` = the
+   `x = j * (LANE_W + LANE_GUTTER)`, `data.width: LINK_W`, `data.height: LINK_H` (160). `data.name` = the
    target flow's `flowPlan` title, `data.detail` = the target view's `purpose` (for `sequence`,
    `sequence.title`; for `tour`, "Guided walkthrough, N steps"). `data.target.project` is the
    project slug you were given.
 
    ```json
-   { "id": "link-send-path", "type": "linkflow", "position": { "x": 0, "y": 584 },
+   { "id": "link-send-path", "type": "linkflow", "position": { "x": 0, "y": 808 },
      "data": { "name": "How a receipt gets sent",
                "detail": "The path from checkout to the provider, with the retired inline call left in so the swap is visible.",
-               "width": 300, "height": 132,
+               "width": 300, "height": 160,
                "target": { "project": "pr-2841-storefront", "flow": "send-path" } } }
    ```
 
@@ -263,7 +338,7 @@ Same geometry, narrower content. No header panel. Resolve your slice from `views
   it is empty, draw every relation whose `from` and `to` are both in scope — the induced picture.
 - Keep lane identity, drop empty lanes, then **re-index `k` over the survivors** so the columns are
   contiguous. A gap where a lane used to be reads as a missing lane.
-- **Back-link:** a `linkflow` at `(0, LANE_TOP - 172)`, `data.width: 300`, `data.height: 132`,
+- **Back-link:** a `linkflow` at `(0, LANE_TOP - 200)`, `data.width: LINK_W`, `data.height: LINK_H`,
   `data.name` = `"Back to the change map"`, target flow `main`.
 - Child views: one `linkflow` each on that same row, the `j`-th at
   `x = j * (LANE_W + LANE_GUTTER)` — the back-link occupies `j = 0`.
@@ -273,27 +348,37 @@ Same geometry, narrower content. No header panel. Resolve your slice from `views
 - Lanes are `sequence.participants` in array order — participant `k` is lane `k`.
 - `lane.order` does not apply here; array order **is** the order, and there is no `lanes[]` object
   to read. Band and header geometry are §5's, but the header `name` comes from the participant's
-  element: `element.label`, plus `" · " + element.subtitle` when it has one. Band ids are
+  element: `element.label`, plus `" · " + element.subtitle` when it has one **and the joined string
+  is ≤42 characters** — past that, the label alone, exactly as in §5. Band ids are
   `lane-<participantElementId>-band`, headers `lane-<participantElementId>-header`.
 - One card per `sequence.messages` entry, in the **receiver's** lane (`message.to`) at
   `row = index`. Size every band with `rows = messages.length`, so row `i` sits at the same `y` in
   every lane and the chain reads straight across.
-- Card `type` follows the receiving participant's element kind (§2). `data.name` = `message.label`;
-  `data.description` = `"<delta> — step <i+1>, <from> → <to>"`; `data.detail` = `message.note`;
-  colour from `message.delta` (§3).
+- Card `type` follows the receiving participant's element kind (§2). `data.name` =
+  `message.label` trimmed to 34 characters; `data.description` = `"<delta> · step <i+1>"` and
+  nothing more; `data.detail` = `message.note`; colour from `message.delta` (§3).
+
+  The sender and receiver are already drawn — the card sits in the receiver's lane and the chain
+  connector comes from the sender's. Repeating `"<from> → <to>"` in the description spends the
+  card's second line restating its own position, and on long participant ids it overflows.
 - Chain: connector `chain-<i>` from `msg-<messages[i-1].id>` to `msg-<messages[i].id>`, for
   `i = 1..n-1`, `label` = `"<i+1> · <messages[i].label>"`, every one `animated: true`.
 - `kind: "return"` draws its incoming connector `style: "dashed"`; delta still owns the colour.
 - A self message (`from === to`) is a card in that one lane like any other — the chain runs into it
   and out of it unbroken. Never skip it in the numbering.
-- Back-link at `(0, LANE_TOP - 172)`, exactly as for view flows.
+- Back-link at `(0, LANE_TOP - 200)`, exactly as for view flows.
 
 ### `tour`
 
-- One column. Step `i` is a `rectangle` with id `step-<step.id>` at `(0, i * (CARD_H + CARD_GAP))`
-  — `(0, i * 136)` — `data.width: 420` (`CARD_W * 1.4`), `data.height: 96`. Border `slate`,
-  `solid`, `1` — steps are narration, not change.
-- `data.name` = `"<i+1> · <step.heading>"`; `data.description` = `step.body`.
+- One column. Step `i` is a `rectangle` with id `step-<step.id>` at `(0, i * (STEP_H + CARD_GAP))`
+  — `STEP_H` is **156** and the pitch is 196, so `(0, i * 196)` — `data.width: 420`
+  (`CARD_W * 1.4`), `data.height: 156`. Border `slate`, `solid`, `1` — steps are narration, not
+  change.
+- `data.name` = `"<i+1> · <step.heading>"`, ≤48 characters including the number: the heading wraps
+  to two lines at 420px and a third line lands on the body.
+- `data.description` = the **first sentence** of `step.body`, ≤120 characters. A step card is a
+  headline, not the paragraph; the whole body is one click away in `detail` (below), and a body
+  pasted whole overflows the card and paints over the next step.
 - `data.detail` = `step.body`, a blank line, then a `### Read this` list — one line per id in
   `step.focus`. For an element: its `label`, an em dash, then its `files[]` as blob links built per
   §7, line fragment included. For a relation: `"<from label> → <to label>"` and the relation's
@@ -301,16 +386,28 @@ Same geometry, narrower content. No header panel. Resolve your slice from `views
   dropped, not guessed at; a step whose entire focus drops loses its card and its spine connector,
   and the steps after it renumber. A reviewer should be able to go from step 1 to the first line of
   code without opening anything else — a step that names no file has not done that.
-- Beside each step, a `linkflow` with id `link-<step.id>` to that step's `stage` flow at
-  `(CARD_W * 1.4 + LANE_GUTTER, i * (CARD_H + CARD_GAP))` — `(460, i * 136)` — `data.width: 300`,
-  `data.height: 132`. `stage` names a **view id**, not a flow slug: run it through §1's slug
-  derivation (including the `-view` collision suffix) before matching it against `flowPlan`.
-  `"main"` and `"sequence"` are the two literal stage values that are already slugs. A step whose
-  stage flow the §1 cap trimmed gets no link. `stage` is required by the model contract — a step
-  missing one is a `modelProblems` entry *and* no link, never a guess.
+- Beside a step, a `linkflow` with id `link-<step.id>` to that step's `stage` flow at
+  `(CARD_W * 1.4 + LANE_GUTTER, i * (STEP_H + CARD_GAP))` — `(460, i * 196)` — `data.width: LINK_W`,
+  `data.height: LINK_H`. `data.name` is short and fixed by kind — `"Open the change map"` for
+  `main`, `"Open the sequence"` for `sequence`, `"Open <view title>"` for a view, ≤40 characters —
+  and `data.detail` is the step's heading, so the card says which step it belongs to. Never paste
+  the pull request's title into a link card: it is long, it wraps, and it is the same on every one.
+
+  The back-link on `main`'s children follows the same rule: `"Back to the change map"`.
+
+  **Only the first step of a run of steps sharing a stage gets one.** Emit the link when
+  `step.stage` differs from the previous step's stage (and always for step 1); the steps after it
+  in the same run get no link and no gap filled — the link is a change of scene, and six identical
+  "Open the change map" cards down the right-hand column is noise a reviewer has to read past.
+
+  `stage` names a **view id**, not a flow slug: run it through §1's slug derivation (including the
+  `-view` collision suffix) before matching it against `flowPlan`. `"main"` and `"sequence"` are
+  the two literal stage values that are already slugs. A step whose stage flow the §1 cap trimmed
+  gets no link. `stage` is required by the model contract — a step missing one is a `modelProblems`
+  entry *and* no link, never a guess.
 - Spine: connector `chain-<i>` from step card `i-1` to step card `i`, `color: "slate"`,
   `style: "solid"`, `borderSize: 1`, `direction: "forward"`, no label, not animated.
-- Back-link at `(0, LANE_TOP - 172)`.
+- Back-link at `(0, LANE_TOP - 200)`.
 
 ## 7. Detail panels
 
@@ -387,6 +484,14 @@ the body is the truth — this list is entirely computable from it and needs no 
    `modelProblems` entry, not a card you draw quietly.
 10. Every band's `childIds` names exactly its own cards, in row order, and every card is named by
     exactly one band.
+11. **Nothing overflows its box.** Every card `data.name` ≤34 chars, every card
+    `data.description` ≤72 chars on one line, every lane header `data.name` ≤42, every tour step
+    `name` ≤48 and `description` ≤120. The canvas neither clips nor reflows: a string past its cap
+    is painted over the node beneath it, and the reviewer reads two texts on top of each other.
+12. **The header panel clears the lanes.** `pr-header`'s height is the computed `HEADER_H`, and
+    its `y` is `LANE_TOP - (HEADER_H + 60)`. A panel sized by guess lands on the first row of
+    cards.
+13. **Every position and size is an integer.** No fractions anywhere in the body.
 
 The only thing worth reading back is that it landed, as counts — never the whole flow document.
 
@@ -414,3 +519,11 @@ If you catch yourself thinking any of the following, you are rationalising.
   at most; demote the rest to `normal`.
 - "I need an id for this and the table does not give me one." → then the model is missing an
   element. Say so in `modelProblems`; do not mint one.
+- *"The summary is good prose — I'll put all of it in the header panel."* → the panel does not
+  scroll and does not clip. Two sentences on the card, the rest in `detail`. The same rule governs
+  a card `description` and a tour step body: the box has a size, and text past it is painted on
+  top of the next node, not hidden.
+- *"This lane label plus its subtitle is 60 characters, but it reads so well."* → it wraps to
+  three lines and lands on the first card. Drop the subtitle; it is on the cards already.
+- *"I'll shrink the card to fit the layout and let the text wrap."* → backwards. The card sizes
+  are fixed by §5 so that every lane lines up; the **text** is what gets cut to fit them.
