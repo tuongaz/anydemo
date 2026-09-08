@@ -19,6 +19,15 @@ Run `$SEEFLOW help` once and confirm every required subcommand is present: `proj
 - Required missing → tell the user which subcommand is missing and that the fix is `npm i -g @tuongaz/seeflow@latest`. Then stop — do **not** start Phase 1.
 - All present → continue.
 
+For `inputClass === "pr"` only, two more subcommands are required — `flows:create`
+and `flows:delete` — and the run also needs the GitHub CLI and `jq`. Probe them in
+the same message: `command -v gh`, `gh auth status`, `command -v jq`. A missing or
+unauthenticated `gh` stops the run with one line telling the user to install it
+(`brew install gh`) or run `gh auth login`; a missing `jq` stops it the same way
+(`brew install jq`) — the diff-cap and merge-base steps in Phase 1 both need it. Do
+not fall back to unauthenticated fetching, and do not try to reconstruct the diff
+from a local checkout.
+
 If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), surface the failure (`$SEEFLOW unresolved — neither local binary nor npx fallback available`) and stop.
 
 ### componentCatalog support — set `$hasComponentCatalog` here
@@ -73,23 +82,25 @@ If either set is non-empty, continue silently — this is a maintainer signal, n
 
 ## Input-source gate — pick the brief's origin
 
-Decide `$inputClass` before launching Phase 1. Three values:
+Decide `$inputClass` before launching Phase 1. Four values:
 
 | Class | Trigger | Phase 1 behaviour |
 |---|---|---|
 | `code` | Project root has a source tree AND the user's ask is about a running system ("show how X works", "diagram our pipeline", "add a flow for Y"). Default. | Launch code-analyzer + system-analyzer as today. |
 | `conversation` | The current session already carries the brief's substance — ≥3 file references discussed, named entities, a tech stack mentioned — OR the user explicitly opts in ("use what we just discussed", "based on what we've been looking at"). | Skip the code-analyzer; the orchestrator builds the brief inline from the conversation. System-analyzer still runs when the flow touches a runtime; skip it too when the discussion already covered dev setup. |
 | `document` | The user's prompt anchors on a document to visualise rather than a system to diagram — gap analysis, comparison, status report, RFC, architectural narrative, checklist, audit — OR the project root has no source tree and the user wants the canvas to render structured information. (Folds in the old "empty-project / design-only" branch.) | Skip both analyzers. The orchestrator builds the brief inline from the prompt + any pasted / referenced document text and sets `inputClass: "document"`. The planner defaults to `component` nodes from `$componentCatalog`, falling back to `html` for content the catalog can't render. |
+| `pr` | The prompt names a pull request to understand — a GitHub PR URL, `owner/repo#123`, or `pr review …` phrasing. | Skip both analyzers. The orchestrator fetches the PR with `gh` and launches `seeflow-pr-analyzer`, which writes a review model; flow writers render it. See `p1-discover.md` §`inputClass === "pr"`. |
 
 Heuristic ladder, applied in order:
 
-1. **Explicit user phrase** — pick the matching class without asking. ("Use what we just discussed" → `conversation`; "render this gap analysis" → `document`.)
-2. **No source tree** — default to `document`. The empty-project / design-only branch from the prior skill version is now the no-source-tree case of `document`.
-3. **Document-anchored prompt** — verbs like "render", "show this", "lay out", "visualise" + a noun like "report", "analysis", "comparison", "spec", "checklist" → `document`.
-4. **Rich conversation context** — heuristic counts: ≥3 distinct file paths quoted, named services / DBs / queues, an articulated `techStack` already in-thread → `conversation`.
-5. **Default** — `code`.
+1. **A pull request in the prompt** — a GitHub PR URL, `owner/repo#123`, or the words "pr review" / "review this PR" / "diagram this PR" → `pr`. This wins over every rung below it, including a source tree being present.
+2. **Explicit user phrase** — pick the matching class without asking. ("Use what we just discussed" → `conversation`; "render this gap analysis" → `document`.)
+3. **No source tree** — default to `document`. The empty-project / design-only branch from the prior skill version is now the no-source-tree case of `document`.
+4. **Document-anchored prompt** — verbs like "render", "show this", "lay out", "visualise" + a noun like "report", "analysis", "comparison", "spec", "checklist" → `document`.
+5. **Rich conversation context** — heuristic counts: ≥3 distinct file paths quoted, named services / DBs / queues, an articulated `techStack` already in-thread → `conversation`.
+6. **Default** — `code`.
 
-When the heuristic is genuinely ambiguous (e.g. source tree present AND a document discussed), ask once via `AskUserQuestion` with three options (`code`, `conversation`, `document`) and a one-line description each. Debounce — never re-ask the same question in a single session.
+When the heuristic is genuinely ambiguous (e.g. source tree present AND a document discussed), ask once via `AskUserQuestion` with four options (`code`, `conversation`, `document`, `pr`) and a one-line description each. Debounce — never re-ask the same question in a single session.
 
 ## Studio probe + LEARN.md (parallel)
 
