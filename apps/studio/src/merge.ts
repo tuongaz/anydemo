@@ -98,6 +98,7 @@ const CONNECTOR_STYLE_KEYS = new Set([
   'color',
   'direction',
   'borderSize',
+  'animated',
   'path',
   'headShape',
   'tailShape',

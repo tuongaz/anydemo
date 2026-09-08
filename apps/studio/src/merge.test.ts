@@ -349,3 +349,32 @@ describe('mergeNodeUpdates retype: geometric ↔ image / html / icon strips per-
     expect(data.alt).toBe('a cart'); // alt is in image-allowed semantic set too
   });
 });
+
+describe('connector animated', () => {
+  it('routes connector animated into style.json', () => {
+    const { flow, style } = splitFlow({
+      version: 2,
+      name: 'T',
+      nodes: [
+        { id: 'a', type: 'rectangle', position: { x: 0, y: 0 }, data: {} },
+        { id: 'b', type: 'rectangle', position: { x: 200, y: 0 }, data: {} },
+      ],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', animated: true }],
+    });
+    expect(style.connectors?.c1?.animated).toBe(true);
+    expect(flow.connectors[0]).not.toHaveProperty('animated');
+  });
+
+  it('merges connector animated back onto the resolved connector', () => {
+    const resolved = mergeFlowAndStyle(
+      {
+        version: 2,
+        name: 'T',
+        nodes: [],
+        connectors: [{ id: 'c1', source: 'a', target: 'b' }],
+      },
+      { connectors: { c1: { animated: true } } },
+    );
+    expect(resolved.connectors[0]?.animated).toBe(true);
+  });
+});
